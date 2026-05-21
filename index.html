@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#0b5fb4" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- App interna: bloquea indexación de buscadores -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="googlebot" content="noindex, nofollow" />
+
+    <title>Skilled ERP</title>
+    <meta name="description" content="Sistema interno de gestión de nómina y operación de Skilled." />
+    <meta name="application-name" content="Skilled ERP" />
+    <meta name="apple-mobile-web-app-title" content="Skilled ERP" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/logo_sidebar.png" />
+    <link rel="shortcut icon" href="/logo_sidebar.png" />
+    <link rel="apple-touch-icon" href="/logo_sidebar.png" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefers = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var dark = saved === 'dark' || (!saved && prefers);
+          if (dark) document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body class="font-sans antialiased bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-100">
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

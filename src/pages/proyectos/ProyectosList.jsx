@@ -1,0 +1,234 @@
+import { useEffect, useMemo, useState } from 'react'
+import toast from 'react-hot-toast'
+import {
+  Plus, Search, Pencil, FolderOpen, Folder, Users as UsersIcon,
+} from 'lucide-react'
+import {
+  PageHeader, Button, Input, Select, Table, THead, TH, TBody, TR, TD,
+  Badge, EmptyState, Skeleton,
+} from '../../components/ui'
+import { useAuth } from '../../context/AuthContext'
+import { listarProyectos } from '../../api/proyectos'
+import ProyectoFormModal from './ProyectoFormModal'
+
+const ICON_PALETTE = [
+  'from-amber-400 to-amber-500',
+  'from-indigo-500 to-indigo-400',
+  'from-cyan-500 to-cyan-400',
+  'from-blue-600 to-blue-400',
+  'from-rose-500 to-rose-400',
+  'from-emerald-600 to-emerald-400',
+]
+
+function iconClass(p) {
+  if (!p.activo) return 'from-ink-400 to-ink-300'
+  return ICON_PALETTE[p.id % ICON_PALETTE.length]
+}
+
+function fmtFechaCorta(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch { return iso }
+}
+
+function tiempoRelativo(iso) {
+  if (!iso) return null
+  const created = new Date(iso)
+  const now = new Date()
+  const diffDays = Math.floor((now - created) / (1000 * 60 * 60 * 24))
+  if (diffDays <= 0) return 'hoy'
+  if (diffDays < 30) return `hace ${diffDays} día${diffDays === 1 ? '' : 's'}`
+  if (diffDays < 365) return `hace ${Math.floor(diffDays / 30)} mes${Math.floor(diffDays / 30) === 1 ? '' : 'es'}`
+  return `hace ${(diffDays / 365).toFixed(1)} año${diffDays >= 730 ? 's' : ''}`
+}
+
+export default function ProyectosList() {
+  const { isAdmin } = useAuth()
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [qInput, setQInput] = useState('')
+  const [estado, setEstado] = useState('todos')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editId, setEditId] = useState(null)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    listarProyectos({ q, estado })
+      .then((res) => { if (!cancelled) setItems(res.items || []) })
+      .catch((err) => {
+        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar proyectos')
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [q, estado, reloadKey])
+
+  const onSearch = (e) => {
+    e.preventDefault()
+    setQ(qInput.trim())
+  }
+
+  const openNew = () => { setEditId(null); setModalOpen(true) }
+  const openEdit = (id) => { setEditId(id); setModalOpen(true) }
+  const closeModal = () => setModalOpen(false)
+  const onSaved = () => setReloadKey((k) => k + 1)
+
+  const total = useMemo(() => items.length, [items])
+
+  return (
+    <>
+      <PageHeader
+        icon={FolderOpen}
+        title="Gestión de Proyectos"
+        description="Administra los proyectos de la empresa, coordinadores y personal asignado."
+        actions={
+          isAdmin ? (
+            <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openNew}>
+              Nuevo Proyecto
+            </Button>
+          ) : null
+        }
+      />
+
+      <form onSubmit={onSearch} className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-end">
+        <Input
+          wrapperClassName="flex-1 max-w-md"
+          label="Buscar"
+          placeholder="Nombre o número de proyecto"
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          leftIcon={<Search size={15} />}
+        />
+        <Select
+          wrapperClassName="sm:w-44"
+          label="Estado"
+          value={estado}
+          onChange={(e) => setEstado(e.target.value)}
+        >
+          <option value="todos">Todos</option>
+          <option value="activos">Activos</option>
+          <option value="inactivos">Inactivos</option>
+        </Select>
+        <div className="flex gap-2">
+          <Button type="submit" variant="primary">Buscar</Button>
+          {(q || estado !== 'todos') && (
+            <Button type="button" variant="ghost" onClick={() => { setQInput(''); setQ(''); setEstado('todos') }}>
+              Limpiar
+            </Button>
+          )}
+        </div>
+        <div className="sm:ml-auto text-xs text-ink-500 dark:text-ink-400 self-end pb-2">
+          Total: <span className="font-semibold text-ink-700 dark:text-ink-200">{total}</span>
+        </div>
+      </form>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={FolderOpen}
+          title={q || estado !== 'todos' ? 'Sin resultados' : 'Sin proyectos registrados'}
+          description={q || estado !== 'todos' ? 'Ningún proyecto coincide con los filtros.' : 'Comienza dando de alta un proyecto.'}
+          action={isAdmin && !q && estado === 'todos' ? (
+            <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openNew}>Nuevo Proyecto</Button>
+          ) : null}
+        />
+      ) : (
+        <Table>
+          <THead>
+            <TH>No. Proy.</TH>
+            <TH>Proyecto</TH>
+            <TH>Estado</TH>
+            <TH>Coordinador</TH>
+            <TH align="right">Participantes</TH>
+            <TH>Creado</TH>
+            <TH align="right">Acciones</TH>
+          </THead>
+          <TBody>
+            {items.map((p) => {
+              const IconCmp = p.activo ? FolderOpen : Folder
+              return (
+                <TR key={p.id}>
+                  <TD>
+                    <span className="inline-block px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/60">
+                      {p.numero_proyecto}
+                    </span>
+                  </TD>
+                  <TD>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`flex-shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white bg-gradient-to-br ${iconClass(p)}`}>
+                        <IconCmp size={16} />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-ink-900 dark:text-ink-100 truncate">{p.nombre || '—'}</div>
+                        <div className="text-xs text-ink-500 dark:text-ink-400 mt-0.5">
+                          {p.participantes_count > 0
+                            ? `${p.participantes_count} participante${p.participantes_count === 1 ? '' : 's'}`
+                            : 'Sin participantes'}
+                        </div>
+                      </div>
+                    </div>
+                  </TD>
+                  <TD>
+                    {p.activo
+                      ? <Badge tone="success" dot>Activo</Badge>
+                      : <Badge tone="danger" dot>Inactivo</Badge>}
+                  </TD>
+                  <TD>
+                    {p.coordinador ? (
+                      <div className="inline-flex items-center gap-2 min-w-0">
+                        <span className="h-7 w-7 inline-flex items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white text-[11px] font-bold">
+                          {p.coordinador.initials}
+                        </span>
+                        <span className="text-sm text-ink-700 dark:text-ink-200 truncate">{p.coordinador.username}</span>
+                      </div>
+                    ) : (
+                      <span className="inline-block text-xs italic text-ink-400 px-2 py-0.5 rounded-full border border-dashed border-ink-300 dark:border-ink-700">
+                        Sin asignar
+                      </span>
+                    )}
+                  </TD>
+                  <TD align="right">
+                    <Badge tone={p.participantes_count > 0 ? 'info' : 'neutral'} leftIcon={<UsersIcon size={11} />}>
+                      {p.participantes_count}
+                    </Badge>
+                  </TD>
+                  <TD>
+                    {p.created_at ? (
+                      <div className="flex flex-col">
+                        <span className="text-sm text-ink-700 dark:text-ink-200">{fmtFechaCorta(p.created_at)}</span>
+                        <span className="text-xs text-ink-400">{tiempoRelativo(p.created_at)}</span>
+                      </div>
+                    ) : <span className="text-ink-400">—</span>}
+                  </TD>
+                  <TD align="right">
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      title={isAdmin ? 'Editar' : 'Ver'}
+                      onClick={() => openEdit(p.id)}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                  </TD>
+                </TR>
+              )
+            })}
+          </TBody>
+        </Table>
+      )}
+
+      <ProyectoFormModal
+        open={modalOpen}
+        onClose={closeModal}
+        proyectoId={editId}
+        onSaved={onSaved}
+      />
+    </>
+  )
+}
