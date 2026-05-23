@@ -31,31 +31,31 @@ function greeting() {
 function StatCard({ tone, label, value, Icon }) {
   const tones = {
     blue: {
-      border: 'border-l-sky-500',
-      iconWrap: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
+      border: 'border-l-sky-400',
+      iconWrap: 'bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/30',
     },
     green: {
-      border: 'border-l-emerald-500',
-      iconWrap: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
+      border: 'border-l-emerald-400',
+      iconWrap: 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/30',
     },
     purple: {
-      border: 'border-l-violet-500',
-      iconWrap: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
+      border: 'border-l-violet-400',
+      iconWrap: 'bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30',
     },
     orange: {
-      border: 'border-l-amber-500',
-      iconWrap: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
+      border: 'border-l-amber-400',
+      iconWrap: 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/30',
     },
   }
   const t = tones[tone]
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-card hover:shadow-elevated transition-shadow`}>
+    <div className={`bg-white/[0.07] rounded-xl border border-white/15 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)] ring-1 ring-white/5`}>
       <div className={`h-12 w-12 rounded-full inline-flex items-center justify-center flex-shrink-0 ${t.iconWrap}`}>
         <Icon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5">{value}</p>
+        <p className="text-[11px] uppercase tracking-wider font-semibold text-white/60">{label}</p>
+        <p className="text-2xl font-bold tabular-nums text-white mt-0.5">{value}</p>
       </div>
     </div>
   )
@@ -171,10 +171,10 @@ function fmtFecha(iso) {
 
 function Panel({ title, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 shadow-card ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-800 pb-3 mb-4">
-        <div className="flex items-center gap-2 text-ink-700 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-500 dark:text-ink-400" />}
+    <div className={`bg-white/[0.07] rounded-xl border border-white/15 ring-1 ring-white/5 p-5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)] ${className}`}>
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3 mb-4">
+        <div className="flex items-center gap-2 text-white/85 font-semibold text-sm">
+          {Icon && <Icon size={16} className="text-white/60" />}
           {title}
         </div>
         {action}
@@ -187,7 +187,11 @@ function Panel({ title, Icon, action, children, className = '' }) {
 export default function Dashboard() {
   const { user } = useAuth()
   const { theme } = useTheme()
-  const isDark = theme === 'dark'
+  // En el dashboard del admin forzamos la apariencia oscura (video + glass),
+  // así que los charts también renderizan con tooltip y grid en modo dark
+  // independientemente del tema global del usuario.
+  const isDark = true
+  void theme
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -204,7 +208,22 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-5">
+      <div className="dark space-y-5 relative" style={{ isolation: 'isolate' }}>
+        <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+          <video
+            autoPlay muted loop playsInline preload="auto" disablePictureInPicture
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
+            aria-hidden="true"
+          >
+            <source
+              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
+              type="video/mp4"
+            />
+          </video>
+          <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
+        </div>
         <Skeleton className="h-24 rounded-xl" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -221,16 +240,44 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Welcome banner */}
-      <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-6 shadow-card">
-        <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100">
+    <div className="dark space-y-5 relative" style={{ isolation: 'isolate' }}>
+      {/* Video corporativo de fondo — solo en el inicio del admin.
+          OPTIMIZACIÓN: una sola capa con backdrop-blur sobre el video (en lugar
+          de aplicar backdrop-blur a cada tarjeta) elimina ghosting/artefactos
+          al hacer hover y baja el costo de pintura. translateZ(0) promueve el
+          video a su propia capa GPU. */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          disablePictureInPicture
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ transform: 'translateZ(0)', willChange: 'transform' }}
+          aria-hidden="true"
+        >
+          <source
+            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
+            type="video/mp4"
+          />
+        </video>
+        {/* Capa única de glass: blur + saturate + tinte. El blur queda fijo y no
+            se recalcula al hacer hover sobre las tarjetas. */}
+        <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
+      </div>
+
+      {/* Welcome banner — glass */}
+      <div className="bg-white/[0.07] rounded-xl border border-white/15 ring-1 ring-white/5 p-6 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)]">
+        <h1 className="text-xl font-bold text-white">
           {greeting()},{' '}
-          <span className="text-sky-600 dark:text-sky-400 capitalize">
+          <span className="text-sky-300 capitalize">
             {user?.full_name || user?.username}
           </span>!
         </h1>
-        <p className="text-sm text-ink-500 dark:text-ink-400 mt-1">
+        <p className="text-sm text-white/65 mt-1">
           Resumen general de la operación.
         </p>
       </div>
@@ -375,7 +422,7 @@ export default function Dashboard() {
         </Panel>
       </div>
 
-      <div className="text-center pt-4 text-xs text-ink-500 dark:text-ink-400 border-t border-ink-200 dark:border-ink-800">
+      <div className="text-center pt-4 text-xs text-white/40 border-t border-white/10">
         Skilled © {new Date().getFullYear()}
       </div>
     </div>

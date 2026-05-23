@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, Camera, X } from 'lucide-react'
 import {
   Button, Card, PageHeader, Badge, Modal, ConfirmDialog,
   EmptyState, Input, Select, Skeleton,
@@ -11,7 +11,8 @@ import UserAvatar from '../components/UserAvatar'
 import { extractApiError } from '../utils/apiError'
 import { useAuth } from '../context/AuthContext'
 import {
-  listarUsuarios, crearUsuario, eliminarUsuario, cambiarPasswordUsuario,
+  listarUsuarios, crearUsuario, eliminarUsuario, cambiarPasswordUsuario, actualizarUsuario,
+  subirFotoUsuario,
 } from '../api/users'
 
 const ROLE_LABELS = {
@@ -69,6 +70,15 @@ export default function Usuarios() {
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [openEdit, setOpenEdit] = useState(null)
+  const [editForm, setEditForm] = useState({
+    full_name: '', area: '', position: '', factory: '', contact_info: '',
+  })
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [photoFile, setPhotoFile] = useState(null)
+  const [photoPreview, setPhotoPreview] = useState(null)
+  const fileInputRef = useRef(null)
 
   const load = () => {
     setLoading(true)
@@ -134,6 +144,72 @@ export default function Usuarios() {
       toast.error(extractApiError(err, 'No se pudo actualizar la contraseña'))
     } finally {
       setSavingPwd(false)
+    }
+  }
+
+  const startEdit = (u) => {
+    setEditForm({
+      full_name: u.full_name || '',
+      area: u.area || '',
+      position: u.position || '',
+      factory: u.factory || '',
+      contact_info: u.contact_info || '',
+    })
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    setOpenEdit(u)
+  }
+
+  const closeEdit = () => {
+    setOpenEdit(null)
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoPreview(null)
+    setPhotoFile(null)
+  }
+
+  const onPickPhoto = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (!/^image\//.test(f.type)) {
+      toast.error('Selecciona un archivo de imagen (JPG o PNG)')
+      e.target.value = ''
+      return
+    }
+    if (f.size > 8 * 1024 * 1024) {
+      toast.error('La imagen no puede pesar más de 8MB')
+      e.target.value = ''
+      return
+    }
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(f)
+    setPhotoPreview(URL.createObjectURL(f))
+  }
+
+  const clearPhoto = () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview)
+    setPhotoFile(null)
+    setPhotoPreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault()
+    if (!openEdit) return
+    setSavingEdit(true)
+    try {
+      // 1. Texto: PUT JSON
+      const updated = await actualizarUsuario(openEdit.id, editForm)
+      // 2. Foto: POST multipart (solo si el admin eligió una nueva)
+      const withPhoto = photoFile
+        ? await subirFotoUsuario(openEdit.id, photoFile)
+        : updated
+      setUsers((prev) => prev.map((u) => (u.id === withPhoto.id ? { ...u, ...withPhoto } : u)))
+      toast.success(photoFile ? 'Usuario y foto actualizados' : 'Usuario actualizado')
+      closeEdit()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo actualizar el usuario'))
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -221,6 +297,15 @@ export default function Usuarios() {
                   </TD>
                   <TD align="right">
                     <div className="inline-flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => startEdit(u)}
+                        aria-label="Editar usuario"
+                        title="Editar nombre, área, rol y contacto"
+                      >
+                        <Pencil size={14} />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon-sm"
@@ -328,6 +413,118 @@ export default function Usuarios() {
         confirmLabel="Eliminar"
         tone="danger"
       />
+
+      <Modal
+        open={!!openEdit}
+        onClose={closeEdit}
+        title={openEdit ? `Editar perfil — ${openEdit.username}` : 'Editar perfil'}
+        description="Actualiza la foto, datos de contacto y área del usuario."
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeEdit} disabled={savingEdit}>Cancelar</Button>
+            <Button type="submit" form="edit-user-form" loading={savingEdit}>Guardar cambios</Button>
+          </>
+        }
+      >
+        <form id="edit-user-form" onSubmit={handleSaveEdit} className="space-y-3">
+          {openEdit && (
+            <div className="flex items-center gap-4 rounded-md border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/40 px-3 py-3">
+              <div className="relative flex-shrink-0">
+                {photoPreview ? (
+                  <img
+                    src={photoPreview}
+                    alt="Nueva foto"
+                    className="h-16 w-16 rounded-full object-cover ring-2 ring-brand-500 ring-offset-2 ring-offset-white dark:ring-offset-ink-900"
+                  />
+                ) : (
+                  <UserAvatar
+                    id={openEdit.id}
+                    profilePic={openEdit.profile_pic}
+                    name={openEdit.full_name || openEdit.username}
+                    size="lg"
+                  />
+                )}
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={clearPhoto}
+                    className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-rose-500 text-white shadow inline-flex items-center justify-center hover:bg-rose-600"
+                    title="Descartar nueva foto"
+                    aria-label="Descartar foto"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs text-ink-500 dark:text-ink-400">Rol</span>
+                  <Badge tone={ROLE_TONES[openEdit.role] || 'neutral'}>
+                    {ROLE_LABELS[openEdit.role] || openEdit.role}
+                  </Badge>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg"
+                  onChange={onPickPhoto}
+                  className="hidden"
+                  id="user-foto-input"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Camera size={13} />}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {photoPreview ? 'Elegir otra' : 'Cambiar foto'}
+                </Button>
+                {photoFile && (
+                  <p className="text-[10px] text-ink-500 dark:text-ink-400 mt-1 truncate">
+                    {photoFile.name} · {(photoFile.size / 1024).toFixed(0)} KB
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+          <Input
+            label="Nombre completo"
+            value={editForm.full_name}
+            onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+            placeholder="Nombre del usuario"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Área"
+              value={editForm.area}
+              onChange={(e) => setEditForm({ ...editForm, area: e.target.value })}
+            />
+            <Input
+              label="Puesto"
+              value={editForm.position}
+              onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Input
+              label="Planta"
+              value={editForm.factory}
+              onChange={(e) => setEditForm({ ...editForm, factory: e.target.value })}
+            />
+            <Input
+              label="Contacto"
+              value={editForm.contact_info}
+              onChange={(e) => setEditForm({ ...editForm, contact_info: e.target.value })}
+              placeholder="Correo o teléfono"
+            />
+          </div>
+          <p className="text-[11px] text-ink-500 dark:text-ink-400">
+            El rol no es editable desde aquí por seguridad. Si necesitas cambiarlo, elimina la cuenta y vuelve a crearla con el rol correcto.
+          </p>
+        </form>
+      </Modal>
     </div>
   )
 }

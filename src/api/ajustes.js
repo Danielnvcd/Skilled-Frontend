@@ -38,3 +38,19 @@ export async function eliminarDescuento(descuentoId) {
   const { data } = await api.delete(`${BASE}/descuentos/${descuentoId}`)
   return data
 }
+
+export async function exportarExcelPeriodo(periodoId, nombreSugerido) {
+  const res = await api.get(`${BASE}/periodos/${periodoId}/excel`, { responseType: 'blob' })
+  const cd = res.headers['content-disposition'] || ''
+  const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i)
+  const filename = match ? decodeURIComponent(match[1]) : (nombreSugerido || `ajuste_periodo_${periodoId}.xlsx`)
+  const blob = new Blob([res.data], { type: res.headers['content-type'] })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

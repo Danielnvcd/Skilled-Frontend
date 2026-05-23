@@ -59,10 +59,17 @@ export const MENUS = {
     {
       label: 'Operación',
       items: [
+        { path: '/mis-proyectos', label: 'Mis Proyectos', icon: FolderOpen },
         { path: '/credenciales', label: 'Credenciales', icon: IdCard },
         { path: '/horas', label: 'Reporte de Horas', icon: Clock, end: true },
         { path: '/horas/movil', label: 'Escanear QR', icon: ScanLine, mobileOnly: true },
         { path: '/ficha', label: 'Ficha Técnica', icon: HardHat },
+      ],
+    },
+    {
+      label: 'Ayuda',
+      items: [
+        { path: '/manual-coordinador', label: 'Manual de uso', icon: BookOpen },
       ],
     },
   ],

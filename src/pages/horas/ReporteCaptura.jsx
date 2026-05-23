@@ -7,6 +7,8 @@ import {
 } from '../../components/ui'
 import { detalleReporte, cerrarReporte } from '../../api/horas'
 import RegistroModal from './RegistroModal'
+import CapturaMovil from './CapturaMovil'
+import useIsMobile from '../../hooks/useIsMobile'
 
 function fmtFecha(iso) {
   if (!iso) return '—'
@@ -32,6 +34,7 @@ function estadoLabel(estado) {
 export default function ReporteCaptura() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const isMobile = useIsMobile()
 
   const [reporte, setReporte] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -154,7 +157,14 @@ export default function ReporteCaptura() {
         <span><span className="font-semibold text-ink-900 dark:text-ink-100">{totalHoras.toFixed(2)}</span> horas totales</span>
       </div>
 
-      {reporte.trabajadores.length === 0 ? (
+      {isMobile ? (
+        <CapturaMovil
+          reporte={reporte}
+          editable={editable}
+          onRegistroSaved={onRegistroSaved}
+          onRegistroDeleted={onRegistroDeleted}
+        />
+      ) : reporte.trabajadores.length === 0 ? (
         <div className="rounded-lg border border-amber-200 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 p-4 text-sm text-amber-800 dark:text-amber-200">
           Este proyecto no tiene trabajadores asignados. Asigna participantes desde el módulo de Proyectos.
         </div>
@@ -238,9 +248,11 @@ export default function ReporteCaptura() {
         </div>
       )}
 
-      <p className="mt-3 text-xs text-ink-500 dark:text-ink-400 inline-flex items-center gap-1">
-        <Edit3 size={11} /> Click en cualquier celda para {editable ? 'capturar o editar' : 'ver detalle de'} el registro.
-      </p>
+      {!isMobile && (
+        <p className="mt-3 text-xs text-ink-500 dark:text-ink-400 inline-flex items-center gap-1">
+          <Edit3 size={11} /> Click en cualquier celda para {editable ? 'capturar o editar' : 'ver detalle de'} el registro.
+        </p>
+      )}
 
       {cellCtx && (
         <RegistroModal

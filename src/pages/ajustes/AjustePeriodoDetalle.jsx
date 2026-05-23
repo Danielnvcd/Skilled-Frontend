@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle,
+  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle, FileSpreadsheet,
 } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog, EmptyState,
 } from '../../components/ui'
-import { detallePeriodo, cerrarPeriodo, eliminarDescuento } from '../../api/ajustes'
+import { detallePeriodo, cerrarPeriodo, eliminarDescuento, exportarExcelPeriodo } from '../../api/ajustes'
 import AgregarDescuentoModal from './AgregarDescuentoModal'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
@@ -101,18 +101,33 @@ export default function AjustePeriodoDetalle() {
           </Link>
         }
         actions={
-          editable ? (
-            <div className="flex gap-2">
-              <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
-                Agregar descuento
-              </Button>
-              <Button variant="success" leftIcon={<CheckCircle2 size={14} />} onClick={() => setConfirmCerrar(true)}>
-                Cerrar periodo
-              </Button>
-            </div>
-          ) : (
-            <Badge tone="neutral" leftIcon={<Lock size={11} />}>Solo lectura</Badge>
-          )
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              leftIcon={<FileSpreadsheet size={14} />}
+              onClick={async () => {
+                try {
+                  await exportarExcelPeriodo(data.id, `Ajuste_${data.nombre || data.id}.xlsx`)
+                } catch (err) {
+                  toast.error(err.response?.data?.error || 'No se pudo exportar el Excel')
+                }
+              }}
+            >
+              Exportar Excel
+            </Button>
+            {editable ? (
+              <>
+                <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setAddOpen(true)}>
+                  Agregar descuento
+                </Button>
+                <Button variant="success" leftIcon={<CheckCircle2 size={14} />} onClick={() => setConfirmCerrar(true)}>
+                  Cerrar periodo
+                </Button>
+              </>
+            ) : (
+              <Badge tone="neutral" leftIcon={<Lock size={11} />}>Solo lectura</Badge>
+            )}
+          </div>
         }
       />
 

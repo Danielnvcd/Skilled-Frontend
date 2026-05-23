@@ -37,3 +37,19 @@ export async function liquidarPrestamo(id) {
   const { data } = await api.post(`${BASE}/${id}/liquidar`)
   return data
 }
+
+export async function exportarExcelPrestamos(trabajadorId, nombreSugerido) {
+  const res = await api.get(`${BASE}/trabajadores/${trabajadorId}/excel`, { responseType: 'blob' })
+  const cd = res.headers['content-disposition'] || ''
+  const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i)
+  const filename = match ? decodeURIComponent(match[1]) : (nombreSugerido || `prestamos_${trabajadorId}.xlsx`)
+  const blob = new Blob([res.data], { type: res.headers['content-type'] })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}

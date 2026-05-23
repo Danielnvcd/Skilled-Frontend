@@ -12,6 +12,7 @@ import EmpleadoForm from './pages/empleados/EmpleadoForm'
 import EmpleadoView from './pages/empleados/EmpleadoView'
 import EmpleadosImport from './pages/empleados/EmpleadosImport'
 import ProyectosList from './pages/proyectos/ProyectosList'
+import MisProyectos from './pages/proyectos/MisProyectos'
 import ReportesList from './pages/horas/ReportesList'
 import ReporteCaptura from './pages/horas/ReporteCaptura'
 import PrenominaList from './pages/prenomina/PrenominaList'
@@ -40,6 +41,7 @@ import FichaTecnica from './pages/ficha/FichaTecnica'
 import HorasMovil from './pages/horas/HorasMovil'
 import HorasAdminQR from './pages/horas/HorasAdminQR'
 import ManualAdmin from './pages/manual/ManualAdmin'
+import ManualCoordinador from './pages/manual/ManualCoordinador'
 
 function FullPageSpinner() {
   return (
@@ -96,6 +98,7 @@ export default function App() {
         <Route path="usuarios"                element={<RoleRoute allow={isAdmin}><Usuarios /></RoleRoute>} />
         <Route path="bitacora"                element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>} />
         <Route path="manual"                  element={<RoleRoute allow={isAdmin}><ManualAdmin /></RoleRoute>} />
+        <Route path="manual-coordinador"      element={<RoleRoute allow={isCoordinador || isAdmin}><ManualCoordinador /></RoleRoute>} />
         <Route path="metricas"                element={<RoleRoute allow={isAdmin}><Metricas /></RoleRoute>} />
         <Route path="prenomina"               element={<RoleRoute allow={isAdmin}><PrenominaList /></RoleRoute>} />
         <Route path="prenomina/:fecha"        element={<RoleRoute allow={isAdmin}><PrenominaGenerar /></RoleRoute>} />
@@ -123,6 +126,7 @@ export default function App() {
         <Route path="horas/:id"              element={<RoleRoute allow={canOperar}><ReporteCaptura /></RoleRoute>} />
         <Route path="credenciales"           element={<RoleRoute allow={canOperar}><CredencialesList /></RoleRoute>} />
         <Route path="ficha"                  element={<RoleRoute allow={isCoordinador || isAdmin}><FichaTecnica /></RoleRoute>} />
+        <Route path="mis-proyectos"          element={<RoleRoute allow={isCoordinador || isAdmin}><MisProyectos /></RoleRoute>} />
 
         {/* Inventario: admin + rol inventario */}
         <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />

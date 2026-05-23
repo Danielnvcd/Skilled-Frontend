@@ -36,7 +36,7 @@ export default function Layout() {
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative overflow-x-hidden">
       {/* Fondo base global. Va en -z-20 para que cada página pueda meter su propio
           fondo (p. ej. video HLS) en -z-10 sin que el bg lo tape. */}
       <div className="fixed inset-0 -z-20 bg-ink-50 dark:bg-ink-950 pointer-events-none" />
@@ -46,7 +46,7 @@ export default function Layout() {
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
       />
-      <div className={`transition-all duration-300 ${collapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
+      <div className={`min-w-0 transition-all duration-300 ${collapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
         <Topbar collapsed={collapsed} setCollapsed={setCollapsed} setMobileOpen={setMobileOpen} />
         <main ref={mainRef} className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1500px] mx-auto">
           <Outlet />

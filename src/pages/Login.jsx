@@ -43,9 +43,30 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-6 dark overflow-hidden font-['Inter'] bg-gradient-to-br from-black via-ink-950 to-brand-950">
+    <div className="min-h-screen relative flex items-center justify-center p-6 dark overflow-hidden font-['Inter'] bg-black">
+      {/* Video de fondo */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        poster=""
+        className="absolute inset-0 w-full h-full object-cover z-0"
+        aria-hidden="true"
+      >
+        <source
+          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
+          type="video/mp4"
+        />
+      </video>
+
+      {/* Overlay para legibilidad del formulario sobre el video */}
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-black/70 via-black/55 to-brand-950/70" />
+      <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.55)_100%)]" />
+
       <div className="relative z-10 w-full max-w-md">
-        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-black/75 to-black/45 backdrop-blur-xl p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.6)]">
+        <div className="rounded-2xl border border-white/15 bg-white/[0.06] backdrop-blur-2xl backdrop-saturate-150 p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-white/5">
           <div className="flex flex-col items-center text-center mb-10">
             <img
               src="/logo.png"

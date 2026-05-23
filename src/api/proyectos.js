@@ -7,6 +7,11 @@ export async function listarProyectos({ q = '', estado = 'todos' } = {}) {
   return data
 }
 
+export async function listarMisProyectos() {
+  const { data } = await api.get(`${BASE}/mios`)
+  return data
+}
+
 export async function obtenerMeta() {
   const { data } = await api.get(`${BASE}/meta`)
   return data

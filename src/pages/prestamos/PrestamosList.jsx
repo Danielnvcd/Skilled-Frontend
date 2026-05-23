@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Search, HandCoins, Eye, Pencil } from 'lucide-react'
+import { Plus, Search, HandCoins, Eye, Pencil, FileSpreadsheet } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, TBody, TR, TD,
   Badge, EmptyState, Pagination, Skeleton,
 } from '../../components/ui'
-import { listarPrestamos } from '../../api/prestamos'
+import { listarPrestamos, exportarExcelPrestamos } from '../../api/prestamos'
 import PrestamoFormModal from './PrestamoFormModal'
 import PrestamoDetalleModal from './PrestamoDetalleModal'
 
@@ -57,6 +57,15 @@ export default function PrestamosList() {
   const openNuevo = () => { setEditPrestamo(null); setFormOpen(true) }
   const openEditar = (p) => { setEditPrestamo(p); setFormOpen(true) }
   const reload = () => setReloadKey((k) => k + 1)
+
+  const onExportExcel = async (p) => {
+    try {
+      const nombre = `Prestamos_${p.trabajador?.no_empleado || p.trabajador_id}.xlsx`
+      await exportarExcelPrestamos(p.trabajador_id, nombre)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo exportar el Excel')
+    }
+  }
 
   return (
     <>
@@ -163,6 +172,9 @@ export default function PrestamosList() {
                       <div className="inline-flex gap-1">
                         <Button size="icon-sm" variant="ghost" title="Detalle" onClick={() => setDetalleId(p.id)}>
                           <Eye size={14} />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" title="Exportar préstamos del trabajador a Excel" onClick={() => onExportExcel(p)}>
+                          <FileSpreadsheet size={14} className="text-emerald-600 dark:text-emerald-400" />
                         </Button>
                         {p.estado === 'ACTIVO' && (
                           <Button size="icon-sm" variant="ghost" title="Editar" onClick={() => openEditar(p)}>

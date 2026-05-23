@@ -113,26 +113,23 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className={`border-t border-white/5 ${compact ? 'p-2' : 'p-3'}`}>
-          {compact ? (
-            <button
-              onClick={() => setConfirmLogout(true)}
-              title="Cerrar sesión"
-              aria-label="Cerrar sesión"
-              className="h-9 w-9 mx-auto flex items-center justify-center rounded-md text-ink-300 hover:bg-white/10 hover:text-white focus-ring transition-colors"
-            >
-              <LogOut size={17} />
-            </button>
-          ) : (
-            <button
-              onClick={() => setConfirmLogout(true)}
-              className="w-full inline-flex items-center justify-center gap-2 px-2.5 py-2 rounded-md text-sm text-ink-300 hover:bg-white/5 hover:text-white border border-white/5 hover:border-white/10 transition-colors focus-ring"
-            >
-              <LogOut size={15} />
-              Cerrar sesión
-            </button>
-          )}
+        {/* Logout — overflow-hidden evita que el texto "Cerrar sesión" se
+            desborde durante los 300ms en que el sidebar transiciona entre
+            colapsado y expandido. */}
+        <div className={`border-t border-white/5 overflow-hidden ${compact ? 'p-2' : 'p-3'}`}>
+          <button
+            onClick={() => setConfirmLogout(true)}
+            title={compact ? 'Cerrar sesión' : undefined}
+            aria-label="Cerrar sesión"
+            className={
+              compact
+                ? 'h-9 w-9 mx-auto flex items-center justify-center rounded-md text-ink-300 hover:bg-white/10 hover:text-white focus-ring transition-colors'
+                : 'w-full inline-flex items-center justify-center gap-2 px-2.5 py-2 rounded-md text-sm text-ink-300 hover:bg-white/5 hover:text-white border border-white/5 hover:border-white/10 transition-colors focus-ring whitespace-nowrap'
+            }
+          >
+            <LogOut size={compact ? 17 : 15} className="flex-shrink-0" />
+            {!compact && <span className="truncate">Cerrar sesión</span>}
+          </button>
         </div>
       </aside>
 
