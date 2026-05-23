@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, Trash2, FileText, X } from 'lucide-react'
-import { Button, Input, EmptyState, ConfirmDialog } from '../ui'
+import { Upload, Download, Trash2, FileText, X, Eye } from 'lucide-react'
+import { Button, Input, EmptyState, ConfirmDialog, ImageViewer } from '../ui'
 import {
   subirDocumento, eliminarDocumento, descargarDocumento,
 } from '../../api/trabajadores'
@@ -28,6 +28,7 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
   const [uploading, setUploading] = useState(false)
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [viewerDoc, setViewerDoc] = useState(null)
 
   if (!trabajadorId) {
     return (
@@ -132,7 +133,12 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
         <ul className="divide-y divide-ink-200 dark:divide-ink-800 rounded-xl border border-ink-200 dark:border-ink-800 overflow-hidden bg-white dark:bg-ink-900">
           {documentos.map((d) => (
             <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setViewerDoc(d)}
+                className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-md -mx-2 px-2 py-1 hover:bg-ink-50 dark:hover:bg-ink-900/40 transition-colors focus-ring"
+                title="Ver documento"
+              >
                 <div className="h-10 w-10 flex-shrink-0 rounded-lg bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 flex items-center justify-center">
                   <FileText size={18} />
                 </div>
@@ -145,8 +151,11 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
                     {d.fecha_subida && ` · subido ${fmtFecha(d.fecha_subida)}`}
                   </p>
                 </div>
-              </div>
+              </button>
               <div className="flex gap-1 flex-shrink-0">
+                <Button size="icon-sm" variant="ghost" title="Ver" onClick={() => setViewerDoc(d)}>
+                  <Eye size={14} />
+                </Button>
                 <Button size="icon-sm" variant="ghost" title="Descargar" onClick={() => onDownload(d)}>
                   <Download size={14} />
                 </Button>
@@ -168,6 +177,14 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
         description={`¿Eliminar "${confirmDel?.nombre_archivo}"? Esta acción no se puede deshacer.`}
         confirmLabel="Eliminar"
         tone="danger"
+      />
+
+      <ImageViewer
+        open={Boolean(viewerDoc)}
+        onClose={() => setViewerDoc(null)}
+        authPath={viewerDoc ? `/trabajadores/documentos/${viewerDoc.id}` : null}
+        filename={viewerDoc?.nombre_archivo || ''}
+        alt={viewerDoc?.nombre_archivo || 'Documento'}
       />
     </div>
   )

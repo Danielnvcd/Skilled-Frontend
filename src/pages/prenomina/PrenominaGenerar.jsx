@@ -3,13 +3,14 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, FileText, Mail, Save, Pencil, CheckCircle2, Download,
-  Plus, Minus, CirclePlus, CircleMinus, Folder, Lock,
+  Plus, Minus, CirclePlus, CircleMinus, Folder, Lock, FileSpreadsheet,
 } from 'lucide-react'
 import { Skeleton, ConfirmDialog } from '../../components/ui'
 import {
   previewSemana, guardarSemana,
   imprimirConsolidado, imprimirIndividual,
   enviarCorreoIndividual, enviarCorreoTodos,
+  exportarExcel,
 } from '../../api/prenomina'
 import EnvioCorreoModal from './EnvioCorreoModal'
 
@@ -41,6 +42,7 @@ export default function PrenominaGenerar() {
   const [bulkEmailing, setBulkEmailing] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [exportingExcel, setExportingExcel] = useState(false)
 
   const cargar = () => {
     setLoading(true)
@@ -90,6 +92,18 @@ export default function PrenominaGenerar() {
       toast.error(err.response?.data?.error || 'Error al enviar correo')
     } finally {
       setEmailingId(null)
+    }
+  }
+
+  const handleExportarExcel = async () => {
+    setExportingExcel(true)
+    try {
+      await exportarExcel(fecha)
+      toast.success('Excel descargado')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al exportar Excel')
+    } finally {
+      setExportingExcel(false)
     }
   }
 
@@ -150,6 +164,10 @@ export default function PrenominaGenerar() {
         <div className="flex items-center gap-2 flex-wrap justify-end">
           <BarButton variant="outline-indigo" onClick={() => handleImprimir(null)} loading={printingId === 'consolidado'}>
             <FileText size={16} /> Imprimir Proyección (PDF)
+          </BarButton>
+
+          <BarButton variant="outline-emerald" onClick={handleExportarExcel} loading={exportingExcel}>
+            <FileSpreadsheet size={16} /> Exportar Excel
           </BarButton>
 
           <BarButton variant="outline-green" onClick={handleEnviarTodos} loading={bulkEmailing}>
@@ -223,6 +241,7 @@ function BarButton({ variant = 'outline-indigo', loading, onClick, children }) {
   const styles = {
     'outline-indigo': 'border border-indigo-500 text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:border-indigo-500 dark:hover:bg-indigo-900/30',
     'outline-green': 'border border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:border-emerald-600 dark:hover:bg-emerald-900/30',
+    'outline-emerald': 'border border-emerald-500 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-100 dark:text-emerald-300 dark:border-emerald-500 dark:bg-emerald-900/20 dark:hover:bg-emerald-900/30',
     'gradient-green': 'text-white border-0 bg-gradient-to-br from-emerald-600 to-emerald-400 shadow-sm hover:brightness-110',
     'gradient-amber': 'text-white border-0 bg-gradient-to-br from-amber-500 to-amber-400 shadow-sm hover:brightness-110',
   }

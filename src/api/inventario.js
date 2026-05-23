@@ -114,3 +114,56 @@ export async function updateSolicitudEstado(id, estatus) {
   const { data } = await api.patch(`${BASE}/solicitudes/${id}/estado`, { estatus })
   return data
 }
+
+// --- Categorías ---
+export async function getCategorias() {
+  const { data } = await api.get(`${BASE}/categorias/`)
+  return data
+}
+
+// --- Configuración visual de categorías (imagen, etc.) ---
+export async function getCategoriasConfig() {
+  const { data } = await api.get(`${BASE}/categorias-config/`)
+  return data
+}
+
+export async function upsertCategoriaConfig(nombre, imagen_url) {
+  const { data } = await api.put(
+    `${BASE}/categorias-config/${encodeURIComponent(nombre)}`,
+    { imagen_url: imagen_url || null },
+  )
+  return data
+}
+
+export async function deleteCategoriaConfig(nombre) {
+  await api.delete(`${BASE}/categorias-config/${encodeURIComponent(nombre)}`)
+}
+
+// --- Proyectos (endpoint del módulo inventario; distinto del módulo de proyectos) ---
+export async function getProyectosInventario() {
+  const { data } = await api.get(`${BASE}/proyectos/`)
+  return data
+}
+
+// --- Importar materiales ---
+export async function descargarPlantillaMateriales() {
+  const res = await api.get(`${BASE}/productos/plantilla-importar`, { responseType: 'blob' })
+  const blob = new Blob([res.data], { type: res.headers['content-type'] })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'plantilla_materiales.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+export async function importarMateriales(file) {
+  const fd = new FormData()
+  fd.append('archivo', file)
+  const { data } = await api.post(`${BASE}/productos/importar`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}

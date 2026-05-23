@@ -7,6 +7,11 @@ export async function listarTrabajadores({ page = 1, q = '', estado = 'activos',
   return data
 }
 
+export async function obtenerFichaTecnica() {
+  const { data } = await api.get(`${BASE}/ficha-tecnica`)
+  return data
+}
+
 export async function obtenerTrabajador(id) {
   const { data } = await api.get(`${BASE}/${id}`)
   return data

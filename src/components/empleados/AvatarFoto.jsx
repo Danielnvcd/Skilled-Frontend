@@ -7,7 +7,7 @@ import { Avatar } from '../ui'
  * entra al viewport — útil para tablas con muchos rows.
  */
 export default function AvatarFoto({ id, hasFoto, name, size = 'md', thumb = true, lazy = false }) {
-  const url = hasFoto ? `/api/trabajadores/${id}/foto${thumb ? '/thumb' : ''}` : null
+  const url = hasFoto ? `/trabajadores/${id}/foto${thumb ? '/thumb' : ''}` : null
   // Hooks must be called unconditionally — we instantiate both and pick one
   const eagerUrl = useAuthenticatedBlob(lazy ? null : url)
   const [lazyUrl, lazyRef] = useLazyAuthenticatedBlob(lazy ? url : null)

@@ -25,6 +25,21 @@ import ProyectoTotal from './pages/proyecto-total/ProyectoTotal'
 import HistoricoList from './pages/historico/HistoricoList'
 import HistoricoDetalle from './pages/historico/HistoricoDetalle'
 import Bitacora from './pages/Bitacora'
+import Metricas from './pages/Metricas'
+import InventarioDashboard from './pages/inventario/InventarioDashboard'
+import CatalogoProductos from './pages/inventario/CatalogoProductos'
+import AlmacenesEstantes from './pages/inventario/AlmacenesEstantes'
+import MovimientosInventario from './pages/inventario/MovimientosInventario'
+import RegistrarMovimiento from './pages/inventario/RegistrarMovimiento'
+import SolicitudesMaterial from './pages/inventario/SolicitudesMaterial'
+import MisPedidos from './pages/inventario/MisPedidos'
+import ScannerMovil from './pages/inventario/ScannerMovil'
+import ImportarMateriales from './pages/inventario/ImportarMateriales'
+import QREstante from './pages/inventario/QREstante'
+import FichaTecnica from './pages/ficha/FichaTecnica'
+import HorasMovil from './pages/horas/HorasMovil'
+import HorasAdminQR from './pages/horas/HorasAdminQR'
+import ManualAdmin from './pages/manual/ManualAdmin'
 
 function FullPageSpinner() {
   return (
@@ -51,72 +66,77 @@ function RoleRoute({ allow, children }) {
   return children
 }
 
+function RoleBasedHome() {
+  const { user } = useAuth()
+  if (user?.role === 'inventario') return <InventarioDashboard />
+  if (user?.role === 'solicitante_material') return <Navigate to="/inventario/mis-pedidos" replace />
+  if (user?.role === 'coordinador') return <Navigate to="/horas" replace />
+  return <Dashboard />
+}
+
 export default function App() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, isCoordinador } = useAuth()
+
+  const role = user?.role
+  const isInventario = role === 'inventario' || isAdmin
+  const canSolicit   = role === 'solicitante_material' || role === 'inventario' || isAdmin
+  const canOperar    = isAdmin || isCoordinador
 
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/verify-2fa" element={<Verify2FA />} />
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="perfil" element={<Profile />} />
-        <Route path="perfil/:id" element={<Profile />} />
-        <Route path="directorio" element={<Directorio />} />
-        <Route
-          path="usuarios"
-          element={<RoleRoute allow={isAdmin}><Usuarios /></RoleRoute>}
-        />
-        <Route
-          path="bitacora"
-          element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>}
-        />
-        <Route path="proyectos" element={<ProyectosList />} />
-        <Route path="horas" element={<ReportesList />} />
-        <Route path="horas/:id" element={<ReporteCaptura />} />
-        <Route
-          path="prenomina"
-          element={<RoleRoute allow={isAdmin}><PrenominaList /></RoleRoute>}
-        />
-        <Route
-          path="prenomina/:fecha"
-          element={<RoleRoute allow={isAdmin}><PrenominaGenerar /></RoleRoute>}
-        />
-        <Route
-          path="prenomina/:fecha/editar"
-          element={<RoleRoute allow={isAdmin}><PrenominaEditar /></RoleRoute>}
-        />
-        <Route
-          path="prestamos"
-          element={<RoleRoute allow={isAdmin}><PrestamosList /></RoleRoute>}
-        />
-        <Route
-          path="ajustes"
-          element={<RoleRoute allow={isAdmin}><AjustesList /></RoleRoute>}
-        />
-        <Route
-          path="ajustes/:id"
-          element={<RoleRoute allow={isAdmin}><AjustePeriodoDetalle /></RoleRoute>}
-        />
-        <Route path="credenciales" element={<CredencialesList />} />
-        <Route
-          path="proyecto-total"
-          element={<RoleRoute allow={isAdmin}><ProyectoTotal /></RoleRoute>}
-        />
-        <Route
-          path="historico"
-          element={<RoleRoute allow={isAdmin}><HistoricoList /></RoleRoute>}
-        />
-        <Route
-          path="historico/:fecha"
-          element={<RoleRoute allow={isAdmin}><HistoricoDetalle /></RoleRoute>}
-        />
-        <Route path="empleados" element={<EmpleadosList />} />
-        <Route path="empleados/bajas" element={<EmpleadosList variante="bajas" />} />
-        <Route path="empleados/nuevo" element={<EmpleadoForm modo="nuevo" />} />
-        <Route path="empleados/importar" element={<EmpleadosImport />} />
-        <Route path="empleados/:id" element={<EmpleadoView />} />
-        <Route path="empleados/:id/editar" element={<EmpleadoForm modo="editar" />} />
+        <Route index element={<RoleBasedHome />} />
+        <Route path="perfil"      element={<Profile />} />
+        <Route path="perfil/:id"  element={<Profile />} />
+        <Route path="directorio"  element={<Directorio />} />
+
+        {/* Solo admin */}
+        <Route path="usuarios"                element={<RoleRoute allow={isAdmin}><Usuarios /></RoleRoute>} />
+        <Route path="bitacora"                element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>} />
+        <Route path="manual"                  element={<RoleRoute allow={isAdmin}><ManualAdmin /></RoleRoute>} />
+        <Route path="metricas"                element={<RoleRoute allow={isAdmin}><Metricas /></RoleRoute>} />
+        <Route path="prenomina"               element={<RoleRoute allow={isAdmin}><PrenominaList /></RoleRoute>} />
+        <Route path="prenomina/:fecha"        element={<RoleRoute allow={isAdmin}><PrenominaGenerar /></RoleRoute>} />
+        <Route path="prenomina/:fecha/editar" element={<RoleRoute allow={isAdmin}><PrenominaEditar /></RoleRoute>} />
+        <Route path="prestamos"               element={<RoleRoute allow={isAdmin}><PrestamosList /></RoleRoute>} />
+        <Route path="ajustes"                 element={<RoleRoute allow={isAdmin}><AjustesList /></RoleRoute>} />
+        <Route path="ajustes/:id"             element={<RoleRoute allow={isAdmin}><AjustePeriodoDetalle /></RoleRoute>} />
+        <Route path="proyecto-total"          element={<RoleRoute allow={isAdmin}><ProyectoTotal /></RoleRoute>} />
+        <Route path="historico"               element={<RoleRoute allow={isAdmin}><HistoricoList /></RoleRoute>} />
+        <Route path="historico/:fecha"        element={<RoleRoute allow={isAdmin}><HistoricoDetalle /></RoleRoute>} />
+
+        {/* Empleados y Proyectos: solo admin (el coordinador no los ve en Flask) */}
+        <Route path="empleados"              element={<RoleRoute allow={isAdmin}><EmpleadosList /></RoleRoute>} />
+        <Route path="empleados/bajas"        element={<RoleRoute allow={isAdmin}><EmpleadosList variante="bajas" /></RoleRoute>} />
+        <Route path="empleados/nuevo"        element={<RoleRoute allow={isAdmin}><EmpleadoForm modo="nuevo" /></RoleRoute>} />
+        <Route path="empleados/importar"     element={<RoleRoute allow={isAdmin}><EmpleadosImport /></RoleRoute>} />
+        <Route path="empleados/:id"          element={<RoleRoute allow={isAdmin}><EmpleadoView /></RoleRoute>} />
+        <Route path="empleados/:id/editar"   element={<RoleRoute allow={isAdmin}><EmpleadoForm modo="editar" /></RoleRoute>} />
+        <Route path="proyectos"              element={<RoleRoute allow={isAdmin}><ProyectosList /></RoleRoute>} />
+
+        {/* Admin + Coordinador: horas, credenciales, ficha técnica */}
+        <Route path="horas"                  element={<RoleRoute allow={canOperar}><ReportesList /></RoleRoute>} />
+        <Route path="horas/movil"            element={<RoleRoute allow={canOperar}><HorasMovil /></RoleRoute>} />
+        <Route path="horas/qr"               element={<RoleRoute allow={isAdmin}><HorasAdminQR /></RoleRoute>} />
+        <Route path="horas/:id"              element={<RoleRoute allow={canOperar}><ReporteCaptura /></RoleRoute>} />
+        <Route path="credenciales"           element={<RoleRoute allow={canOperar}><CredencialesList /></RoleRoute>} />
+        <Route path="ficha"                  element={<RoleRoute allow={isCoordinador || isAdmin}><FichaTecnica /></RoleRoute>} />
+
+        {/* Inventario: admin + rol inventario */}
+        <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
+        <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
+        <Route path="inventario/importar"    element={<RoleRoute allow={isInventario}><ImportarMateriales /></RoleRoute>} />
+        <Route path="inventario/almacenes"   element={<RoleRoute allow={isInventario}><AlmacenesEstantes /></RoleRoute>} />
+        <Route path="inventario/qr/:id"      element={<RoleRoute allow={isInventario}><QREstante /></RoleRoute>} />
+        <Route path="inventario/movimientos" element={<RoleRoute allow={isInventario}><MovimientosInventario /></RoleRoute>} />
+        <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={isInventario}><RegistrarMovimiento /></RoleRoute>} />
+        <Route path="inventario/solicitudes" element={<RoleRoute allow={isInventario}><SolicitudesMaterial /></RoleRoute>} />
+        <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
+
+        {/* Pedir material: todos los roles pueden solicitarlo */}
+        <Route path="inventario/mis-pedidos" element={<RoleRoute allow={canSolicit}><MisPedidos /></RoleRoute>} />
       </Route>
     </Routes>
   )

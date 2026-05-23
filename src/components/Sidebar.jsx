@@ -2,57 +2,11 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ConfirmDialog } from './ui'
-import {
-  Home,
-  User,
-  Users,
-  UserCog,
-  FolderOpen,
-  Clock,
-  DollarSign,
-  HandCoins,
-  Settings2,
-  IdCard,
-  PieChart,
-  FileClock,
-  History,
-  ChevronLeft,
-  ChevronRight,
-  LogOut,
-  X,
-} from 'lucide-react'
+import useIsMobile from '../hooks/useIsMobile'
+import { LogOut, X } from 'lucide-react'
+import { MENUS, DEFAULT_MENU } from '../config/menus'
 
-const accountGroup = {
-  label: 'Cuenta',
-  items: [
-    { path: '/', label: 'Inicio', icon: Home, end: true },
-    { path: '/perfil', label: 'Mi perfil', icon: User },
-    { path: '/directorio', label: 'Directorio', icon: Users },
-  ],
-}
-
-const operacionGroup = {
-  label: 'Operación',
-  items: [
-    { path: '/empleados', label: 'Empleados', icon: UserCog },
-    { path: '/credenciales', label: 'Credenciales', icon: IdCard },
-    { path: '/proyectos', label: 'Proyectos', icon: FolderOpen },
-    { path: '/horas', label: 'Horas', icon: Clock },
-    { path: '/prenomina', label: 'Prenómina', icon: DollarSign, requiresAdmin: true },
-    { path: '/proyecto-total', label: 'Proyecto Total', icon: PieChart, requiresAdmin: true },
-    { path: '/historico', label: 'Histórico nóminas', icon: FileClock, requiresAdmin: true },
-    { path: '/prestamos', label: 'Préstamos', icon: HandCoins, requiresAdmin: true },
-    { path: '/ajustes', label: 'Ajustes Inbursa', icon: Settings2, requiresAdmin: true },
-  ],
-}
-
-const adminGroup = {
-  label: 'Administración',
-  items: [
-    { path: '/usuarios', label: 'Usuarios', icon: Users },
-    { path: '/bitacora', label: 'Bitácora', icon: History },
-  ],
-}
+// ── Sub-componentes ────────────────────────────────────────────────────────────
 
 function NavItem({ item, compact }) {
   const Icon = item.icon
@@ -82,9 +36,7 @@ function NavItem({ item, compact }) {
   )
 }
 
-function NavGroup({ group, compact, isAdmin }) {
-  const items = group.items.filter((item) => !item.requiresAdmin || isAdmin)
-  if (items.length === 0) return null
+function NavGroup({ group, compact }) {
   return (
     <div className="mb-3">
       {!compact ? (
@@ -95,7 +47,7 @@ function NavGroup({ group, compact, isAdmin }) {
         <div className="mx-3 my-2 h-px bg-white/5" />
       )}
       <div className="space-y-0.5">
-        {items.map((item) => (
+        {group.items.map((item) => (
           <NavItem key={item.path} item={item} compact={compact} />
         ))}
       </div>
@@ -103,11 +55,23 @@ function NavGroup({ group, compact, isAdmin }) {
   )
 }
 
+// ── Sidebar principal ──────────────────────────────────────────────────────────
+
 export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen }) {
-  const { user, logout, isAdmin, isSuperAdmin } = useAuth()
+  const { user, logout } = useAuth()
   const [confirmLogout, setConfirmLogout] = useState(false)
+  const isMobile = useIsMobile()
 
   const compact = collapsed && !mobileOpen
+  const rawGroups = MENUS[user?.role] ?? DEFAULT_MENU
+  // Filtramos items marcados como mobileOnly cuando estamos en escritorio.
+  // Si un grupo queda vacío después del filtro, también lo ocultamos.
+  const groups = rawGroups
+    .map((g) => ({
+      ...g,
+      items: g.items.filter((it) => !it.mobileOnly || isMobile),
+    }))
+    .filter((g) => g.items.length > 0)
 
   return (
     <>
@@ -123,6 +87,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
           ${mobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0 w-72'}
         `}
       >
+        {/* Logo */}
         <div className="h-16 flex items-center justify-center border-b border-white/5 relative px-4">
           <img
             src={compact ? '/logo_sidebar.png' : '/logo.png'}
@@ -130,7 +95,6 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
             className={compact ? 'h-9 w-9 object-contain' : 'h-10 max-w-full object-contain'}
             draggable={false}
           />
-
           {mobileOpen && (
             <button
               onClick={() => setMobileOpen(false)}
@@ -142,19 +106,21 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
           )}
         </div>
 
+        {/* Navegación */}
         <nav className="flex-1 overflow-y-auto scrollbar-dark py-3">
-          <NavGroup group={accountGroup} compact={compact} isAdmin={isAdmin} />
-          <NavGroup group={operacionGroup} compact={compact} isAdmin={isAdmin} />
-          {isAdmin && <NavGroup group={adminGroup} compact={compact} isAdmin={isAdmin} />}
+          {groups.map((group) => (
+            <NavGroup key={group.label} group={group} compact={compact} />
+          ))}
         </nav>
 
+        {/* Logout */}
         <div className={`border-t border-white/5 ${compact ? 'p-2' : 'p-3'}`}>
           {compact ? (
             <button
               onClick={() => setConfirmLogout(true)}
               title="Cerrar sesión"
               aria-label="Cerrar sesión"
-              className="h-9 w-9 mx-auto inline-flex items-center justify-center rounded-md text-ink-300 hover:bg-white/10 hover:text-white focus-ring transition-colors"
+              className="h-9 w-9 mx-auto flex items-center justify-center rounded-md text-ink-300 hover:bg-white/10 hover:text-white focus-ring transition-colors"
             >
               <LogOut size={17} />
             </button>
@@ -175,7 +141,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
         onClose={() => setConfirmLogout(false)}
         onConfirm={() => { setConfirmLogout(false); logout() }}
         title="Cerrar sesión"
-        description={`¿Seguro que quieres cerrar la sesión${user?.fullName || user?.username ? ` de ${user.fullName || user.username}` : ''}?`}
+        description={`¿Seguro que quieres cerrar la sesión${user?.full_name || user?.username ? ` de ${user.full_name || user.username}` : ''}?`}
         confirmLabel="Cerrar sesión"
         cancelLabel="Cancelar"
       />

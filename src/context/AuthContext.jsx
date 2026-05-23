@@ -7,10 +7,16 @@ function buildPerms(user) {
   const role = user?.role
   const isSuperAdmin = role === 'super_admin'
   const isAdmin = role === 'admin' || isSuperAdmin
+  const isCoordinador = role === 'coordinador'
+  const isInventario = role === 'inventario'
+  const isSolicitante = role === 'solicitante_material'
   return {
     role,
     isSuperAdmin,
     isAdmin,
+    isCoordinador,
+    isInventario,
+    isSolicitante,
   }
 }
 

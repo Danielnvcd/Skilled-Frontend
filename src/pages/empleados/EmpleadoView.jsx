@@ -3,10 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Pencil, Download, Briefcase, Hash, Mail, Phone,
-  IdCard, FileText, AlertCircle, MapPin, User, UserMinus, UserCheck,
+  IdCard, FileText, AlertCircle, MapPin, User, UserMinus, UserCheck, Eye,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog,
+  PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog, ImageViewer,
 } from '../../components/ui'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 import {
@@ -71,6 +71,7 @@ export default function EmpleadoView() {
   const [exporting, setExporting] = useState(false)
   const [confirmAction, setConfirmAction] = useState(null) // 'baja' | 'reactivar'
   const [busy, setBusy] = useState(false)
+  const [viewerDoc, setViewerDoc] = useState(null)
 
   const cargar = () => {
     setLoading(true)
@@ -320,7 +321,12 @@ export default function EmpleadoView() {
           <ul className="divide-y divide-ink-200 dark:divide-ink-800">
             {data.documentos.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-3 py-3">
-                <div className="flex items-center gap-3 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setViewerDoc(d)}
+                  className="flex items-center gap-3 min-w-0 flex-1 text-left rounded-md -mx-2 px-2 py-1 hover:bg-ink-50 dark:hover:bg-ink-900/40 transition-colors focus-ring"
+                  title="Ver documento"
+                >
                   <div className="h-9 w-9 rounded-lg bg-brand-50 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 flex items-center justify-center flex-shrink-0">
                     <FileText size={16} />
                   </div>
@@ -332,10 +338,15 @@ export default function EmpleadoView() {
                       {d.fecha_fin && ` → ${fmtFecha(d.fecha_fin)}`}
                     </p>
                   </div>
+                </button>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button size="sm" variant="secondary" leftIcon={<Eye size={13} />} onClick={() => setViewerDoc(d)}>
+                    Ver
+                  </Button>
+                  <Button size="sm" variant="ghost" leftIcon={<Download size={13} />} onClick={() => descargarDocumento(d.id, d.nombre_archivo)} title="Descargar">
+                    <span className="sr-only">Descargar</span>
+                  </Button>
                 </div>
-                <Button size="sm" variant="secondary" leftIcon={<Download size={13} />} onClick={() => descargarDocumento(d.id, d.nombre_archivo)}>
-                  Descargar
-                </Button>
               </li>
             ))}
           </ul>
@@ -353,6 +364,14 @@ export default function EmpleadoView() {
           : 'El empleado volverá a las operaciones activas. ¿Continuar?'}
         confirmLabel={confirmAction === 'baja' ? 'Dar de baja' : 'Reactivar'}
         tone={confirmAction === 'baja' ? 'danger' : 'warning'}
+      />
+
+      <ImageViewer
+        open={Boolean(viewerDoc)}
+        onClose={() => setViewerDoc(null)}
+        authPath={viewerDoc ? `/trabajadores/documentos/${viewerDoc.id}` : null}
+        filename={viewerDoc?.nombre_archivo || ''}
+        alt={viewerDoc?.nombre_archivo || 'Documento'}
       />
     </>
   )

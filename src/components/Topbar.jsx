@@ -1,9 +1,10 @@
-import { Menu, PanelLeft, Search, Sun, Moon } from 'lucide-react'
+import { Menu, PanelLeft, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
 import NotificacionesBell from './NotificacionesBell'
 import UserAvatar from './UserAvatar'
+import MenuSearch from './MenuSearch'
 
 export default function Topbar({ collapsed, setCollapsed, setMobileOpen }) {
   const { user, isAdmin } = useAuth()
@@ -28,15 +29,7 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen }) {
           >
             <PanelLeft size={18} />
           </button>
-          <div className="hidden md:flex items-center gap-2 ml-1 px-3 h-9 rounded-md bg-ink-50 dark:bg-ink-800/60 border border-ink-200 dark:border-ink-700 w-72 lg:w-96">
-            <Search size={15} className="text-ink-400 dark:text-ink-500 flex-shrink-0" />
-            <input
-              type="text"
-              placeholder="Buscar..."
-              className="flex-1 bg-transparent text-sm text-ink-800 dark:text-ink-100 placeholder:text-ink-400 dark:placeholder:text-ink-500 focus:outline-none"
-            />
-            <kbd className="hidden lg:inline-flex items-center gap-1 text-[10px] text-ink-400 dark:text-ink-500 font-mono">⌘ K</kbd>
-          </div>
+          <MenuSearch />
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">

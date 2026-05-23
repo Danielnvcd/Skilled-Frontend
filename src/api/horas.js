@@ -43,3 +43,34 @@ export async function eliminarRegistro(registroId) {
   const { data } = await api.delete(`${BASE}/registros/${registroId}`)
   return data
 }
+
+// ── Móvil / QR ──────────────────────────────────────────────────────────────
+
+export async function obtenerResumenMovil() {
+  const { data } = await api.get(`${BASE}/movil/resumen`)
+  return data
+}
+
+export async function qrCheck({ qr_code, reporte_id }) {
+  const { data } = await api.post(`${BASE}/qr-check`, { qr_code, reporte_id })
+  return data
+}
+
+// ── Admin QR ────────────────────────────────────────────────────────────────
+
+export async function listarTrabajadoresQR() {
+  const { data } = await api.get(`${BASE}/qr/trabajadores`)
+  return data
+}
+
+export async function generarQR(trabajadorId) {
+  const { data } = await api.post(`${BASE}/qr/generar/${trabajadorId}`)
+  return data
+}
+
+export async function descargarImagenQR(qrCode) {
+  const res = await api.get(`${BASE}/qr/imagen/${encodeURIComponent(qrCode)}`, {
+    responseType: 'blob',
+  })
+  return URL.createObjectURL(new Blob([res.data], { type: 'image/png' }))
+}

@@ -79,6 +79,24 @@ export async function enviarCorreoTodos(fechaStr) {
   return data
 }
 
+export async function exportarExcel(fechaStr) {
+  const res = await api.get(`${BASE}/semanas/${fechaStr}/excel`, { responseType: 'blob' })
+  const cd = res.headers['content-disposition'] || ''
+  const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i)
+  const filename = match ? decodeURIComponent(match[1]) : `Prenomina_${fechaStr}.xlsx`
+  const blob = new Blob([res.data], {
+    type: res.headers['content-type'] || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 5_000)
+}
+
 function openBlobInTab(res) {
   const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/pdf' })
   const url = URL.createObjectURL(blob)
