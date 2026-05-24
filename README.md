@@ -52,7 +52,7 @@ En el dashboard de Vercel → **Settings → Environment Variables**:
 
 | Variable | Valor | Scope |
 |---|---|---|
-| `VITE_API_URL` | `https://api.skilled.com.mx/api` (la URL real del backend, terminada en `/api` sin slash final) | Production, Preview, Development |
+| `VITE_API_URL` | `https://api.skilledmx.cloud/api` (la URL real del backend, terminada en `/api` sin slash final) | Production, Preview, Development |
 
 > Vercel **no** lee `.env.production` del repo si la misma variable existe en la UI — la UI gana. `.env.production` queda como fallback documental.
 
