@@ -9,68 +9,58 @@ import { validarEstanteQR, getProductos, createMovimiento } from '../../api/inve
 
 export default function ScannerMovil() {
   const scannerRef = useRef(null)
-  const [html5QrCode, setHtml5QrCode] = useState(null)
   const [isScanning, setIsScanning] = useState(false)
-  
+
   const [estante, setEstante] = useState(null)
   const [productos, setProductos] = useState([])
-  
+
   const [form, setForm] = useState({ tipo: 'ENTRADA', producto_id: '', cantidad: '' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    // Precargar productos
     getProductos().then(setProductos).catch(console.error)
-    
-    return () => {
-      if (html5QrCode && isScanning) {
-        html5QrCode.stop().catch(console.error)
-      }
-    }
   }, [])
 
-  const startScanner = () => {
-    if (!html5QrCode) {
-      const qrScanner = new Html5Qrcode("reader")
-      setHtml5QrCode(qrScanner)
-      
-      qrScanner.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          qrScanner.stop().then(() => {
-            setIsScanning(false)
-            handleQRScanned(decodedText)
-          })
-        },
-        (error) => { /* ignore normal errors frame by frame */ }
-      ).then(() => {
-        setIsScanning(true)
-      }).catch(err => {
-        toast.error('Error al iniciar la cámara. Verifica los permisos.')
-      })
-    } else {
-      html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          html5QrCode.stop().then(() => {
-            setIsScanning(false)
-            handleQRScanned(decodedText)
-          })
-        },
-        () => {}
-      ).then(() => {
-        setIsScanning(true)
-      })
-    }
-  }
+  // Cuando isScanning pasa a true, el div #reader ya está montado y podemos
+  // instanciar Html5Qrcode sin que el constructor truene por elemento ausente.
+  useEffect(() => {
+    if (!isScanning) return
 
-  const stopScanner = () => {
-    if (html5QrCode && isScanning) {
-      html5QrCode.stop().then(() => setIsScanning(false))
+    const qrScanner = new Html5Qrcode('reader')
+    scannerRef.current = qrScanner
+    let stopped = false
+
+    qrScanner
+      .start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          if (stopped) return
+          stopped = true
+          qrScanner.stop().finally(() => {
+            setIsScanning(false)
+            handleQRScanned(decodedText)
+          })
+        },
+        () => { /* ignore frame errors */ }
+      )
+      .catch((err) => {
+        console.error('Scanner start failed:', err)
+        toast.error('Error al iniciar la cámara. Verifica los permisos.')
+        setIsScanning(false)
+      })
+
+    return () => {
+      stopped = true
+      if (qrScanner.getState && qrScanner.getState() === 2 /* SCANNING */) {
+        qrScanner.stop().catch(() => {})
+      }
+      scannerRef.current = null
     }
-  }
+  }, [isScanning])
+
+  const startScanner = () => setIsScanning(true)
+  const stopScanner = () => setIsScanning(false)
 
   const handleQRScanned = async (qrCodeText) => {
     toast.loading('Validando estante...', { id: 'qr' })
