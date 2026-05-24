@@ -312,14 +312,14 @@ export default function Dashboard() {
               return (
                 <li
                   key={log.id}
-                  className={`flex items-start gap-3 px-3 py-2.5 rounded-md ${
+                  className={`relative flex items-start gap-3 px-3 py-2.5 rounded-md ${
                     sospechoso
                       ? 'bg-gradient-to-r from-red-50 to-transparent dark:from-red-900/20 dark:to-transparent border-l-4 border-red-500'
                       : ''
                   }`}
                 >
                   {sospechoso && (
-                    <span className="absolute -translate-y-3 translate-x-1 text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded ml-auto shadow">
+                    <span className="absolute top-1 right-2 text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded shadow">
                       SOSPECHOSO
                     </span>
                   )}
