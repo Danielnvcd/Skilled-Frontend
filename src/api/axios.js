@@ -5,6 +5,11 @@ const api = axios.create({
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
+    // Header anti-CSRF requerido por el backend en /auth/refresh y /auth/logout
+    // (endpoints que autentican vía cookie en lugar de Bearer). Al ser un header
+    // custom, los browsers fuerzan preflight CORS — un <form> HTML cross-site
+    // no puede setearlo, así que bloquea CSRF.
+    'X-Requested-With': 'XMLHttpRequest',
   },
 })
 
