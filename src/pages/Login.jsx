@@ -69,7 +69,7 @@ export default function Login() {
         <div className="rounded-2xl border border-white/15 bg-white/[0.06] backdrop-blur-2xl backdrop-saturate-150 p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-white/5">
           <div className="flex flex-col items-center text-center mb-10">
             <img
-              src="/logo.png"
+              src="/logo1.png"
               alt="Skilled"
               className="h-16 max-w-[240px] object-contain mb-6 drop-shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
               draggable={false}
