@@ -273,14 +273,16 @@ export default function AlmacenesEstantes() {
       }>
         <form id="form-est" onSubmit={(e) => handleSaveEstante(e)} className="space-y-4">
           <Input label="Nombre (ej. Rack 1, Pasillo A)" value={formEstante?.nombre || ''} onChange={e => setFormEstante({...formEstante, nombre: e.target.value})} required />
-          <Select
-            label="Categoría (filtra qué productos se muestran al escanear este estante)"
+          <Input
+            label="Categoría local"
+            placeholder="Ej. Tornillería (déjalo vacío para mostrar todo el catálogo)"
+            list="categorias-estante-list"
             value={formEstante?.descripcion || ''}
             onChange={e => setFormEstante({ ...formEstante, descripcion: e.target.value })}
-          >
-            <option value="">Sin categoría (mostrar todo el catálogo)</option>
-            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
-          </Select>
+          />
+          <datalist id="categorias-estante-list">
+            {categorias.map(c => <option key={c} value={c} />)}
+          </datalist>
           {formEstante?.id && (
             <Select label="Mover a otro almacén" value={formEstante?.almacen_id || ''} onChange={e => setFormEstante({...formEstante, almacen_id: e.target.value})}>
               {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
