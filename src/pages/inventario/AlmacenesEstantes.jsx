@@ -6,15 +6,17 @@ import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
   Input, Skeleton, Table, THead, TH, TBody, TR, TD, Select
 } from '../../components/ui'
-import { 
+import {
   getAlmacenes, createAlmacen, updateAlmacen, deleteAlmacen,
-  getEstantesPorAlmacen, createEstante, updateEstante, deleteEstante 
+  getEstantesPorAlmacen, createEstante, updateEstante, deleteEstante,
+  getCategorias,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 
 export default function AlmacenesEstantes() {
   const [almacenes, setAlmacenes] = useState([])
   const [estantes, setEstantes] = useState([])
+  const [categorias, setCategorias] = useState([])
   const [selectedAlmacen, setSelectedAlmacen] = useState(null)
   
   const [loadingAlm, setLoadingAlm] = useState(true)
@@ -45,7 +47,10 @@ export default function AlmacenesEstantes() {
       .finally(() => setLoadingEst(false))
   }
 
-  useEffect(() => { loadAlmacenes() }, [])
+  useEffect(() => {
+    loadAlmacenes()
+    getCategorias().then(setCategorias).catch(() => setCategorias([]))
+  }, [])
 
   useEffect(() => {
     if (selectedAlmacen) {
@@ -268,7 +273,14 @@ export default function AlmacenesEstantes() {
       }>
         <form id="form-est" onSubmit={(e) => handleSaveEstante(e)} className="space-y-4">
           <Input label="Nombre (ej. Rack 1, Pasillo A)" value={formEstante?.nombre || ''} onChange={e => setFormEstante({...formEstante, nombre: e.target.value})} required />
-          <Input label="Descripción (opcional)" value={formEstante?.descripcion || ''} onChange={e => setFormEstante({...formEstante, descripcion: e.target.value})} />
+          <Select
+            label="Categoría (filtra qué productos se muestran al escanear este estante)"
+            value={formEstante?.descripcion || ''}
+            onChange={e => setFormEstante({ ...formEstante, descripcion: e.target.value })}
+          >
+            <option value="">Sin categoría (mostrar todo el catálogo)</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          </Select>
           {formEstante?.id && (
             <Select label="Mover a otro almacén" value={formEstante?.almacen_id || ''} onChange={e => setFormEstante({...formEstante, almacen_id: e.target.value})}>
               {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
