@@ -83,8 +83,7 @@ export default function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobile
       )}
       <aside
         className={`fixed left-0 top-0 z-50 h-full bg-brand-950 text-ink-100 flex flex-col transition-all duration-300 border-r border-white/5
-          ${collapsed ? 'lg:w-16' : 'lg:w-64'}
-          ${mobileOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0 w-72'}
+          translate-x-0 ${collapsed ? 'w-16' : 'w-64'}
         `}
       >
         {/* Logo */}
