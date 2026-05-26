@@ -13,37 +13,17 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
         navigateFallback: '/index.html',
+        // El backend vive en otro origen (app.skilledmx.cloud), así que /api/*
+        // NUNCA se sirve desde este host. No interceptar requests /api/* en el
+        // SW evita problemas de CORS con responses cacheadas cross-origin.
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
-        runtimeCaching: [
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/productos'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-productos',
-              networkTimeoutSeconds: 4,
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/v1/almacenes')
-              || url.pathname.startsWith('/api/v1/categorias')
-              || url.pathname.startsWith('/api/v1/estantes'),
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-catalogos',
-              networkTimeoutSeconds: 4,
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          // Google Fonts: el browser ya los carga vía <link> y los cachea
-          // naturalmente. Cachearlos en el SW provoca fetch() bloqueado por
-          // CSP (connect-src). Sin este runtime cache, las fonts siguen
-          // funcionando online — solo se pierde el cache offline para esas
-          // (irrelevante: el font del HTML hereda al system font de fallback).
-        ],
+        // Sin runtimeCaching: el SW solo precachea los assets estáticos del
+        // build y sirve el fallback de navegación para rutas SPA. Las requests
+        // cross-origin (API y fonts) las maneja el browser sin intervención
+        // del SW — evita el bug donde al cambiar de pestaña el SW servía
+        // responses cacheadas opacas que fallan el CORS check.
+        runtimeCaching: [],
       },
       devOptions: { enabled: false },
     }),
