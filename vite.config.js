@@ -38,16 +38,11 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com'
-              || url.origin === 'https://fonts.gstatic.com',
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
+          // Google Fonts: el browser ya los carga vía <link> y los cachea
+          // naturalmente. Cachearlos en el SW provoca fetch() bloqueado por
+          // CSP (connect-src). Sin este runtime cache, las fonts siguen
+          // funcionando online — solo se pierde el cache offline para esas
+          // (irrelevante: el font del HTML hereda al system font de fallback).
         ],
       },
       devOptions: { enabled: false },
