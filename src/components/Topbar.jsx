@@ -15,7 +15,16 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
     <header className="sticky top-0 z-30 bg-white/85 dark:bg-ink-900/85 backdrop-blur border-b border-ink-200 dark:border-ink-800">
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16">
         <div className="flex items-center gap-2 min-w-0">
-          {!isMobileDevice && (
+          {isMobileDevice ? (
+            <Link to="/" className="flex items-center" aria-label="Inicio">
+              <img
+                src="/logo.png"
+                alt="Skilled"
+                className="h-8 max-w-[120px] object-contain"
+                draggable={false}
+              />
+            </Link>
+          ) : (
             <button
               onClick={() => setCollapsed(!collapsed)}
               className="inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring"

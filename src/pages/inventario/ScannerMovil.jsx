@@ -29,7 +29,8 @@ export default function ScannerMovil() {
 
   // Cuando el QR es de producto directo (no estante ni herramienta).
   const [productoDirecto, setProductoDirecto] = useState(null)
-  const [accionForm, setAccionForm] = useState({ tipo: 'SALIDA', cantidad: '' })
+  // ajusteDir: '+' suma al stock, '-' resta. Solo aplica cuando tipo=AJUSTE.
+  const [accionForm, setAccionForm] = useState({ tipo: 'SALIDA', cantidad: '', ajusteDir: '+' })
   const [accionSaving, setAccionSaving] = useState(false)
 
   const [estante, setEstante] = useState(null)
@@ -145,16 +146,25 @@ export default function ScannerMovil() {
     if (!productoDirecto) return
     if (!accionForm.cantidad) return
     setAccionSaving(true)
+    // Para AJUSTE, el signo lo determinan los botones +/-. Para ENTRADA/SALIDA
+    // siempre es positivo (el backend usa el `tipo` para decidir suma o resta).
+    const rawCant = Math.abs(Number(accionForm.cantidad))
+    const cantidadFinal = accionForm.tipo === 'AJUSTE' && accionForm.ajusteDir === '-'
+      ? -rawCant
+      : rawCant
     try {
       await createMovimientoRapido({
         producto_qr: productoDirecto.codigo,
         tipo: accionForm.tipo,
-        cantidad: Number(accionForm.cantidad),
+        cantidad: cantidadFinal,
         motivo: `Móvil QR — Producto ${productoDirecto.codigo}`,
       })
-      toast.success(`${accionForm.tipo} de ${accionForm.cantidad} ${productoDirecto.unidad || ''} registrado`)
+      const verbo = accionForm.tipo === 'AJUSTE'
+        ? (accionForm.ajusteDir === '+' ? `+${rawCant}` : `-${rawCant}`)
+        : `${accionForm.tipo.toLowerCase()} de ${rawCant}`
+      toast.success(`${productoDirecto.codigo}: ${verbo} ${productoDirecto.unidad || ''}`)
       setProductoDirecto(null)
-      setAccionForm({ tipo: 'SALIDA', cantidad: '' })
+      setAccionForm({ tipo: 'SALIDA', cantidad: '', ajusteDir: '+' })
       setView('scanner')
       setIsScanning(true)
     } catch (err) {
@@ -306,7 +316,7 @@ export default function ScannerMovil() {
             </div>
 
             <Button variant="ghost" className="w-full" leftIcon={<ScanLine size={16} />} onClick={scanAnother}>
-              Escanear otro estante
+              Escanear otro QR
             </Button>
           </div>
         </Card>
@@ -518,18 +528,61 @@ export default function ScannerMovil() {
                 </button>
               </div>
 
-              <Input
-                label="Cantidad"
-                type="number"
-                step="0.01"
-                min={accionForm.tipo === 'AJUSTE' ? undefined : 0.01}
-                required
-                value={accionForm.cantidad}
-                onChange={e => setAccionForm({ ...accionForm, cantidad: e.target.value })}
-                placeholder="0"
-                className="text-center text-xl font-bold"
-                autoFocus
-              />
+              {accionForm.tipo === 'AJUSTE' && (
+                <div>
+                  <p className="text-xs font-medium text-ink-700 dark:text-ink-300 mb-2">
+                    ¿Sumar o restar al stock?
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAccionForm({ ...accionForm, ajusteDir: '+' })}
+                      className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                        accionForm.ajusteDir === '+'
+                          ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700'
+                          : 'border-transparent bg-ink-100 dark:bg-ink-800 text-ink-500'
+                      }`}
+                    >
+                      <PackagePlus size={16} />
+                      Aumentar (+)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccionForm({ ...accionForm, ajusteDir: '-' })}
+                      className={`flex items-center justify-center gap-2 py-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                        accionForm.ajusteDir === '-'
+                          ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700'
+                          : 'border-transparent bg-ink-100 dark:bg-ink-800 text-ink-500'
+                      }`}
+                    >
+                      <PackageMinus size={16} />
+                      Disminuir (−)
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-ink-500 mt-2 text-center">
+                    {accionForm.ajusteDir === '+'
+                      ? `Encontraste piezas de más (sobran ${accionForm.cantidad || 'N'}).`
+                      : `Faltan piezas o se dañaron (faltan ${accionForm.cantidad || 'N'}).`}
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-ink-700 dark:text-ink-300 mb-1.5">
+                  Cantidad{accionForm.tipo === 'AJUSTE' && ' (siempre positiva)'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  required
+                  value={accionForm.cantidad}
+                  onChange={e => setAccionForm({ ...accionForm, cantidad: e.target.value.replace('-', '') })}
+                  placeholder="0"
+                  autoFocus
+                  className="w-full px-3 py-3 text-center text-2xl font-bold rounded-md border border-ink-300 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-900 dark:text-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
 
               <Button
                 type="submit"
@@ -541,8 +594,17 @@ export default function ScannerMovil() {
               </Button>
             </form>
 
+            <Button
+              variant="ghost"
+              className="w-full"
+              leftIcon={<ScanLine size={16} />}
+              onClick={scanAnother}
+            >
+              Escanear otro QR (sin guardar)
+            </Button>
+
             <p className="text-[10px] text-center text-ink-500">
-              Se usa el almacén default. Para elegir otro, usa el flujo de "Registrar movimiento".
+              Se usa el almacén default. Para elegir otro, usa "Registrar movimiento".
             </p>
           </div>
         </Card>
