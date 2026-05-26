@@ -8,7 +8,10 @@ import {
 import {
   Button, Card, Select, Input
 } from '../../components/ui'
-import { getProductos, createMovimiento, getInventarioEstante } from '../../api/inventario'
+import {
+  getProductos, createMovimiento, getInventarioEstante,
+  getProductoPorCodigo, createMovimientoRapido,
+} from '../../api/inventario'
 import { validarUnidadQR } from '../../api/herramientas'
 import { useNavigate } from 'react-router-dom'
 
@@ -20,9 +23,14 @@ export default function ScannerMovil() {
 
   const navigate = useNavigate()
 
-  // Vista actual: 'scanner' | 'menu' | 'products' | 'form'
+  // Vista actual: 'scanner' | 'menu' | 'products' | 'form' | 'product-action'
   const [view, setView] = useState('scanner')
   const [isScanning, setIsScanning] = useState(false)
+
+  // Cuando el QR es de producto directo (no estante ni herramienta).
+  const [productoDirecto, setProductoDirecto] = useState(null)
+  const [accionForm, setAccionForm] = useState({ tipo: 'SALIDA', cantidad: '' })
+  const [accionSaving, setAccionSaving] = useState(false)
 
   const [estante, setEstante] = useState(null)
   const [productos, setProductos] = useState([])
@@ -104,7 +112,7 @@ export default function ScannerMovil() {
 
   const handleQRScanned = async (qrCodeText) => {
     toast.loading('Validando QR…', { id: 'qr' })
-    // Probar primero como QR de estante; si falla, intentar como unidad de herramienta.
+    // Orden de pruebas: estante → herramienta → producto (código).
     try {
       const data = await getInventarioEstante(qrCodeText)
       setEstante(data.estante)
@@ -119,8 +127,41 @@ export default function ScannerMovil() {
       const unidad = await validarUnidadQR(qrCodeText)
       toast.success(`Herramienta ${unidad.codigo_interno}`, { id: 'qr' })
       navigate(`/inventario/herramientas/unidades/${unidad.id}`)
+      return
+    } catch { /* probar producto */ }
+    try {
+      const prod = await getProductoPorCodigo(qrCodeText)
+      setProductoDirecto(prod)
+      setAccionForm({ tipo: 'SALIDA', cantidad: '' })
+      setView('product-action')
+      toast.success(`Producto ${prod.codigo}`, { id: 'qr' })
     } catch {
-      toast.error('QR no reconocido (no es estante ni herramienta)', { id: 'qr' })
+      toast.error('QR no reconocido (no es estante, herramienta ni producto)', { id: 'qr' })
+    }
+  }
+
+  const submitAccionRapida = async (e) => {
+    e.preventDefault()
+    if (!productoDirecto) return
+    if (!accionForm.cantidad) return
+    setAccionSaving(true)
+    try {
+      await createMovimientoRapido({
+        producto_qr: productoDirecto.codigo,
+        tipo: accionForm.tipo,
+        cantidad: Number(accionForm.cantidad),
+        motivo: `Móvil QR — Producto ${productoDirecto.codigo}`,
+      })
+      toast.success(`${accionForm.tipo} de ${accionForm.cantidad} ${productoDirecto.unidad || ''} registrado`)
+      setProductoDirecto(null)
+      setAccionForm({ tipo: 'SALIDA', cantidad: '' })
+      setView('scanner')
+      setIsScanning(true)
+    } catch (err) {
+      const msg = err.response?.data?.detail || 'Error al registrar el movimiento'
+      toast.error(msg)
+    } finally {
+      setAccionSaving(false)
     }
   }
 
@@ -154,6 +195,7 @@ export default function ScannerMovil() {
   const backToScanner = () => {
     setEstante(null)
     setProductosEstanteApi(null)
+    setProductoDirecto(null)
     setSearchText('')
     setView('scanner')
   }
@@ -161,6 +203,7 @@ export default function ScannerMovil() {
   const scanAnother = () => {
     setEstante(null)
     setProductosEstanteApi(null)
+    setProductoDirecto(null)
     setSearchText('')
     setView('scanner')
     setIsScanning(true)
@@ -417,6 +460,90 @@ export default function ScannerMovil() {
                 Guardar movimiento
               </Button>
             </form>
+          </div>
+        </Card>
+      )}
+
+      {/* VIEW: producto escaneado directo — acción rápida */}
+      {view === 'product-action' && productoDirecto && (
+        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="p-4 bg-brand-50 dark:bg-brand-900/30 border-b border-brand-100 dark:border-brand-800 rounded-t-xl flex items-center gap-3">
+            <Button variant="ghost" size="icon-sm" onClick={backToScanner}>
+              <ArrowLeft size={18} />
+            </Button>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-bold uppercase tracking-wider text-brand-600">Producto</span>
+              <h2 className="text-lg font-bold text-ink-900 dark:text-ink-100 truncate">{productoDirecto.descripcion}</h2>
+              <p className="text-xs text-ink-500 font-mono">{productoDirecto.codigo}</p>
+            </div>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 p-3">
+                <p className="text-[10px] uppercase text-ink-500 font-bold">Stock actual</p>
+                <p className="text-lg font-bold tabular-nums">{Number(productoDirecto.stock_actual ?? 0).toFixed(2)} {productoDirecto.unidad}</p>
+              </div>
+              <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 p-3">
+                <p className="text-[10px] uppercase text-ink-500 font-bold">Disponible</p>
+                <p className="text-lg font-bold tabular-nums">{Number(productoDirecto.stock_disponible ?? productoDirecto.stock_actual ?? 0).toFixed(2)}</p>
+              </div>
+            </div>
+
+            <form onSubmit={submitAccionRapida} className="space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAccionForm({ ...accionForm, tipo: 'ENTRADA' })}
+                  className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${accionForm.tipo === 'ENTRADA' ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700' : 'border-transparent bg-ink-100 dark:bg-ink-800 text-ink-500'}`}
+                >
+                  <PackagePlus size={20} />
+                  <span className="text-xs font-bold mt-1">Entrada</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccionForm({ ...accionForm, tipo: 'SALIDA' })}
+                  className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${accionForm.tipo === 'SALIDA' ? 'border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700' : 'border-transparent bg-ink-100 dark:bg-ink-800 text-ink-500'}`}
+                >
+                  <PackageMinus size={20} />
+                  <span className="text-xs font-bold mt-1">Salida</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccionForm({ ...accionForm, tipo: 'AJUSTE' })}
+                  className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all ${accionForm.tipo === 'AJUSTE' ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700' : 'border-transparent bg-ink-100 dark:bg-ink-800 text-ink-500'}`}
+                >
+                  <Activity size={20} />
+                  <span className="text-xs font-bold mt-1">Ajuste</span>
+                </button>
+              </div>
+
+              <Input
+                label="Cantidad"
+                type="number"
+                step="0.01"
+                min={accionForm.tipo === 'AJUSTE' ? undefined : 0.01}
+                required
+                value={accionForm.cantidad}
+                onChange={e => setAccionForm({ ...accionForm, cantidad: e.target.value })}
+                placeholder="0"
+                className="text-center text-xl font-bold"
+                autoFocus
+              />
+
+              <Button
+                type="submit"
+                className="w-full h-12 text-lg"
+                loading={accionSaving}
+                disabled={!accionForm.cantidad}
+              >
+                Registrar y escanear siguiente
+              </Button>
+            </form>
+
+            <p className="text-[10px] text-center text-ink-500">
+              Se usa el almacén default. Para elegir otro, usa el flujo de "Registrar movimiento".
+            </p>
           </div>
         </Card>
       )}

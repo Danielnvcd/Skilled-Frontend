@@ -148,7 +148,7 @@ export default function AlmacenesEstantes() {
     setProductosLoading(true)
     try {
       const [all, asignados] = await Promise.all([
-        productosAll.length ? Promise.resolve(productosAll) : getProductos({ limit: 5000 }),
+        productosAll.length ? Promise.resolve(productosAll) : getProductos({ limit: 1000 }),
         getProductosDeEstante(estante.id),
       ])
       setProductosAll(all)

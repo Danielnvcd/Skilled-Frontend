@@ -3,6 +3,11 @@ import api from './axios'
 const BASE = '/v1'
 
 // --- Productos ---
+export async function getProductoPorCodigo(codigo) {
+  const { data } = await api.get(`${BASE}/productos/by-codigo/${encodeURIComponent(codigo)}`)
+  return data
+}
+
 export async function getProductos({ skip = 0, limit = 200 } = {}) {
   const { data } = await api.get(`${BASE}/productos/`, { params: { skip, limit } })
   return data
