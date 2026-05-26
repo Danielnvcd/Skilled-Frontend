@@ -1,4 +1,4 @@
-import { Menu, PanelLeft, Sun, Moon } from 'lucide-react'
+import { PanelLeft, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
@@ -6,7 +6,7 @@ import NotificacionesBell from './NotificacionesBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
 
-export default function Topbar({ collapsed, setCollapsed, setMobileOpen }) {
+export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobileDevice = false }) {
   const { user, isAdmin } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
@@ -15,20 +15,15 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen }) {
     <header className="sticky top-0 z-30 bg-white/85 dark:bg-ink-900/85 backdrop-blur border-b border-ink-200 dark:border-ink-800">
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16">
         <div className="flex items-center gap-2 min-w-0">
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="lg:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring"
-            aria-label="Abrir menú"
-          >
-            <Menu size={18} />
-          </button>
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring"
-            aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
-          >
-            <PanelLeft size={18} />
-          </button>
+          {!isMobileDevice && (
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring"
+              aria-label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
+            >
+              <PanelLeft size={18} />
+            </button>
+          )}
           <MenuSearch />
         </div>
 

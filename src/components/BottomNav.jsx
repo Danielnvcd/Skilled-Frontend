@@ -11,7 +11,7 @@ export default function BottomNav() {
     <nav
       role="navigation"
       aria-label="Navegación móvil"
-      className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-ink-200 dark:border-ink-800 bg-white/95 dark:bg-ink-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 pb-[env(safe-area-inset-bottom)]"
+      className="fixed bottom-0 inset-x-0 z-30 border-t border-ink-200 dark:border-ink-800 bg-white/95 dark:bg-ink-950/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="flex justify-around">
         {items.map(it => {

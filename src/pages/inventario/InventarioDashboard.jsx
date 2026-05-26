@@ -18,6 +18,7 @@ import {
 } from '../../api/inventario'
 import { getStatsHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import useIsMobileDevice from '../../hooks/useIsMobileDevice'
 
 const CHART_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444',
@@ -164,7 +165,95 @@ const TIPO_STYLE = {
   TRASPASO: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300',
 }
 
+// ── Versión móvil: minimal, foco en escanear ───────────────────────────────
+
+function MobileInventarioHome() {
+  const { user } = useAuth()
+  const [bajoMinimo, setBajoMinimo] = useState([])
+  const [solicitudesPend, setSolicitudesPend] = useState(0)
+
+  useEffect(() => {
+    Promise.all([
+      getProductosBajoMinimo().catch(() => []),
+      getSolicitudes({ limit: 100 }).catch(() => []),
+    ]).then(([bajos, sols]) => {
+      setBajoMinimo(bajos)
+      setSolicitudesPend(sols.filter(s => s.estatus === 'PENDIENTE').length)
+    })
+  }, [])
+
+  return (
+    <div className="max-w-md mx-auto space-y-5 pt-2">
+      <div>
+        <p className="text-xs uppercase tracking-wider text-ink-500 dark:text-ink-400 font-semibold">
+          {greeting()}
+        </p>
+        <h1 className="text-2xl font-bold text-ink-900 dark:text-ink-100 mt-1">
+          {user?.full_name?.split(' ')[0] || user?.username}
+        </h1>
+      </div>
+
+      <Link
+        to="/inventario/scanner"
+        className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-brand-600 text-white py-10 shadow-lg active:scale-[0.98] transition-transform"
+      >
+        <ScanLine size={48} strokeWidth={1.5} />
+        <span className="text-lg font-bold">Escanear QR</span>
+        <span className="text-xs text-white/80">Estante, producto o herramienta</span>
+      </Link>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Link
+          to="/inventario/bajo-minimo"
+          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+            <AlertTriangle size={16} />
+            <span className="text-[10px] uppercase font-bold tracking-wider">Bajo mínimo</span>
+          </div>
+          <p className="text-2xl font-bold mt-1 tabular-nums">{bajoMinimo.length}</p>
+        </Link>
+        <Link
+          to="/inventario/solicitudes"
+          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
+            <ClipboardList size={16} />
+            <span className="text-[10px] uppercase font-bold tracking-wider">Solicitudes</span>
+          </div>
+          <p className="text-2xl font-bold mt-1 tabular-nums">{solicitudesPend}</p>
+          <p className="text-[10px] text-ink-500 mt-0.5">pendientes</p>
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold px-1">Atajos</p>
+        <Link to="/inventario/catalogo" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
+          <Package size={18} className="text-brand-600" />
+          <span className="text-sm font-medium flex-1">Catálogo</span>
+          <ChevronRight size={16} className="text-ink-400" />
+        </Link>
+        <Link to="/inventario/movimientos/nuevo" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
+          <ArrowRightLeft size={18} className="text-brand-600" />
+          <span className="text-sm font-medium flex-1">Registrar movimiento</span>
+          <ChevronRight size={16} className="text-ink-400" />
+        </Link>
+        <Link to="/inventario/tomas" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
+          <ClipboardList size={18} className="text-brand-600" />
+          <span className="text-sm font-medium flex-1">Tomas físicas</span>
+          <ChevronRight size={16} className="text-ink-400" />
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ── Dashboard completo (PC) ────────────────────────────────────────────────
+
 export default function InventarioDashboard() {
+  const isMobileDevice = useIsMobileDevice()
+  if (isMobileDevice) return <MobileInventarioHome />
+
   const { user } = useAuth()
   const { theme } = useTheme()
   // Forzamos apariencia oscura (video + glass): los charts también usan
