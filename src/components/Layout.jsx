@@ -65,8 +65,11 @@ export default function Layout() {
         <main
           ref={mainRef}
           className={`px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1500px] mx-auto ${
-            isMobileDevice ? 'pb-24' : 'pb-8'
+            isMobileDevice ? 'pb-8' : 'pb-8'
           }`}
+          style={isMobileDevice
+            ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)' }
+            : undefined}
         >
           <Outlet />
         </main>
