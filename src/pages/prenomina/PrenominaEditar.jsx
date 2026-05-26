@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, Lock, CheckCircle2, X, Plus, Minus, AlertCircle,
   Bus, PartyPopper, Wallet, ReceiptText, ChevronDown, ChevronUp,
+  FileSpreadsheet, DollarSign,
 } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog, EmptyState,
@@ -11,6 +12,7 @@ import {
 import {
   detalleEditor, cerrarSemana,
   eliminarDescuento, eliminarDeposito,
+  exportarExcel,
 } from '../../api/prenomina'
 import AjusteRapidoModal from './AjusteRapidoModal'
 
@@ -253,6 +255,7 @@ export default function PrenominaEditar() {
   const [loading, setLoading] = useState(true)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [descargandoExcel, setDescargandoExcel] = useState(false)
 
   const [ajusteOpen, setAjusteOpen] = useState(false)
   const [ajusteCtx, setAjusteCtx] = useState({ modo: null, prenomina: null })
@@ -288,6 +291,18 @@ export default function PrenominaEditar() {
     () => (data?.prenominas || []).reduce((acc, p) => acc + (p.total_a_pagar || 0), 0),
     [data]
   )
+
+  const handleDescargarExcel = async () => {
+    setDescargandoExcel(true)
+    try {
+      await exportarExcel(fecha)
+      toast.success('Excel descargado')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al generar el Excel')
+    } finally {
+      setDescargandoExcel(false)
+    }
+  }
 
   const handleAjusteRapido = (modo, prenomina) => {
     setAjusteCtx({ modo, prenomina })
@@ -338,13 +353,28 @@ export default function PrenominaEditar() {
           </Link>
         }
         actions={
-          editable ? (
-            <Button variant="success" leftIcon={<CheckCircle2 size={14} />} onClick={() => setConfirmCerrar(true)}>
-              Cerrar y aprobar
+          <div className="flex flex-wrap items-center gap-2">
+            <Link to={`/prenomina/${fecha}/pago`}>
+              <Button variant="secondary" leftIcon={<DollarSign size={14} />}>
+                Resumen de pago
+              </Button>
+            </Link>
+            <Button
+              variant="secondary"
+              leftIcon={<FileSpreadsheet size={14} />}
+              loading={descargandoExcel}
+              onClick={handleDescargarExcel}
+            >
+              Descargar Excel
             </Button>
-          ) : (
-            <Badge tone="neutral" leftIcon={<Lock size={11} />}>Solo lectura</Badge>
-          )
+            {editable ? (
+              <Button variant="success" leftIcon={<CheckCircle2 size={14} />} onClick={() => setConfirmCerrar(true)}>
+                Cerrar y aprobar
+              </Button>
+            ) : (
+              <Badge tone="neutral" leftIcon={<Lock size={11} />}>Solo lectura</Badge>
+            )}
+          </div>
         }
       />
 

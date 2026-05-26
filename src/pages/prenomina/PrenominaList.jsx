@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   DollarSign, CalendarRange, CalendarDays, CheckCheck, Clock, Percent,
   List, CheckCircle2, Calculator, Eye, FolderOpen, Layers, X, CalendarX,
+  Wallet,
 } from 'lucide-react'
 import { PageHeader, Skeleton, EmptyState } from '../../components/ui'
 import { listarSemanas } from '../../api/prenomina'
@@ -177,7 +178,12 @@ export default function PrenominaList() {
               {grouped.map((g) => g.type === 'sep' ? (
                 <MonthSep key={g.key} label={g.label} />
               ) : (
-                <SemanaCard key={g.semana.fecha_str} semana={g.semana} onClick={() => navigate(`/prenomina/${g.semana.fecha_str}`)} />
+                <SemanaCard
+                  key={g.semana.fecha_str}
+                  semana={g.semana}
+                  onClick={() => navigate(`/prenomina/${g.semana.fecha_str}`)}
+                  onResumenPago={() => navigate(`/prenomina/${g.semana.fecha_str}/pago`)}
+                />
               ))}
             </div>
           )}
@@ -250,7 +256,7 @@ function MonthSep({ label }) {
   )
 }
 
-function SemanaCard({ semana, onClick }) {
+function SemanaCard({ semana, onClick, onResumenPago }) {
   const isDone = semana.estado_prenomina !== 'PENDIENTE'
   const isAprobada = semana.estado_prenomina === 'APROBADO'
   const inicio = parseDate(semana.fecha_inicio)
@@ -348,6 +354,17 @@ function SemanaCard({ semana, onClick }) {
             : <><Calculator size={14} /> Calcular prenómina</>
           }
         </button>
+
+        {isDone && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onResumenPago() }}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-md hover:shadow-lg hover:brightness-110"
+            title="Ver cuánto se le paga a cada empleado"
+          >
+            <Wallet size={14} /> Resumen de pago
+          </button>
+        )}
       </div>
     </div>
   )

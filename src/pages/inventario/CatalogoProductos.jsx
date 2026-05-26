@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, Trash2, Edit2, Image as ImageIcon } from 'lucide-react'
+import { Package, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
   EmptyState, Input, Skeleton, Select,
@@ -9,9 +10,9 @@ import {
 import {
   getProductos, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
+  getProductoStocks,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
-import { Link } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 
 export default function CatalogoProductos() {
@@ -58,6 +59,22 @@ export default function CatalogoProductos() {
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Desglose de stock por bodega (Pausa 2): null = cerrado, objeto = producto seleccionado.
+  const [stocksModal, setStocksModal] = useState(null)
+  const [stocksData, setStocksData] = useState(null)
+  const [loadingStocks, setLoadingStocks] = useState(false)
+
+  useEffect(() => {
+    if (!stocksModal) { setStocksData(null); return }
+    let cancel = false
+    setLoadingStocks(true)
+    getProductoStocks(stocksModal.id, { incluirVacios: true })
+      .then((d) => { if (!cancel) setStocksData(d) })
+      .catch(() => { if (!cancel) setStocksData(null) })
+      .finally(() => { if (!cancel) setLoadingStocks(false) })
+    return () => { cancel = true }
+  }, [stocksModal])
 
   const load = () => {
     setLoading(true)
@@ -145,7 +162,7 @@ export default function CatalogoProductos() {
 
   const openNew = () => {
     setEditingId(null)
-    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, imagen_url: '' })
+    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '' })
     setOpenForm(true)
   }
 
@@ -158,7 +175,9 @@ export default function CatalogoProductos() {
       unidad: p.unidad,
       stock_actual: p.stock_actual,
       stock_minimo: p.stock_minimo,
-      imagen_url: p.imagen_url || ''
+      imagen_url: p.imagen_url || '',
+      proveedor_default_nombre: p.proveedor_default_nombre || '',
+      proveedor_default_contacto: p.proveedor_default_contacto || '',
     })
     setOpenForm(true)
   }
@@ -348,14 +367,43 @@ export default function CatalogoProductos() {
                   <TD>{p.categoria}</TD>
                   <TD>
                     <div className="flex flex-col">
-                      <span className={p.stock_actual <= p.stock_minimo ? 'text-red-600 font-bold' : ''}>
-                        {p.stock_actual} {p.unidad}
+                      <span
+                        className={p.stock_actual <= p.stock_minimo ? 'text-red-600 font-bold' : ''}
+                        title={
+                          (p.stock_reservado || 0) > 0
+                            ? `Stock total: ${p.stock_actual} · Apartado: ${p.stock_reservado} · Disponible: ${p.stock_disponible}`
+                            : `Stock: ${p.stock_actual}`
+                        }
+                      >
+                        {p.stock_disponible ?? p.stock_actual} {p.unidad}
+                        {(p.stock_reservado || 0) > 0 && (
+                          <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                            ({p.stock_reservado} apart.)
+                          </span>
+                        )}
                       </span>
                       <span className="text-[10px] text-ink-500">Mín: {p.stock_minimo}</span>
                     </div>
                   </TD>
                   <TD align="right">
                     <div className="inline-flex items-center gap-1">
+                      <Link to={`/inventario/productos/${p.id}/kardex`}>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          title="Ver kardex (historial)"
+                        >
+                          <History size={14} />
+                        </Button>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Ver stock por bodega"
+                        onClick={() => setStocksModal(p)}
+                      >
+                        <Warehouse size={14} />
+                      </Button>
                       <Button variant="ghost" size="icon-sm" onClick={() => openEdit(p)}>
                         <Edit2 size={14} />
                       </Button>
@@ -400,6 +448,22 @@ export default function CatalogoProductos() {
           </div>
 
           <Input label="Foto del Producto (URL — opcional)" value={form.imagen_url || ''} onChange={(e) => setForm({ ...form, imagen_url: e.target.value })} placeholder="https://ejemplo.com/imagen.jpg" />
+
+          {/* Proveedor default (Pausa 9) — usado para Compras express */}
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Proveedor (opcional)"
+              value={form.proveedor_default_nombre || ''}
+              onChange={(e) => setForm({ ...form, proveedor_default_nombre: e.target.value })}
+              placeholder="Ej. Cementos del Norte"
+            />
+            <Input
+              label="Contacto (tel/email — opcional)"
+              value={form.proveedor_default_contacto || ''}
+              onChange={(e) => setForm({ ...form, proveedor_default_contacto: e.target.value })}
+              placeholder="5512345678"
+            />
+          </div>
 
           {imagePreview && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700">
@@ -497,6 +561,63 @@ export default function CatalogoProductos() {
         confirmLabel="Eliminar"
         tone="danger"
       />
+
+      {/* Modal de desglose por bodega (Pausa 2) */}
+      <Modal
+        open={!!stocksModal}
+        onClose={() => setStocksModal(null)}
+        title={stocksModal ? `Stock por bodega — ${stocksModal.codigo}` : ''}
+      >
+        {stocksModal && (
+          <div className="space-y-3">
+            <div className="text-sm text-ink-600 dark:text-ink-300">
+              <strong>{stocksModal.descripcion}</strong>
+              <div className="text-xs text-ink-500 mt-0.5">
+                Total global: <span className="font-mono font-bold">{stocksModal.stock_actual} {stocksModal.unidad}</span>
+                {' · '}Mínimo: <span className="font-mono">{stocksModal.stock_minimo}</span>
+              </div>
+            </div>
+
+            {loadingStocks ? (
+              <Skeleton className="h-32 rounded-lg" />
+            ) : !stocksData || stocksData.stocks.length === 0 ? (
+              <p className="text-sm text-ink-400 italic">
+                Sin registros de stock en bodega. Importa o registra un movimiento ENTRADA para iniciar.
+              </p>
+            ) : (
+              <div className="rounded-lg border border-ink-200 dark:border-ink-800 overflow-hidden">
+                <Table>
+                  <THead>
+                    <TH>Bodega</TH>
+                    <TH>Ubicación</TH>
+                    <TH align="right">Cantidad</TH>
+                  </THead>
+                  <TBody>
+                    {stocksData.stocks
+                      .slice()
+                      .sort((a, b) => b.cantidad - a.cantidad)
+                      .map((s) => (
+                        <TR key={s.almacen_id}>
+                          <TD className="font-medium">{s.almacen_nombre}</TD>
+                          <TD className="text-xs text-ink-500">{s.almacen_ubicacion || '—'}</TD>
+                          <TD align="right" className={`font-mono font-bold tabular-nums ${s.cantidad > 0 ? '' : 'text-ink-400'}`}>
+                            {s.cantidad} {stocksModal.unidad}
+                          </TD>
+                        </TR>
+                      ))}
+                  </TBody>
+                </Table>
+              </div>
+            )}
+
+            {stocksData && Math.abs(stocksData.total - Number(stocksModal.stock_actual)) > 0.01 && (
+              <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+                <strong>Aviso:</strong> el total por bodega ({stocksData.total}) no coincide con el cache global ({stocksModal.stock_actual}). Esto indica un desfase — al registrar el próximo movimiento se recalculará automáticamente.
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
     </div>
   )

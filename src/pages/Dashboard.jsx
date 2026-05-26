@@ -216,10 +216,7 @@ export default function Dashboard() {
             style={{ transform: 'translateZ(0)', willChange: 'transform' }}
             aria-hidden="true"
           >
-            <source
-              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-              type="video/mp4"
-            />
+            <source src="/login-bg.mp4" type="video/mp4" />
           </video>
           <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
@@ -258,10 +255,7 @@ export default function Dashboard() {
           style={{ transform: 'translateZ(0)', willChange: 'transform' }}
           aria-hidden="true"
         >
-          <source
-            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-            type="video/mp4"
-          />
+          <source src="/login-bg.mp4" type="video/mp4" />
         </video>
         {/* Capa única de glass: blur + saturate + tinte. El blur queda fijo y no
             se recalcula al hacer hover sobre las tarjetas. */}

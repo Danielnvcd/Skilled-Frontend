@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft } from 'lucide-react'
+import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, Card, PageHeader } from '../../components/ui'
 import { descargarPlantillaMateriales, importarMateriales } from '../../api/inventario'
@@ -34,6 +34,9 @@ export default function ImportarMateriales() {
       const res = await importarMateriales(file)
       setResultado(res)
       if (res.exitosos > 0) toast.success(`${res.exitosos} productos importados`)
+      if (res.categorias_creadas?.length > 0) {
+        toast.success(`${res.categorias_creadas.length} categoría(s) nueva(s) creada(s) automáticamente`)
+      }
       if (res.errores.length > 0) toast.error(`${res.errores.length} filas con error`)
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Error al importar el archivo')
@@ -84,10 +87,10 @@ export default function ImportarMateriales() {
             <h3 className="font-semibold text-ink-900 dark:text-ink-100">Llena con cuidado</h3>
           </div>
           <ul className="text-sm text-ink-500 dark:text-ink-400 space-y-1 list-disc list-inside flex-1">
-            <li>No alteres los encabezados de la fila 1</li>
-            <li>El Código (SKU) debe ser único</li>
-            <li>Stock: solo números, sin texto</li>
-            <li>Categoría y Unidad son obligatorios</li>
+            <li>No alteres los encabezados</li>
+            <li>SKU único (A-Z 0-9 - _ . /)</li>
+            <li>Stock: solo números &ge; 0</li>
+            <li>URL Imagen es opcional — solo HTTPS</li>
           </ul>
         </Card>
 
@@ -167,6 +170,25 @@ export default function ImportarMateriales() {
               <p className={`text-sm ${resultado.errores.length > 0 ? 'text-red-600 dark:text-red-400' : 'text-ink-500'}`}>Filas con error</p>
             </div>
           </div>
+
+          {resultado.categorias_creadas?.length > 0 && (
+            <div className="bg-sky-50 dark:bg-sky-900/10 border border-sky-200 dark:border-sky-800 rounded-xl p-4">
+              <p className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wide mb-2 flex items-center gap-2">
+                <Tags size={14} />
+                Categorías nuevas creadas automáticamente:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {resultado.categorias_creadas.map((c, i) => (
+                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                    {c}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-sky-600 dark:text-sky-400 mt-2 italic">
+                Puedes asignarles una imagen desde el catálogo de categorías.
+              </p>
+            </div>
+          )}
 
           {resultado.errores.length > 0 && (
             <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-4 max-h-48 overflow-y-auto">

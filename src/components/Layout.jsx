@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import BottomNav from './BottomNav'
 
 const STORAGE_KEY = 'sidebar:collapsed'
 
@@ -48,10 +49,11 @@ export default function Layout() {
       />
       <div className={`min-w-0 transition-all duration-300 ${collapsed ? 'lg:pl-16' : 'lg:pl-64'}`}>
         <Topbar collapsed={collapsed} setCollapsed={setCollapsed} setMobileOpen={setMobileOpen} />
-        <main ref={mainRef} className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 max-w-[1500px] mx-auto">
+        <main ref={mainRef} className="px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pb-24 lg:pb-8 max-w-[1500px] mx-auto">
           <Outlet />
         </main>
       </div>
+      <BottomNav />
     </div>
   )
 }

@@ -4,11 +4,14 @@ import toast from 'react-hot-toast'
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, Activity, Package,
   Plus, Minus, AlertTriangle, CheckCircle2, Info, ChevronLeft, Save,
+  Warehouse,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, Select, Skeleton,
 } from '../../components/ui'
-import { getProductos, getAlmacenes, createMovimiento } from '../../api/inventario'
+import {
+  getProductos, getAlmacenes, createMovimiento, getProductoStocks,
+} from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 
 const TIPOS = [
@@ -36,6 +39,14 @@ const TIPOS = [
     color: 'amber',
     sign: '±',
   },
+  {
+    key: 'TRASPASO',
+    label: 'Traspaso',
+    desc: 'Mueve stock entre bodegas',
+    Icon: ArrowRightLeft,
+    color: 'sky',
+    sign: '→',
+  },
 ]
 
 const COLORS = {
@@ -60,6 +71,13 @@ const COLORS = {
     text:   'text-amber-700 dark:text-amber-300',
     btn:    'bg-amber-600 hover:bg-amber-700',
   },
+  sky: {
+    border: 'border-sky-500',
+    ring:   'ring-sky-500/20',
+    bg:     'bg-sky-50 dark:bg-sky-900/20',
+    text:   'text-sky-700 dark:text-sky-300',
+    btn:    'bg-sky-600 hover:bg-sky-700',
+  },
 }
 
 export default function RegistrarMovimiento() {
@@ -73,8 +91,15 @@ export default function RegistrarMovimiento() {
   const [tipo, setTipo] = useState('ENTRADA')
   const [productoId, setProductoId] = useState('')
   const [cantidad, setCantidad] = useState('')
-  const [almacenId, setAlmacenId] = useState('')
+  // Pausa 2: almacenes separados por dirección — TRASPASO requiere ambos,
+  // ENTRADA/SALIDA solo uno, AJUSTE depende del signo.
+  const [almacenOrigenId, setAlmacenOrigenId] = useState('')
+  const [almacenDestinoId, setAlmacenDestinoId] = useState('')
   const [motivo, setMotivo] = useState('')
+
+  // Desglose de stock por bodega del producto seleccionado (Pausa 2).
+  const [stocksProducto, setStocksProducto] = useState(null)
+  const [loadingStocks, setLoadingStocks] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -97,7 +122,27 @@ export default function RegistrarMovimiento() {
     [productos, productoId]
   )
 
-  // Cálculo del stock resultante con signo según tipo
+  // Cargar desglose por bodega cuando cambia el producto seleccionado.
+  useEffect(() => {
+    if (!productoId) { setStocksProducto(null); return }
+    let cancel = false
+    setLoadingStocks(true)
+    getProductoStocks(productoId, { incluirVacios: true })
+      .then((data) => { if (!cancel) setStocksProducto(data) })
+      .catch(() => { if (!cancel) setStocksProducto(null) })
+      .finally(() => { if (!cancel) setLoadingStocks(false) })
+    return () => { cancel = true }
+  }, [productoId])
+
+  // Stock disponible en la bodega origen seleccionada (para validar SALIDAs/TRASPASOs).
+  const stockEnOrigen = useMemo(() => {
+    if (!stocksProducto || !almacenOrigenId) return null
+    const row = stocksProducto.stocks.find((s) => String(s.almacen_id) === String(almacenOrigenId))
+    return row ? Number(row.cantidad) : 0
+  }, [stocksProducto, almacenOrigenId])
+
+  // Cálculo del stock resultante con signo según tipo.
+  // TRASPASO no afecta el total global, solo redistribuye entre bodegas.
   const calculo = useMemo(() => {
     if (!producto || cantidad === '' || isNaN(Number(cantidad))) return null
     const cant = Number(cantidad)
@@ -106,25 +151,40 @@ export default function RegistrarMovimiento() {
     let delta = 0
     if (tipo === 'ENTRADA') delta = Math.abs(cant)
     else if (tipo === 'SALIDA') delta = -Math.abs(cant)
+    else if (tipo === 'TRASPASO') delta = 0  // no cambia el total
     else delta = cant
     const nuevo = stock + delta
+
+    // Para SALIDA/TRASPASO/AJUSTE negativo: validar contra la bodega origen.
+    const requiereOrigen =
+      tipo === 'SALIDA' || tipo === 'TRASPASO' ||
+      (tipo === 'AJUSTE' && cant < 0)
+    const insuficienteEnOrigen =
+      requiereOrigen && almacenOrigenId !== '' && stockEnOrigen !== null &&
+      Math.abs(cant) > stockEnOrigen
+
     return {
       stock,
       minimo,
       delta,
       nuevo,
       negativo: nuevo < 0,
-      bajoMinimo: nuevo >= 0 && nuevo < minimo,
+      bajoMinimo: tipo !== 'TRASPASO' && nuevo >= 0 && nuevo < minimo,
       cantidadInvalida: (tipo !== 'AJUSTE') && cant <= 0,
+      insuficienteEnOrigen,
     }
-  }, [producto, cantidad, tipo])
+  }, [producto, cantidad, tipo, almacenOrigenId, stockEnOrigen])
 
-  // Sugiere el almacén "natural" según el tipo
-  const almacenLabel = tipo === 'ENTRADA'
-    ? 'Almacén destino'
-    : tipo === 'SALIDA'
-      ? 'Almacén origen'
-      : 'Almacén (opcional)'
+  // Determinar qué selectores de almacén mostrar según el tipo.
+  const necesitaDestino = tipo === 'ENTRADA' || tipo === 'TRASPASO' ||
+                          (tipo === 'AJUSTE' && Number(cantidad) >= 0)
+  const necesitaOrigen = tipo === 'SALIDA' || tipo === 'TRASPASO' ||
+                         (tipo === 'AJUSTE' && Number(cantidad) < 0)
+
+  const almacenOk =
+    (!necesitaOrigen || !!almacenOrigenId) &&
+    (!necesitaDestino || !!almacenDestinoId) &&
+    (tipo !== 'TRASPASO' || almacenOrigenId !== almacenDestinoId)
 
   const puedeGuardar =
     !!productoId &&
@@ -132,7 +192,9 @@ export default function RegistrarMovimiento() {
     !isNaN(Number(cantidad)) &&
     !!calculo &&
     !calculo.negativo &&
-    !calculo.cantidadInvalida
+    !calculo.cantidadInvalida &&
+    !calculo.insuficienteEnOrigen &&
+    almacenOk
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -145,11 +207,8 @@ export default function RegistrarMovimiento() {
         cantidad: Number(cantidad),
         motivo: motivo.trim() || null,
       }
-      if (almacenId) {
-        if (tipo === 'ENTRADA') payload.almacen_destino_id = Number(almacenId)
-        else if (tipo === 'SALIDA') payload.almacen_origen_id = Number(almacenId)
-        else payload.almacen_destino_id = Number(almacenId)
-      }
+      if (almacenOrigenId) payload.almacen_origen_id = Number(almacenOrigenId)
+      if (almacenDestinoId) payload.almacen_destino_id = Number(almacenDestinoId)
       await createMovimiento(payload)
       toast.success(`${tipoCfg.label} registrada correctamente`)
       navigate('/inventario/movimientos')
@@ -284,18 +343,51 @@ export default function RegistrarMovimiento() {
             </div>
           </div>
 
-          {/* Almacén (opcional) */}
-          {almacenes.length > 0 && (
-            <Select
-              label={`${almacenLabel} (opcional)`}
-              value={almacenId}
-              onChange={(e) => setAlmacenId(e.target.value)}
-            >
-              <option value="">Sin especificar</option>
-              {almacenes.map((a) => (
-                <option key={a.id} value={a.id}>{a.nombre}{a.ubicacion ? ` — ${a.ubicacion}` : ''}</option>
-              ))}
-            </Select>
+          {/* Almacenes — obligatorios según tipo (Pausa 2: stock por bodega) */}
+          {almacenes.length === 0 ? (
+            <Card className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 text-sm">
+              <AlertTriangle size={14} className="inline text-amber-600 mr-1.5" />
+              No hay bodegas registradas. Crea una en "Almacenes" antes de mover stock.
+            </Card>
+          ) : (
+            <div className={tipo === 'TRASPASO' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : ''}>
+              {necesitaOrigen && (
+                <Select
+                  label={`Bodega origen${necesitaOrigen ? ' *' : ''}`}
+                  value={almacenOrigenId}
+                  onChange={(e) => setAlmacenOrigenId(e.target.value)}
+                  required={necesitaOrigen}
+                >
+                  <option value="">Selecciona bodega…</option>
+                  {almacenes.map((a) => {
+                    const s = stocksProducto?.stocks.find((x) => x.almacen_id === a.id)
+                    const disponible = s ? Number(s.cantidad) : 0
+                    return (
+                      <option key={a.id} value={a.id}>
+                        {a.nombre}{producto ? ` — disponible: ${disponible}` : ''}
+                      </option>
+                    )
+                  })}
+                </Select>
+              )}
+              {necesitaDestino && (
+                <Select
+                  label={`Bodega destino${necesitaDestino ? ' *' : ''}`}
+                  value={almacenDestinoId}
+                  onChange={(e) => setAlmacenDestinoId(e.target.value)}
+                  required={necesitaDestino}
+                >
+                  <option value="">Selecciona bodega…</option>
+                  {almacenes
+                    .filter((a) => tipo !== 'TRASPASO' || String(a.id) !== String(almacenOrigenId))
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.nombre}{a.ubicacion ? ` — ${a.ubicacion}` : ''}
+                      </option>
+                    ))}
+                </Select>
+              )}
+            </div>
           )}
 
           {/* Motivo */}
@@ -377,9 +469,18 @@ export default function RegistrarMovimiento() {
 
                   <div className="grid grid-cols-2 gap-2 text-center">
                     <div className="rounded-lg bg-ink-50 dark:bg-ink-800 p-3">
-                      <p className="text-[10px] uppercase font-bold tracking-wider text-ink-500">Stock actual</p>
-                      <p className="text-xl font-extrabold text-ink-900 dark:text-ink-100 tabular-nums">{producto.stock_actual}</p>
-                      <p className="text-[10px] text-ink-500">{producto.unidad}</p>
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-ink-500">Disponible</p>
+                      <p className="text-xl font-extrabold text-ink-900 dark:text-ink-100 tabular-nums">
+                        {producto.stock_disponible ?? producto.stock_actual}
+                      </p>
+                      <p className="text-[10px] text-ink-500">
+                        {producto.unidad}
+                        {(producto.stock_reservado || 0) > 0 && (
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold ml-1">
+                            · {producto.stock_reservado} apart.
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-ink-50 dark:bg-ink-800 p-3">
                       <p className="text-[10px] uppercase font-bold tracking-wider text-ink-500">Stock mínimo</p>
@@ -391,6 +492,35 @@ export default function RegistrarMovimiento() {
               )}
             </div>
           </Card>
+
+          {/* Desglose por bodega (Pausa 2) */}
+          {producto && (
+            <Card className="overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-ink-200 dark:border-ink-800 flex items-center gap-2">
+                <Warehouse size={14} className="text-ink-500" />
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Stock por bodega</span>
+              </div>
+              {loadingStocks ? (
+                <div className="p-3 text-xs text-ink-400">Cargando…</div>
+              ) : !stocksProducto || stocksProducto.stocks.length === 0 ? (
+                <div className="p-3 text-xs text-ink-400">Sin registros de bodega para este producto.</div>
+              ) : (
+                <ul className="divide-y divide-ink-100 dark:divide-ink-800">
+                  {stocksProducto.stocks
+                    .slice()
+                    .sort((a, b) => b.cantidad - a.cantidad)
+                    .map((s) => (
+                      <li key={s.almacen_id} className="flex items-center justify-between px-4 py-2 text-sm">
+                        <span className="truncate">{s.almacen_nombre}</span>
+                        <span className={`font-mono font-bold tabular-nums ${s.cantidad > 0 ? 'text-ink-900 dark:text-ink-100' : 'text-ink-400'}`}>
+                          {s.cantidad} {producto.unidad}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </Card>
+          )}
 
           {/* Resultado calculado */}
           {producto && calculo && cantidad !== '' && (
@@ -433,14 +563,28 @@ export default function RegistrarMovimiento() {
           )}
 
           {/* Alertas */}
-          {calculo?.negativo && (
+          {calculo?.insuficienteEnOrigen && (
+            <Card className="p-4 border-l-4 border-l-rose-500 bg-rose-50 dark:bg-rose-900/20">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={20} className="text-rose-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-rose-700 dark:text-rose-300 text-sm">Stock insuficiente en bodega origen</p>
+                  <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
+                    Disponible en esa bodega: <strong>{stockEnOrigen}</strong>. Ajusta la cantidad o elige otra bodega.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {calculo?.negativo && !calculo.insuficienteEnOrigen && (
             <Card className="p-4 border-l-4 border-l-rose-500 bg-rose-50 dark:bg-rose-900/20">
               <div className="flex items-start gap-3">
                 <AlertTriangle size={20} className="text-rose-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-bold text-rose-700 dark:text-rose-300 text-sm">No se puede registrar</p>
                   <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
-                    El movimiento dejaría el stock en <strong>{calculo.nuevo}</strong>. El sistema no permite stock negativo.
+                    El movimiento dejaría el stock global en <strong>{calculo.nuevo}</strong>. El sistema no permite stock negativo.
                   </p>
                 </div>
               </div>

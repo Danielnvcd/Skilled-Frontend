@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ArrowLeft, FileText, Mail, Save, Pencil, CheckCircle2, Download,
   Plus, Minus, CirclePlus, CircleMinus, Folder, Lock, FileSpreadsheet,
+  DollarSign,
 } from 'lucide-react'
 import { Skeleton, ConfirmDialog } from '../../components/ui'
 import {
@@ -169,6 +170,12 @@ export default function PrenominaGenerar() {
           <BarButton variant="outline-emerald" onClick={handleExportarExcel} loading={exportingExcel}>
             <FileSpreadsheet size={16} /> Exportar Excel
           </BarButton>
+
+          {data.ya_guardada && (
+            <BarButton variant="outline-emerald" onClick={() => navigate(`/prenomina/${fecha}/pago`)}>
+              <DollarSign size={16} /> Resumen de pago
+            </BarButton>
+          )}
 
           <BarButton variant="outline-green" onClick={handleEnviarTodos} loading={bulkEmailing}>
             <Mail size={16} /> Enviar todos por correo

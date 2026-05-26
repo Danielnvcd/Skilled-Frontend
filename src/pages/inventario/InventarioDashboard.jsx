@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   PackageSearch, Boxes, ScanLine, ArrowRightLeft, Send, ClipboardList,
   AlertTriangle, Package, TrendingUp, TrendingDown, Clock, ChevronRight,
-  History, CheckCircle2,
+  History, CheckCircle2, Wrench, Hammer, Settings2,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -16,6 +16,7 @@ import { useTheme } from '../../context/ThemeContext'
 import {
   getProductos, getProductosBajoMinimo, getMovimientos, getSolicitudes,
 } from '../../api/inventario'
+import { getStatsHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 
 const CHART_COLORS = [
@@ -175,6 +176,7 @@ export default function InventarioDashboard() {
   const [bajoMinimo, setBajoMinimo] = useState([])
   const [movimientos, setMovimientos] = useState([])
   const [solicitudes, setSolicitudes] = useState([])
+  const [herrStats, setHerrStats] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -183,12 +185,14 @@ export default function InventarioDashboard() {
       getProductosBajoMinimo().catch(() => []),
       getMovimientos({ limit: 300 }).catch(() => []),
       getSolicitudes({ limit: 100 }).catch(() => []),
+      getStatsHerramientas().catch(() => null),
     ])
-      .then(([prods, bajos, movs, sols]) => {
+      .then(([prods, bajos, movs, sols, hStats]) => {
         setProductos(prods)
         setBajoMinimo(bajos)
         setMovimientos(movs)
         setSolicitudes(sols)
+        setHerrStats(hStats)
       })
       .catch((err) => toast.error(extractApiError(err, 'Error al cargar el dashboard')))
       .finally(() => setLoading(false))
@@ -263,10 +267,7 @@ export default function InventarioDashboard() {
             style={{ transform: 'translateZ(0)', willChange: 'transform' }}
             aria-hidden="true"
           >
-            <source
-              src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-              type="video/mp4"
-            />
+            <source src="/login-bg.mp4" type="video/mp4" />
           </video>
           <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
@@ -305,10 +306,7 @@ export default function InventarioDashboard() {
           style={{ transform: 'translateZ(0)', willChange: 'transform' }}
           aria-hidden="true"
         >
-          <source
-            src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-            type="video/mp4"
-          />
+          <source src="/login-bg.mp4" type="video/mp4" />
         </video>
         <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
@@ -333,6 +331,22 @@ export default function InventarioDashboard() {
         <StatCard tone="orange" label="Solicitudes pendientes" value={solicitudesPendientes.length}  Icon={ClipboardList}  to="/inventario/solicitudes" />
         <StatCard tone="red"    label="Bajo mínimo"            value={bajoMinimo.length}             Icon={AlertTriangle}  to="/inventario/movimientos" />
         <StatCard tone="green"  label="Movimientos hoy"        value={movimientosHoy}                Icon={ArrowRightLeft} to="/inventario/movimientos" />
+        {herrStats && (
+          <>
+            <StatCard tone="purple" label="Herramientas activas"
+                      value={herrStats.total_herramientas}
+                      Icon={Wrench} to="/inventario/herramientas" />
+            <StatCard tone="blue"   label="Unidades asignadas"
+                      value={herrStats.unidades_por_estado?.ASIGNADA || 0}
+                      Icon={Hammer} to="/inventario/herramientas/asignaciones" />
+            <StatCard tone="orange" label="En mantenimiento"
+                      value={herrStats.unidades_por_estado?.EN_MANTENIMIENTO || 0}
+                      Icon={Settings2} to="/inventario/herramientas/mantenimientos" />
+            <StatCard tone="red"    label="Incidencias y bajas"
+                      value={(herrStats.incidencias_abiertas || 0) + (herrStats.solicitudes_baja_pendientes || 0)}
+                      Icon={AlertTriangle} to="/inventario/herramientas/incidencias" />
+          </>
+        )}
       </div>
 
       {/* Gráficas */}

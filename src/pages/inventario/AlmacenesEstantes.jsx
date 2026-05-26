@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Boxes, Plus, Edit2, Trash2, QrCode, Printer } from 'lucide-react'
+import { Boxes, Plus, Edit2, Trash2, QrCode, Printer, Package, Search } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -9,7 +9,7 @@ import {
 import {
   getAlmacenes, createAlmacen, updateAlmacen, deleteAlmacen,
   getEstantesPorAlmacen, createEstante, updateEstante, deleteEstante,
-  getCategorias,
+  getCategorias, getProductos, getProductosDeEstante, setProductosDeEstante,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 
@@ -28,7 +28,14 @@ export default function AlmacenesEstantes() {
   
   const [confirmDelAlm, setConfirmDelAlm] = useState(null)
   const [confirmDelEst, setConfirmDelEst] = useState(null)
-  
+
+  // Modal de asignar productos a un estante (Pausa 4 — scanner móvil).
+  const [productosModalEstante, setProductosModalEstante] = useState(null)
+  const [productosAll, setProductosAll] = useState([])
+  const [productosAsignados, setProductosAsignados] = useState(new Set())
+  const [productosLoading, setProductosLoading] = useState(false)
+  const [productosSearch, setProductosSearch] = useState('')
+
   const [saving, setSaving] = useState(false)
 
   const loadAlmacenes = () => {
@@ -134,6 +141,49 @@ export default function AlmacenesEstantes() {
     }
   }
 
+  // --- Handlers Productos del Estante (Pausa 4) ---
+  const openProductosModal = async (estante) => {
+    setProductosModalEstante(estante)
+    setProductosSearch('')
+    setProductosLoading(true)
+    try {
+      const [all, asignados] = await Promise.all([
+        productosAll.length ? Promise.resolve(productosAll) : getProductos({ limit: 5000 }),
+        getProductosDeEstante(estante.id),
+      ])
+      setProductosAll(all)
+      setProductosAsignados(new Set(asignados.map(p => p.id)))
+    } catch (err) {
+      toast.error(extractApiError(err, 'Error al cargar productos'))
+      setProductosModalEstante(null)
+    } finally {
+      setProductosLoading(false)
+    }
+  }
+
+  const toggleProductoAsignado = (id) => {
+    setProductosAsignados(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const guardarProductosEstante = async () => {
+    if (!productosModalEstante) return
+    setSaving(true)
+    try {
+      await setProductosDeEstante(productosModalEstante.id, Array.from(productosAsignados))
+      toast.success(`${productosAsignados.size} producto(s) asignado(s) a ${productosModalEstante.nombre}`)
+      setProductosModalEstante(null)
+    } catch (err) {
+      toast.error(extractApiError(err, 'Error al guardar'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -218,6 +268,9 @@ export default function AlmacenesEstantes() {
                           </Link>
                         </TD>
                         <TD align="right">
+                          <Button variant="ghost" size="sm" leftIcon={<Package size={13} />} onClick={() => openProductosModal(e)}>
+                            Productos
+                          </Button>
                           <Button variant="ghost" size="icon-sm" onClick={() => setFormEstante(e)}>
                             <Edit2 size={13} />
                           </Button>
@@ -292,6 +345,76 @@ export default function AlmacenesEstantes() {
       </Modal>
 
       <ConfirmDialog open={!!confirmDelEst} onClose={() => setConfirmDelEst(null)} onConfirm={handleDeleteEstante} title="Eliminar Estante" description="Se desactivará el estante." confirmLabel="Eliminar" tone="danger" />
+
+      {/* Modal: asignar productos al estante (Pausa 4) */}
+      <Modal
+        open={!!productosModalEstante}
+        onClose={() => setProductosModalEstante(null)}
+        title={productosModalEstante ? `Productos en ${productosModalEstante.nombre}` : ''}
+        size="lg"
+        footer={
+          <>
+            <span className="text-xs text-ink-500 mr-auto">
+              {productosAsignados.size} seleccionado(s)
+            </span>
+            <Button variant="secondary" onClick={() => setProductosModalEstante(null)}>Cancelar</Button>
+            <Button onClick={guardarProductosEstante} loading={saving}>Guardar</Button>
+          </>
+        }
+      >
+        <p className="text-xs text-ink-500 mb-3">
+          Marca los productos que se guardan en este estante. Al escanear el QR
+          desde el móvil verás aquí su lista.
+        </p>
+        <div className="relative mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+          <input
+            type="text"
+            value={productosSearch}
+            onChange={e => setProductosSearch(e.target.value)}
+            placeholder="Buscar por código o descripción…"
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-900 dark:text-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </div>
+        {productosLoading ? (
+          <Skeleton className="h-60 w-full rounded-md" />
+        ) : (
+          <div className="max-h-[55vh] overflow-y-auto border border-ink-200 dark:border-ink-800 rounded-md divide-y divide-ink-100 dark:divide-ink-800">
+            {(() => {
+              const q = productosSearch.trim().toLowerCase()
+              const visible = productosAll.filter(p => {
+                if (!q) return true
+                return (p.codigo || '').toLowerCase().includes(q)
+                    || (p.descripcion || '').toLowerCase().includes(q)
+              })
+              if (visible.length === 0) {
+                return <p className="p-4 text-sm italic text-ink-500 text-center">Sin resultados.</p>
+              }
+              return visible.map(p => {
+                const checked = productosAsignados.has(p.id)
+                return (
+                  <label
+                    key={p.id}
+                    className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-ink-50 dark:hover:bg-ink-800/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleProductoAsignado(p.id)}
+                      className="rounded border-ink-300 dark:border-ink-700 text-brand-600 focus:ring-brand-500"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-mono text-ink-500">{p.codigo}</p>
+                      <p className="text-sm text-ink-900 dark:text-ink-100 truncate">{p.descripcion}</p>
+                    </div>
+                    <span className="text-xs text-ink-400">{p.categoria}</span>
+                  </label>
+                )
+              })
+            })()}
+          </div>
+        )}
+      </Modal>
 
     </div>
   )

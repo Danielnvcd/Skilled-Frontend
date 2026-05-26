@@ -55,10 +55,7 @@ export default function Login() {
         className="absolute inset-0 w-full h-full object-cover z-0"
         aria-hidden="true"
       >
-        <source
-          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-          type="video/mp4"
-        />
+        <source src="/login-bg.mp4" type="video/mp4" />
       </video>
 
       {/* Overlay para legibilidad del formulario sobre el video */}

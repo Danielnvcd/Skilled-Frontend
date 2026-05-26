@@ -35,11 +35,23 @@ export async function setupTwoFa(currentPassword) {
   return data // { secret, qr }
 }
 
-export async function confirmTwoFa({ code, secret, currentPassword }) {
+export async function confirmTwoFa({ code, secret, currentPassword, currentTwoFaCode }) {
+  // currentTwoFaCode es obligatorio SOLO si el usuario ya tiene 2FA activo
+  // (re-keying de dispositivo). El backend responde 401 con
+  // `requires_current_2fa_code: true` si lo necesita.
   const { data } = await api.post(`${BASE}/confirm-2fa`, {
     code,
     secret,
     current_password: currentPassword,
+    current_2fa_code: currentTwoFaCode || undefined,
+  })
+  return data
+}
+
+export async function disableTwoFa({ currentPassword, code }) {
+  const { data } = await api.post(`${BASE}/disable-2fa`, {
+    current_password: currentPassword,
+    code,
   })
   return data
 }

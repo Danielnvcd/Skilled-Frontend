@@ -8,7 +8,9 @@ import {
 import {
   Button, Card, Select, Input
 } from '../../components/ui'
-import { validarEstanteQR, getProductos, createMovimiento } from '../../api/inventario'
+import { getProductos, createMovimiento, getInventarioEstante } from '../../api/inventario'
+import { validarUnidadQR } from '../../api/herramientas'
+import { useNavigate } from 'react-router-dom'
 
 // Placeholder SVG inline (mismo del legacy) — data: URIs están permitidos por el CSP.
 const IMG_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%239ca3af' stroke-width='2'><rect x='8' y='12' width='48' height='40' rx='4'/><path d='M8 40l12-12 16 16 8-8 12 12'/><circle cx='22' cy='24' r='4'/></svg>"
@@ -16,24 +18,32 @@ const IMG_PLACEHOLDER = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2
 export default function ScannerMovil() {
   const scannerRef = useRef(null)
 
+  const navigate = useNavigate()
+
   // Vista actual: 'scanner' | 'menu' | 'products' | 'form'
   const [view, setView] = useState('scanner')
   const [isScanning, setIsScanning] = useState(false)
 
   const [estante, setEstante] = useState(null)
   const [productos, setProductos] = useState([])
+  // Productos asignados al estante via ProductoEstante (Pausa 4). Si está vacío
+  // caemos al kludge legacy de filtrar por categoría == descripcion.
+  const [productosEstanteApi, setProductosEstanteApi] = useState(null)
   const [searchText, setSearchText] = useState('')
 
   const [form, setForm] = useState({ tipo: 'ENTRADA', producto_id: '', cantidad: '' })
   const [saving, setSaving] = useState(false)
 
-  // Productos filtrados por categoría del estante (estante.descripcion = nombre de categoría).
-  // Si el estante no tiene descripción, muestra todo el catálogo.
+  // Lista de productos del estante. Prioridad:
+  //   1. lo que devolvió /estantes/<qr>/inventario (asignación explícita).
+  //   2. fallback: productos cuya categoría coincide con la descripción del estante.
+  //   3. último recurso: catálogo completo.
   const productosEstante = useMemo(() => {
     if (!estante) return []
+    if (productosEstanteApi && productosEstanteApi.length > 0) return productosEstanteApi
     const cat = estante.descripcion
     return cat ? productos.filter(p => p.categoria === cat) : productos
-  }, [estante, productos])
+  }, [estante, productos, productosEstanteApi])
 
   const filteredProducts = useMemo(() => {
     const q = searchText.trim().toLowerCase()
@@ -93,16 +103,24 @@ export default function ScannerMovil() {
   const stopScanner = () => setIsScanning(false)
 
   const handleQRScanned = async (qrCodeText) => {
-    toast.loading('Validando estante...', { id: 'qr' })
+    toast.loading('Validando QR…', { id: 'qr' })
+    // Probar primero como QR de estante; si falla, intentar como unidad de herramienta.
     try {
-      const data = await validarEstanteQR(qrCodeText)
-      setEstante(data)
+      const data = await getInventarioEstante(qrCodeText)
+      setEstante(data.estante)
+      setProductosEstanteApi(data.productos || [])
       setSearchText('')
       setForm({ tipo: 'ENTRADA', producto_id: '', cantidad: '' })
       setView('menu')
-      toast.success(`Estante ${data.nombre} detectado`, { id: 'qr' })
+      toast.success(`Estante ${data.estante.nombre} detectado`, { id: 'qr' })
+      return
+    } catch { /* probar herramienta */ }
+    try {
+      const unidad = await validarUnidadQR(qrCodeText)
+      toast.success(`Herramienta ${unidad.codigo_interno}`, { id: 'qr' })
+      navigate(`/inventario/herramientas/unidades/${unidad.id}`)
     } catch {
-      toast.error('QR inválido o estante no encontrado', { id: 'qr' })
+      toast.error('QR no reconocido (no es estante ni herramienta)', { id: 'qr' })
     }
   }
 
@@ -135,12 +153,14 @@ export default function ScannerMovil() {
 
   const backToScanner = () => {
     setEstante(null)
+    setProductosEstanteApi(null)
     setSearchText('')
     setView('scanner')
   }
 
   const scanAnother = () => {
     setEstante(null)
+    setProductosEstanteApi(null)
     setSearchText('')
     setView('scanner')
     setIsScanning(true)

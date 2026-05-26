@@ -18,6 +18,7 @@ import ReporteCaptura from './pages/horas/ReporteCaptura'
 import PrenominaList from './pages/prenomina/PrenominaList'
 import PrenominaGenerar from './pages/prenomina/PrenominaGenerar'
 import PrenominaEditar from './pages/prenomina/PrenominaEditar'
+import PrenominaResumenPago from './pages/prenomina/PrenominaResumenPago'
 import PrestamosList from './pages/prestamos/PrestamosList'
 import AjustesList from './pages/ajustes/AjustesList'
 import AjustePeriodoDetalle from './pages/ajustes/AjustePeriodoDetalle'
@@ -29,7 +30,13 @@ import Bitacora from './pages/Bitacora'
 import Metricas from './pages/Metricas'
 import InventarioDashboard from './pages/inventario/InventarioDashboard'
 import CatalogoProductos from './pages/inventario/CatalogoProductos'
+import ProductoKardex from './pages/inventario/ProductoKardex'
+import BajoMinimo from './pages/inventario/BajoMinimo'
+import Reportes from './pages/inventario/Reportes'
+import Etiquetas from './pages/inventario/Etiquetas'
 import AlmacenesEstantes from './pages/inventario/AlmacenesEstantes'
+import Tomas from './pages/inventario/Tomas'
+import TomaDetalle from './pages/inventario/TomaDetalle'
 import MovimientosInventario from './pages/inventario/MovimientosInventario'
 import RegistrarMovimiento from './pages/inventario/RegistrarMovimiento'
 import SolicitudesMaterial from './pages/inventario/SolicitudesMaterial'
@@ -37,6 +44,14 @@ import MisPedidos from './pages/inventario/MisPedidos'
 import ScannerMovil from './pages/inventario/ScannerMovil'
 import ImportarMateriales from './pages/inventario/ImportarMateriales'
 import QREstante from './pages/inventario/QREstante'
+import HerramientasCatalogo from './pages/inventario/HerramientasCatalogo'
+import HerramientasUnidades from './pages/inventario/HerramientasUnidades'
+import HerramientaUnidadFicha from './pages/inventario/HerramientaUnidadFicha'
+import AsignacionesHerramienta from './pages/inventario/AsignacionesHerramienta'
+import MantenimientosHerramienta from './pages/inventario/MantenimientosHerramienta'
+import IncidenciasYBajas from './pages/inventario/IncidenciasYBajas'
+import MisHerramientas from './pages/inventario/MisHerramientas'
+import MisIncidencias from './pages/inventario/MisIncidencias'
 import FichaTecnica from './pages/ficha/FichaTecnica'
 import HorasMovil from './pages/horas/HorasMovil'
 import HorasAdminQR from './pages/horas/HorasAdminQR'
@@ -81,7 +96,8 @@ export default function App() {
 
   const role = user?.role
   const isInventario = role === 'inventario' || isAdmin
-  const canSolicit   = role === 'solicitante_material' || role === 'inventario' || isAdmin
+  // Coordinador también puede crear y ver SUS solicitudes/pedidos (cambio 2026-05-25).
+  const canSolicit   = role === 'solicitante_material' || role === 'inventario' || role === 'coordinador' || isAdmin
   const canOperar    = isAdmin || isCoordinador
 
   return (
@@ -103,6 +119,7 @@ export default function App() {
         <Route path="prenomina"               element={<RoleRoute allow={isAdmin}><PrenominaList /></RoleRoute>} />
         <Route path="prenomina/:fecha"        element={<RoleRoute allow={isAdmin}><PrenominaGenerar /></RoleRoute>} />
         <Route path="prenomina/:fecha/editar" element={<RoleRoute allow={isAdmin}><PrenominaEditar /></RoleRoute>} />
+        <Route path="prenomina/:fecha/pago"   element={<RoleRoute allow={isAdmin}><PrenominaResumenPago /></RoleRoute>} />
         <Route path="prestamos"               element={<RoleRoute allow={isAdmin}><PrestamosList /></RoleRoute>} />
         <Route path="ajustes"                 element={<RoleRoute allow={isAdmin}><AjustesList /></RoleRoute>} />
         <Route path="ajustes/:id"             element={<RoleRoute allow={isAdmin}><AjustePeriodoDetalle /></RoleRoute>} />
@@ -131,16 +148,34 @@ export default function App() {
         {/* Inventario: admin + rol inventario */}
         <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
         <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
+        <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={isInventario}><ProductoKardex /></RoleRoute>} />
+        <Route path="inventario/bajo-minimo" element={<RoleRoute allow={isInventario}><BajoMinimo /></RoleRoute>} />
+        <Route path="inventario/reportes"    element={<RoleRoute allow={isInventario}><Reportes /></RoleRoute>} />
+        <Route path="inventario/etiquetas"   element={<RoleRoute allow={isInventario}><Etiquetas /></RoleRoute>} />
         <Route path="inventario/importar"    element={<RoleRoute allow={isInventario}><ImportarMateriales /></RoleRoute>} />
         <Route path="inventario/almacenes"   element={<RoleRoute allow={isInventario}><AlmacenesEstantes /></RoleRoute>} />
         <Route path="inventario/qr/:id"      element={<RoleRoute allow={isInventario}><QREstante /></RoleRoute>} />
         <Route path="inventario/movimientos" element={<RoleRoute allow={isInventario}><MovimientosInventario /></RoleRoute>} />
         <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={isInventario}><RegistrarMovimiento /></RoleRoute>} />
-        <Route path="inventario/solicitudes" element={<RoleRoute allow={isInventario}><SolicitudesMaterial /></RoleRoute>} />
+        <Route path="inventario/solicitudes" element={<RoleRoute allow={canSolicit}><SolicitudesMaterial /></RoleRoute>} />
         <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
+        <Route path="inventario/tomas"       element={<RoleRoute allow={isInventario}><Tomas /></RoleRoute>} />
+        <Route path="inventario/tomas/:id"   element={<RoleRoute allow={isInventario}><TomaDetalle /></RoleRoute>} />
 
         {/* Pedir material: todos los roles pueden solicitarlo */}
         <Route path="inventario/mis-pedidos" element={<RoleRoute allow={canSolicit}><MisPedidos /></RoleRoute>} />
+
+        {/* Herramientas — inventario + admin */}
+        <Route path="inventario/herramientas"                element={<RoleRoute allow={isInventario}><HerramientasCatalogo /></RoleRoute>} />
+        <Route path="inventario/herramientas/unidades"       element={<RoleRoute allow={isInventario}><HerramientasUnidades /></RoleRoute>} />
+        <Route path="inventario/herramientas/unidades/:id"   element={<RoleRoute allow={canSolicit}><HerramientaUnidadFicha /></RoleRoute>} />
+        <Route path="inventario/herramientas/asignaciones"   element={<RoleRoute allow={isInventario}><AsignacionesHerramienta /></RoleRoute>} />
+        <Route path="inventario/herramientas/mantenimientos" element={<RoleRoute allow={isInventario}><MantenimientosHerramienta /></RoleRoute>} />
+        <Route path="inventario/herramientas/incidencias"    element={<RoleRoute allow={isInventario}><IncidenciasYBajas /></RoleRoute>} />
+
+        {/* Vistas para el solicitante */}
+        <Route path="inventario/mis-herramientas"  element={<RoleRoute allow={canSolicit}><MisHerramientas /></RoleRoute>} />
+        <Route path="inventario/mis-incidencias"   element={<RoleRoute allow={canSolicit}><MisIncidencias /></RoleRoute>} />
       </Route>
     </Routes>
   )

@@ -2,7 +2,8 @@ import {
   Home, User, Users, UserCog, FolderOpen, Clock, DollarSign, HandCoins,
   Settings2, IdCard, PieChart, FileClock, History,
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
-  BarChart3, HardHat, QrCode, BookOpen,
+  BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
+  Wrench, Hammer, AlertTriangle, ClipboardCheck,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -67,6 +68,14 @@ export const MENUS = {
       ],
     },
     {
+      // Coordinador puede armar y consultar SUS propios pedidos de material.
+      label: 'Inventario',
+      items: [
+        { path: '/inventario/mis-pedidos', label: 'Pedir material', icon: Send },
+        { path: '/inventario/solicitudes', label: 'Mis solicitudes', icon: ClipboardList },
+      ],
+    },
+    {
       label: 'Ayuda',
       items: [
         { path: '/manual-coordinador', label: 'Manual de uso', icon: BookOpen },
@@ -84,24 +93,37 @@ export const MENUS = {
       ],
     },
     {
-      label: 'Inventario',
+      label: 'Materiales',
       items: [
         { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
+        { path: '/inventario/bajo-minimo', label: 'Bajo mínimo', icon: AlertTriangle },
         { path: '/inventario/almacenes', label: 'Almacenes', icon: Boxes },
-        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: ArrowRightLeft },
+        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: ArrowRightLeft, end: true },
         { path: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', icon: PlusSquare },
         { path: '/inventario/solicitudes', label: 'Solicitudes', icon: ClipboardList },
+        { path: '/inventario/tomas', label: 'Tomas físicas', icon: ClipboardCheck },
+        { path: '/inventario/reportes', label: 'Reportes', icon: FileSpreadsheet },
+        { path: '/inventario/etiquetas', label: 'Etiquetas', icon: Tag },
         { path: '/inventario/scanner', label: 'Escáner QR', icon: ScanLine, mobileOnly: true },
+      ],
+    },
+    {
+      label: 'Herramientas',
+      items: [
+        { path: '/inventario/herramientas', label: 'Catálogo', icon: Wrench, end: true },
+        { path: '/inventario/herramientas/unidades', label: 'Unidades', icon: Hammer },
+        { path: '/inventario/herramientas/asignaciones', label: 'Asignaciones', icon: HardHat },
+        { path: '/inventario/herramientas/mantenimientos', label: 'Mantenimientos', icon: Settings2 },
+        { path: '/inventario/herramientas/incidencias', label: 'Incidencias y bajas', icon: AlertTriangle },
       ],
     },
   ],
 
-  // Solicitante de material: SOLO puede crear y ver sus pedidos
+  // Solicitante de material: pide material + herramientas, ve sus incidencias
   solicitante_material: [
     {
       label: 'Cuenta',
       items: [
-        { path: '/', label: 'Inicio', icon: Home, end: true },
         { path: '/perfil', label: 'Mi perfil', icon: User },
       ],
     },
@@ -112,11 +134,51 @@ export const MENUS = {
         { path: '/inventario/solicitudes', label: 'Mis solicitudes', icon: ClipboardList },
       ],
     },
+    {
+      label: 'Herramientas',
+      items: [
+        { path: '/inventario/mis-herramientas', label: 'Mis herramientas', icon: Hammer },
+        { path: '/inventario/mis-incidencias', label: 'Mis incidencias / bajas', icon: AlertTriangle },
+      ],
+    },
   ],
 }
 
 // super_admin usa el mismo menú que admin
 MENUS.super_admin = MENUS.admin
+
+// Bottom nav de móvil: 4-5 atajos por rol. Se muestra solo en pantallas <md.
+// Cada item es { path, label, icon, end? }.
+export const BOTTOM_NAV = {
+  admin: [
+    { path: '/', label: 'Inicio', icon: Home, end: true },
+    { path: '/horas', label: 'Horas', icon: Clock, end: true },
+    { path: '/inventario/scanner', label: 'Escanear', icon: ScanLine },
+    { path: '/prenomina', label: 'Prenómina', icon: DollarSign },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+  coordinador: [
+    { path: '/horas', label: 'Horas', icon: Clock, end: true },
+    { path: '/horas/movil', label: 'Escanear', icon: ScanLine },
+    { path: '/inventario/mis-pedidos', label: 'Pedidos', icon: Send },
+    { path: '/inventario/solicitudes', label: 'Mis sols.', icon: ClipboardList },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+  inventario: [
+    { path: '/', label: 'Inicio', icon: Home, end: true },
+    { path: '/inventario/scanner', label: 'Escanear', icon: ScanLine },
+    { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
+    { path: '/inventario/solicitudes', label: 'Solicitudes', icon: ClipboardList },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+  solicitante_material: [
+    { path: '/inventario/mis-pedidos', label: 'Pedir', icon: Send },
+    { path: '/inventario/solicitudes', label: 'Mis sols.', icon: ClipboardList },
+    { path: '/inventario/mis-herramientas', label: 'Mis herr.', icon: Hammer },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+}
+BOTTOM_NAV.super_admin = BOTTOM_NAV.admin
 
 // Fallback: menú mínimo para roles no mapeados
 export const DEFAULT_MENU = [

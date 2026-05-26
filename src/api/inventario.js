@@ -28,6 +28,30 @@ export async function deleteProducto(id) {
   return data
 }
 
+// Desglose de stock por bodega (Pausa 2 — stock por almacén).
+export async function getProductoStocks(id, { incluirVacios = false } = {}) {
+  const { data } = await api.get(`${BASE}/productos/${id}/stocks`, {
+    params: incluirVacios ? { incluir_vacios: 1 } : {},
+  })
+  return data
+}
+
+// Disponibilidad: actual / reservado / disponible + lista de reservas (Pausa 2-bis).
+export async function getProductoDisponibilidad(id) {
+  const { data } = await api.get(`${BASE}/productos/${id}/disponibilidad`)
+  return data
+}
+
+// Kardex / historial con saldo corrido (Pausa 3).
+export async function getProductoKardex(id, { desde, hasta, tipo, limit = 500 } = {}) {
+  const params = { limit }
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  if (tipo) params.tipo = tipo
+  const { data } = await api.get(`${BASE}/productos/${id}/kardex`, { params })
+  return data
+}
+
 // --- Almacenes ---
 export async function getAlmacenes() {
   const { data } = await api.get(`${BASE}/almacenes/`)
@@ -85,6 +109,21 @@ export async function validarEstanteQR(qrCode) {
   return data
 }
 
+export async function getInventarioEstante(qrCode) {
+  const { data } = await api.get(`${BASE}/estantes/${qrCode}/inventario`)
+  return data
+}
+
+export async function getProductosDeEstante(estanteId) {
+  const { data } = await api.get(`${BASE}/estantes/${estanteId}/productos`)
+  return data
+}
+
+export async function setProductosDeEstante(estanteId, producto_ids) {
+  const { data } = await api.put(`${BASE}/estantes/${estanteId}/productos`, { producto_ids })
+  return data
+}
+
 // --- Movimientos ---
 export async function getMovimientos({ producto_id, tipo, limit = 200 } = {}) {
   const params = { limit }
@@ -97,6 +136,51 @@ export async function getMovimientos({ producto_id, tipo, limit = 200 } = {}) {
 export async function createMovimiento(payload) {
   const { data } = await api.post(`${BASE}/movimientos/`, payload)
   return data
+}
+
+export async function createMovimientoRapido(payload) {
+  const { data } = await api.post(`${BASE}/movimientos/rapido`, payload)
+  return data
+}
+
+// --- Tomas físicas (Pausa 10) ---
+export async function listTomas(params = {}) {
+  const { data } = await api.get(`${BASE}/tomas/`, { params })
+  return data
+}
+
+export async function getToma(id) {
+  const { data } = await api.get(`${BASE}/tomas/${id}`)
+  return data
+}
+
+export async function createToma(payload) {
+  const { data } = await api.post(`${BASE}/tomas/`, payload)
+  return data
+}
+
+export async function patchTomaDetalle(tomaId, detId, payload) {
+  const { data } = await api.patch(`${BASE}/tomas/${tomaId}/detalles/${detId}`, payload)
+  return data
+}
+
+export async function patchTomaDetallePorCodigo(tomaId, payload) {
+  const { data } = await api.patch(`${BASE}/tomas/${tomaId}/detalles/por-codigo`, payload)
+  return data
+}
+
+export async function cerrarToma(tomaId, payload = {}) {
+  const { data } = await api.post(`${BASE}/tomas/${tomaId}/cerrar`, payload)
+  return data
+}
+
+export async function cancelarToma(tomaId) {
+  const { data } = await api.post(`${BASE}/tomas/${tomaId}/cancelar`, {})
+  return data
+}
+
+export function getTomaPdfUrl(tomaId) {
+  return `${BASE}/tomas/${tomaId}/pdf`
 }
 
 // --- Solicitudes ---
@@ -112,6 +196,22 @@ export async function createSolicitud(payload) {
 
 export async function updateSolicitudEstado(id, estatus) {
   const { data } = await api.patch(`${BASE}/solicitudes/${id}/estado`, { estatus })
+  return data
+}
+
+// Pausa 8b — editar cantidad_aprobada de una línea de solicitud APROBADA.
+export async function patchSolicitudDetalle(solId, detId, { cantidad_aprobada }) {
+  const { data } = await api.patch(
+    `${BASE}/solicitudes/${solId}/detalles/${detId}`,
+    { cantidad_aprobada },
+  )
+  return data
+}
+
+// Pausa 8b — entrega total o parcial.
+// payload: { almacen_origen_id?, motivo?, entregas: [{detalle_id, cantidad_entregada}] }
+export async function entregarSolicitud(solId, payload) {
+  const { data } = await api.post(`${BASE}/solicitudes/${solId}/entregar`, payload)
   return data
 }
 
@@ -145,6 +245,108 @@ export async function getProyectosInventario() {
   return data
 }
 
+// --- Vista previa PDF de una solicitud (no la guarda) ---
+// Mismo mecanismo que prenómina: backend renderiza con xhtml2pdf y devuelve blob.
+export async function previewSolicitudPdf(payload) {
+  const res = await api.post(`${BASE}/solicitudes/preview-pdf`, payload, { responseType: 'blob' })
+  _openBlobInTab(res)
+}
+
+// --- Imprimir PDF de una solicitud ya guardada (por ID) ---
+export async function imprimirSolicitud(solId) {
+  const res = await api.get(`${BASE}/solicitudes/${solId}/pdf`, { responseType: 'blob' })
+  _openBlobInTab(res)
+}
+
+function _openBlobInTab(res) {
+  const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const w = window.open(url, '_blank')
+  if (!w) {
+    const a = document.createElement('a')
+    a.href = url
+    const cd = res.headers['content-disposition'] || ''
+    const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i)
+    a.download = match ? decodeURIComponent(match[1]) : 'solicitud.pdf'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+// --- Reportes Excel (Pausa 6) ---
+// Cada uno descarga un .xlsx con send_file. Helper de descarga compartido.
+async function _descargarXlsx(url, params, fallbackName) {
+  const res = await api.get(url, { params, responseType: 'blob' })
+  const blob = new Blob([res.data], {
+    type: res.headers['content-type']
+      || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const objUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objUrl
+  const cd = res.headers['content-disposition'] || ''
+  const match = cd.match(/filename\*?=(?:UTF-8'')?["']?([^"';\n]+)/i)
+  a.download = match ? decodeURIComponent(match[1]) : fallbackName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(objUrl), 60_000)
+}
+
+export async function descargarReporteInventarioActual({ categoria, solo_bajo_minimo } = {}) {
+  const params = {}
+  if (categoria) params.categoria = categoria
+  if (solo_bajo_minimo) params.solo_bajo_minimo = 1
+  await _descargarXlsx(`${BASE}/reportes/inventario-actual.xlsx`, params, 'inventario_actual.xlsx')
+}
+
+export async function descargarReporteMovimientos({ desde, hasta, tipo, producto_id, usuario_id } = {}) {
+  const params = {}
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  if (tipo) params.tipo = tipo
+  if (producto_id) params.producto_id = producto_id
+  if (usuario_id) params.usuario_id = usuario_id
+  await _descargarXlsx(`${BASE}/reportes/movimientos.xlsx`, params, 'movimientos.xlsx')
+}
+
+export async function descargarReporteKardex({ producto_id, desde, hasta } = {}) {
+  if (!producto_id) throw new Error('producto_id es requerido')
+  const params = { producto_id }
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  await _descargarXlsx(`${BASE}/reportes/kardex.xlsx`, params, 'kardex.xlsx')
+}
+
+export async function descargarReporteConsumoProyecto({ desde, hasta, estatus } = {}) {
+  const params = {}
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  if (estatus) params.estatus = estatus
+  await _descargarXlsx(`${BASE}/reportes/consumo-proyecto.xlsx`, params, 'consumo_proyecto.xlsx')
+}
+
+export async function descargarReporteSolicitudes({ desde, hasta, estatus } = {}) {
+  const params = {}
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  if (estatus) params.estatus = estatus
+  await _descargarXlsx(`${BASE}/reportes/solicitudes.xlsx`, params, 'solicitudes.xlsx')
+}
+
+// --- Etiquetas imprimibles (Pausa 8a) ---
+// Genera y descarga (o abre) un PDF de etiquetas Avery con código de barras o QR.
+export async function generarEtiquetasPdf({ formato = 'avery_5160', tipo = 'barcode', items }) {
+  const res = await api.post(
+    `${BASE}/etiquetas/pdf`,
+    { formato, tipo, items },
+    { responseType: 'blob' },
+  )
+  _openBlobInTab(res)
+}
+
 // --- Importar materiales ---
 export async function descargarPlantillaMateriales() {
   const res = await api.get(`${BASE}/productos/plantilla-importar`, { responseType: 'blob' })
@@ -166,4 +368,41 @@ export async function importarMateriales(file) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   return data
+}
+
+// --- Compras express (Pausa 9) ---
+// Sugerencia: dado un set de producto_ids, agrupa por proveedor default y
+// calcula cantidad sugerida basada en consumo de los últimos 30 días.
+export async function sugerirOCExpress(producto_ids) {
+  const { data } = await api.post(
+    `${BASE}/ordenes-compra/express/sugerencia`,
+    { producto_ids },
+  )
+  return data  // { grupos: [{ proveedor, contacto, items: [...] }] }
+}
+
+// PDF de orden de compra express. Devuelve la URL del blob (para que el caller
+// pueda abrirla o descargarla) + el link de WhatsApp (header X-Whatsapp-Link) +
+// el folio. NO abre la pestaña automáticamente: el modal decide qué hacer.
+export async function generarOCExpressPdf({ proveedor, contacto, notas, items }) {
+  const res = await api.post(
+    `${BASE}/ordenes-compra/express/pdf`,
+    { proveedor, contacto, notas, items },
+    { responseType: 'blob' },
+  )
+  const blob = new Blob([res.data], { type: res.headers['content-type'] || 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  const whatsappLink = res.headers['x-whatsapp-link'] || ''
+  const folio = res.headers['x-folio'] || ''
+  return { url, blob, whatsappLink, folio }
+}
+
+// Helper que el modal puede usar para "Descargar" un PDF ya generado.
+export function descargarPdfDesdeUrl(url, filename) {
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename || 'orden_compra.pdf'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
 }

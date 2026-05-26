@@ -6,7 +6,7 @@ import { extractApiError } from '../utils/apiError'
 import { useAuth } from '../context/AuthContext'
 import {
   User, Building2, Briefcase, Factory, Phone, ShieldCheck, Save,
-  KeyRound, ShieldAlert, ArrowLeft, Mail, Lock,
+  KeyRound, ShieldAlert, ShieldOff, ArrowLeft, Mail, Lock,
 } from 'lucide-react'
 import {
   Button, Card, CardHeader, PageHeader, Badge, Input, Modal,
@@ -15,7 +15,7 @@ import {
 import UserAvatar from '../components/UserAvatar'
 import {
   obtenerUsuario, updateProfile, changeOwnPassword,
-  setupTwoFa, confirmTwoFa,
+  setupTwoFa, confirmTwoFa, disableTwoFa,
 } from '../api/auth'
 
 export default function Profile() {
@@ -40,7 +40,13 @@ export default function Profile() {
   const [setupOpen, setSetupOpen] = useState(false)
   const [setupData, setSetupData] = useState(null)
   const [code, setCode] = useState('')
+  const [currentTwoFaCode, setCurrentTwoFaCode] = useState('')
   const [confirming, setConfirming] = useState(false)
+
+  // Desactivar 2FA
+  const [disableOpen, setDisableOpen] = useState(false)
+  const [disableForm, setDisableForm] = useState({ currentPassword: '', code: '' })
+  const [disableSubmitting, setDisableSubmitting] = useState(false)
 
   const reload = async () => {
     try {
@@ -90,7 +96,13 @@ export default function Profile() {
     setSetupOpen(false)
     setSetupData(null)
     setCode('')
+    setCurrentTwoFaCode('')
     setCurrentPassword('')
+  }
+
+  const resetDisableState = () => {
+    setDisableOpen(false)
+    setDisableForm({ currentPassword: '', code: '' })
   }
 
   const startSetup2fa = () => {
@@ -153,20 +165,44 @@ export default function Profile() {
   const confirm2fa = async (e) => {
     e.preventDefault()
     if (!setupData) return
+    // Si user ya tiene 2FA, exigimos el código del dispositivo actual.
+    if (user.totp_enabled && !currentTwoFaCode) {
+      toast.error('Ingresa el código actual de tu 2FA para cambiar de dispositivo')
+      return
+    }
     setConfirming(true)
     try {
       await confirmTwoFa({
         code,
         secret: setupData.secret,
         currentPassword,
+        currentTwoFaCode: user.totp_enabled ? currentTwoFaCode : undefined,
       })
-      toast.success('2FA activado correctamente')
+      toast.success(user.totp_enabled ? '2FA reconfigurado correctamente' : '2FA activado correctamente')
       resetSetupState()
       await reload()
     } catch (err) {
       toast.error(extractApiError(err, 'Código incorrecto'))
     } finally {
       setConfirming(false)
+    }
+  }
+
+  const submitDisable2fa = async (e) => {
+    e.preventDefault()
+    setDisableSubmitting(true)
+    try {
+      await disableTwoFa({
+        currentPassword: disableForm.currentPassword,
+        code: disableForm.code,
+      })
+      toast.success('2FA desactivado')
+      resetDisableState()
+      await reload()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo desactivar 2FA'))
+    } finally {
+      setDisableSubmitting(false)
     }
   }
 
@@ -316,19 +352,24 @@ export default function Profile() {
                   description="Protege tu cuenta con un código adicional desde tu app autenticadora (Google Authenticator, Authy, 1Password)."
                 />
                 {user.totp_enabled ? (
-                  <div className="flex items-center justify-between gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                  <div className="flex items-center justify-between gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-md flex-wrap">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-9 w-9 rounded-full bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center flex-shrink-0">
                         <ShieldCheck size={18} className="text-emerald-700 dark:text-emerald-300" />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">2FA activado</p>
                         <p className="text-xs text-emerald-700 dark:text-emerald-400">Tu cuenta está protegida.</p>
                       </div>
                     </div>
-                    <Button variant="secondary" size="sm" leftIcon={<KeyRound size={14} />} onClick={startSetup2fa}>
-                      Reconfigurar
-                    </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button variant="secondary" size="sm" leftIcon={<KeyRound size={14} />} onClick={startSetup2fa}>
+                        Cambiar dispositivo
+                      </Button>
+                      <Button variant="ghost" size="sm" leftIcon={<ShieldOff size={14} />} onClick={() => setDisableOpen(true)} className="text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
+                        Desactivar
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between gap-4 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
@@ -433,8 +474,10 @@ export default function Profile() {
       <Modal
         open={setupOpen}
         onClose={resetSetupState}
-        title="Configurar 2FA"
-        description="Escanea el QR con tu app autenticadora y verifica el código generado."
+        title={user.totp_enabled ? 'Cambiar dispositivo 2FA' : 'Configurar 2FA'}
+        description={user.totp_enabled
+          ? 'Escanea el QR con tu nueva app. Para confirmar el cambio necesitas tanto el código del dispositivo nuevo como uno del actual.'
+          : 'Escanea el QR con tu app autenticadora y verifica el código generado.'}
         size="md"
       >
         {setupData && (
@@ -454,9 +497,30 @@ export default function Profile() {
                 {setupData.secret}
               </div>
             </div>
+            {user.totp_enabled && (
+              <div>
+                <label className="block text-xs font-medium text-ink-700 dark:text-ink-300 mb-2 tracking-wide">
+                  Código actual (del dispositivo registrado)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={currentTwoFaCode}
+                  onChange={(e) => setCurrentTwoFaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  maxLength={6}
+                  required
+                  className="block w-full px-4 py-2.5 border border-amber-300 dark:border-amber-700 bg-white dark:bg-ink-800 rounded-md text-center text-xl font-semibold tracking-[0.4em] text-ink-900 dark:text-ink-100 placeholder:text-ink-300 dark:placeholder:text-ink-600 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 focus:outline-none transition-colors"
+                />
+                <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  Prueba que tienes acceso al dispositivo actual antes de cambiarlo.
+                </p>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-medium text-ink-700 dark:text-ink-300 mb-2 tracking-wide">
-                Código de 6 dígitos
+                Código del nuevo dispositivo
               </label>
               <input
                 type="text"
@@ -473,10 +537,58 @@ export default function Profile() {
             </div>
             <div className="flex gap-2 justify-end pt-2">
               <Button variant="secondary" type="button" onClick={resetSetupState}>Cancelar</Button>
-              <Button type="submit" loading={confirming} leftIcon={<ShieldCheck size={14} />}>Verificar y activar</Button>
+              <Button type="submit" loading={confirming} leftIcon={<ShieldCheck size={14} />}>
+                {user.totp_enabled ? 'Confirmar cambio' : 'Verificar y activar'}
+              </Button>
             </div>
           </form>
         )}
+      </Modal>
+
+      <Modal
+        open={disableOpen}
+        onClose={resetDisableState}
+        title="Desactivar 2FA"
+        description="Quitar el segundo factor reduce la seguridad de tu cuenta. Para confirmar necesitamos tu contraseña y un código actual del autenticador."
+        size="sm"
+      >
+        <form onSubmit={submitDisable2fa} className="space-y-4">
+          <Input
+            label="Contraseña actual"
+            leftIcon={<Lock size={14} />}
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            required
+            value={disableForm.currentPassword}
+            onChange={(e) => setDisableForm({ ...disableForm, currentPassword: e.target.value })}
+          />
+          <div>
+            <label className="block text-xs font-medium text-ink-700 dark:text-ink-300 mb-2 tracking-wide">
+              Código 2FA actual
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={disableForm.code}
+              onChange={(e) => setDisableForm({ ...disableForm, code: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+              placeholder="000000"
+              maxLength={6}
+              required
+              className="block w-full px-4 py-3 border border-ink-300 dark:border-ink-700 bg-white dark:bg-ink-800 rounded-md text-center text-2xl font-semibold tracking-[0.5em] text-ink-900 dark:text-ink-100 placeholder:text-ink-300 dark:placeholder:text-ink-600 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-colors"
+            />
+          </div>
+          <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-800 dark:text-amber-300">
+            Después de desactivar entrarás con solo usuario y contraseña. Te recomendamos volverlo a activar pronto.
+          </div>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="secondary" type="button" onClick={resetDisableState}>Cancelar</Button>
+            <Button type="submit" loading={disableSubmitting} leftIcon={<ShieldOff size={14} />} className="bg-red-600 hover:bg-red-700">
+              Desactivar 2FA
+            </Button>
+          </div>
+        </form>
       </Modal>
     </div>
   )

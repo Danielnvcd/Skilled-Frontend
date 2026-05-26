@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, Camera, X } from 'lucide-react'
+import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, Camera, X, IdCard } from 'lucide-react'
 import {
   Button, Card, PageHeader, Badge, Modal, ConfirmDialog,
   EmptyState, Input, Select, Skeleton,
@@ -14,6 +14,7 @@ import {
   listarUsuarios, crearUsuario, eliminarUsuario, cambiarPasswordUsuario, actualizarUsuario,
   subirFotoUsuario,
 } from '../api/users'
+import { listarTrabajadores } from '../api/trabajadores'
 
 const ROLE_LABELS = {
   super_admin: 'Super administrador',
@@ -74,11 +75,18 @@ export default function Usuarios() {
   const [openEdit, setOpenEdit] = useState(null)
   const [editForm, setEditForm] = useState({
     full_name: '', area: '', position: '', factory: '', contact_info: '',
+    trabajador_id: '',
   })
   const [savingEdit, setSavingEdit] = useState(false)
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const fileInputRef = useRef(null)
+
+  // Catálogo de empleados activos para el selector de "Liga a empleado".
+  // Lo cargamos una vez en background; el dropdown filtra localmente.
+  const [trabajadores, setTrabajadores] = useState([])
+  const [loadingTrab, setLoadingTrab] = useState(false)
+  const [trabSearch, setTrabSearch] = useState('')
 
   const load = () => {
     setLoading(true)
@@ -154,10 +162,21 @@ export default function Usuarios() {
       position: u.position || '',
       factory: u.factory || '',
       contact_info: u.contact_info || '',
+      trabajador_id: u.trabajador_id || '',
     })
     setPhotoFile(null)
     setPhotoPreview(null)
+    setTrabSearch('')
     setOpenEdit(u)
+    // Carga diferida: solo al abrir el modal por primera vez.
+    if (trabajadores.length === 0 && !loadingTrab) {
+      setLoadingTrab(true)
+      // per_page=500 cubre la mayoría; si quedan fuera, el admin puede capturar el id manualmente luego.
+      listarTrabajadores({ page: 1, perPage: 500, estado: 'activos' })
+        .then((res) => setTrabajadores(res?.items || []))
+        .catch(() => toast.error('No se pudieron cargar los empleados'))
+        .finally(() => setLoadingTrab(false))
+    }
   }
 
   const closeEdit = () => {
@@ -197,8 +216,10 @@ export default function Usuarios() {
     if (!openEdit) return
     setSavingEdit(true)
     try {
-      // 1. Texto: PUT JSON
-      const updated = await actualizarUsuario(openEdit.id, editForm)
+      // 1. Texto: PUT JSON. trabajador_id puede ser '' (= desvincular) o int.
+      const payload = { ...editForm }
+      payload.trabajador_id = payload.trabajador_id === '' ? null : Number(payload.trabajador_id)
+      const updated = await actualizarUsuario(openEdit.id, payload)
       // 2. Foto: POST multipart (solo si el admin eligió una nueva)
       const withPhoto = photoFile
         ? await subirFotoUsuario(openEdit.id, photoFile)
@@ -252,6 +273,7 @@ export default function Usuarios() {
             <TH>Usuario</TH>
             <TH>Rol</TH>
             <TH>Nombre completo</TH>
+            <TH>Empleado ligado</TH>
             <TH>2FA</TH>
             <TH align="right">Acciones</TH>
           </THead>
@@ -284,6 +306,17 @@ export default function Usuarios() {
                     </Badge>
                   </TD>
                   <TD>{u.full_name || <span className="text-ink-400">—</span>}</TD>
+                  <TD>
+                    {u.trabajador_id ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                        <IdCard size={13} />
+                        <span className="font-mono">{u.trabajador_no_empleado}</span>
+                        <span className="text-ink-500 dark:text-ink-400 truncate max-w-[120px]">{u.trabajador_nombre}</span>
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-400 dark:text-ink-500">Sin ligar</span>
+                    )}
+                  </TD>
                   <TD>
                     {u.totp_enabled ? (
                       <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
@@ -520,6 +553,65 @@ export default function Usuarios() {
               placeholder="Correo o teléfono"
             />
           </div>
+          {/* Liga a empleado (RRHH) — habilita asignaciones de herramienta */}
+          <div className="border-t border-ink-200 dark:border-ink-700 pt-3 mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-ink-700 dark:text-ink-300 inline-flex items-center gap-1.5">
+                <IdCard size={14} /> Liga a empleado
+              </label>
+              {editForm.trabajador_id && (
+                <button
+                  type="button"
+                  onClick={() => setEditForm({ ...editForm, trabajador_id: '' })}
+                  className="text-xs text-rose-600 hover:underline"
+                >
+                  Desvincular
+                </button>
+              )}
+            </div>
+            {loadingTrab ? (
+              <Skeleton className="h-9 w-full rounded-md" />
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre o número de empleado…"
+                    value={trabSearch}
+                    onChange={(e) => setTrabSearch(e.target.value)}
+                    className="block w-full h-9 pl-9 pr-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+                  />
+                </div>
+                <Select
+                  value={String(editForm.trabajador_id || '')}
+                  onChange={(e) => setEditForm({ ...editForm, trabajador_id: e.target.value })}
+                >
+                  <option value="">— Sin ligar —</option>
+                  {trabajadores
+                    .filter((t) => {
+                      const q = trabSearch.trim().toLowerCase()
+                      if (!q) return true
+                      return (
+                        t.no_empleado?.toLowerCase().includes(q) ||
+                        t.nombre_apellidos?.toLowerCase().includes(q) ||
+                        t.nombre?.toLowerCase().includes(q)
+                      )
+                    })
+                    .slice(0, 200)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.no_empleado} — {t.nombre_apellidos || t.nombre}
+                      </option>
+                    ))}
+                </Select>
+                <p className="text-[11px] text-ink-500 dark:text-ink-400 mt-1">
+                  Necesario para que solicitantes y coordinadores vean sus herramientas asignadas como empleado.
+                </p>
+              </>
+            )}
+          </div>
+
           <p className="text-[11px] text-ink-500 dark:text-ink-400">
             El rol no es editable desde aquí por seguridad. Si necesitas cambiarlo, elimina la cuenta y vuelve a crearla con el rol correcto.
           </p>
