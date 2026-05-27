@@ -55,6 +55,92 @@ function OnlineIndicator({ lastSeen }) {
   )
 }
 
+function ComboboxTrabajadores({ trabajadores, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const selected = trabajadores.find(t => String(t.id) === String(value))
+  
+  const filtered = trabajadores.filter(t => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
+    return (
+      t.no_empleado?.toLowerCase().includes(q) ||
+      t.nombre_apellidos?.toLowerCase().includes(q) ||
+      t.nombre?.toLowerCase().includes(q)
+    )
+  })
+
+  return (
+    <div className="relative w-full" ref={ref}>
+      <div 
+        className="block w-full h-9 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-left flex items-center justify-between cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+        onClick={() => { setOpen(!open); if (!open) setSearch(''); }}
+      >
+        <span className="truncate text-ink-900 dark:text-ink-100">
+          {selected ? `${selected.no_empleado} — ${selected.nombre} ${selected.nombre_apellidos || ''}`.trim() : '— Sin ligar —'}
+        </span>
+        <span className="text-ink-400 ml-2 text-xs">▼</span>
+      </div>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-700 rounded-md shadow-lg overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-ink-100 dark:border-ink-800">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Buscar por nombre o número…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full h-8 pl-8 pr-3 text-sm bg-ink-50 dark:bg-ink-950 border border-ink-200 dark:border-ink-800 rounded outline-none focus:border-brand-500"
+              />
+            </div>
+          </div>
+          <div className="max-h-60 overflow-y-auto">
+            <div 
+              className={`px-3 py-2 text-sm cursor-pointer hover:bg-ink-50 dark:hover:bg-ink-800 ${!value ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300 font-medium' : 'text-ink-700 dark:text-ink-300'}`}
+              onClick={() => { onChange(''); setOpen(false) }}
+            >
+              — Sin ligar —
+            </div>
+            {filtered.slice(0, 100).map(t => (
+              <div
+                key={t.id}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-ink-50 dark:hover:bg-ink-800 truncate ${String(t.id) === String(value) ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-300 font-medium' : 'text-ink-700 dark:text-ink-300'}`}
+                onClick={() => { onChange(String(t.id)); setOpen(false) }}
+              >
+                {t.no_empleado} — {`${t.nombre} ${t.nombre_apellidos || ''}`.trim()}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-3 py-3 text-sm text-center text-ink-500">No se encontraron empleados.</div>
+            )}
+            {filtered.length > 100 && (
+              <div className="px-3 py-2 text-xs text-center text-ink-400 border-t border-ink-100 dark:border-ink-800 bg-ink-50 dark:bg-ink-900/50">
+                Mostrando 100 de {filtered.length}. Usa el buscador para refinar.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 export default function Usuarios() {
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState([])
@@ -169,14 +255,14 @@ export default function Usuarios() {
     setTrabSearch('')
     setOpenEdit(u)
     // Carga diferida: solo al abrir el modal por primera vez.
-    if (trabajadores.length === 0 && !loadingTrab) {
-      setLoadingTrab(true)
-      // per_page=500 cubre la mayoría; si quedan fuera, el admin puede capturar el id manualmente luego.
-      listarTrabajadores({ page: 1, perPage: 500, estado: 'activos' })
-        .then((res) => setTrabajadores(res?.items || []))
-        .catch(() => toast.error('No se pudieron cargar los empleados'))
-        .finally(() => setLoadingTrab(false))
-    }
+      if (trabajadores.length === 0 && !loadingTrab) {
+        setLoadingTrab(true)
+        // per_page=5000 para cargar todos los activos al editar.
+        listarTrabajadores({ page: 1, perPage: 5000, estado: 'activos' })
+          .then((res) => setTrabajadores(res?.items || []))
+          .catch(() => toast.error('No se pudieron cargar los empleados'))
+          .finally(() => setLoadingTrab(false))
+      }
   }
 
   const closeEdit = () => {
@@ -573,38 +659,11 @@ export default function Usuarios() {
               <Skeleton className="h-9 w-full rounded-md" />
             ) : (
               <>
-                <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre o número de empleado…"
-                    value={trabSearch}
-                    onChange={(e) => setTrabSearch(e.target.value)}
-                    className="block w-full h-9 pl-9 pr-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-                  />
-                </div>
-                <Select
-                  value={String(editForm.trabajador_id || '')}
-                  onChange={(e) => setEditForm({ ...editForm, trabajador_id: e.target.value })}
-                >
-                  <option value="">— Sin ligar —</option>
-                  {trabajadores
-                    .filter((t) => {
-                      const q = trabSearch.trim().toLowerCase()
-                      if (!q) return true
-                      return (
-                        t.no_empleado?.toLowerCase().includes(q) ||
-                        t.nombre_apellidos?.toLowerCase().includes(q) ||
-                        t.nombre?.toLowerCase().includes(q)
-                      )
-                    })
-                    .slice(0, 200)
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.no_empleado} — {t.nombre_apellidos || t.nombre}
-                      </option>
-                    ))}
-                </Select>
+                <ComboboxTrabajadores 
+                  trabajadores={trabajadores}
+                  value={editForm.trabajador_id}
+                  onChange={(val) => setEditForm({ ...editForm, trabajador_id: val })}
+                />
                 <p className="text-[11px] text-ink-500 dark:text-ink-400 mt-1">
                   Necesario para que solicitantes y coordinadores vean sus herramientas asignadas como empleado.
                 </p>
