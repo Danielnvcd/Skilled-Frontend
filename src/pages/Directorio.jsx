@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Users, Search, Briefcase, Building2, Factory, Phone, Mail, ShieldCheck } from 'lucide-react'
+import { Users, Search, Briefcase, Building2, Factory, Phone, Mail, ShieldCheck, IdCard } from 'lucide-react'
 import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../components/ui'
 import UserAvatar from '../components/UserAvatar'
 import { listarDirectorio } from '../api/auth'
@@ -134,7 +134,7 @@ function UserCard({ user }) {
 
   return (
     <Card className="!p-0 overflow-hidden flex flex-col group hover:shadow-elevated transition-shadow">
-      <div className="relative h-20 bg-gradient-to-br from-brand-100 to-brand-200 dark:from-brand-900/40 dark:to-brand-800/40">
+      <div className="relative h-20 bg-gradient-to-br from-brand-600/20 via-brand-500/10 to-brand-400/20 dark:from-brand-900/50 dark:via-brand-800/30 dark:to-brand-700/40">
         <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
           <div className="relative">
             <UserAvatar
@@ -143,7 +143,7 @@ function UserCard({ user }) {
               name={user.full_name || user.username}
               size="xl"
               lazy
-              className="!h-20 !w-20 !text-2xl ring-4 ring-white dark:ring-ink-900"
+              className="!h-20 !w-20 !text-2xl ring-2 ring-ink-200 dark:ring-ink-700 shadow-lg"
             />
             {online && (
               <span
@@ -173,6 +173,12 @@ function UserCard({ user }) {
         </div>
 
         <div className="space-y-1.5 text-xs text-ink-600 dark:text-ink-300 mb-4 text-left">
+          {user.trabajador_no_empleado && (
+            <div className="flex items-center gap-2 truncate">
+              <IdCard size={11} className="text-ink-400 dark:text-ink-500 flex-shrink-0" />
+              <span className="truncate font-mono">{user.trabajador_no_empleado}</span>
+            </div>
+          )}
           {user.position && (
             <div className="flex items-center gap-2 truncate">
               <Briefcase size={11} className="text-ink-400 dark:text-ink-500 flex-shrink-0" />
@@ -197,7 +203,7 @@ function UserCard({ user }) {
               <span className="truncate">{user.contact_info}</span>
             </div>
           )}
-          {!user.position && !user.area && !user.factory && !user.contact_info && (
+          {!user.trabajador_no_empleado && !user.position && !user.area && !user.factory && !user.contact_info && (
             <p className="text-[11px] italic text-ink-400 dark:text-ink-500 text-center">Perfil sin información adicional</p>
           )}
         </div>

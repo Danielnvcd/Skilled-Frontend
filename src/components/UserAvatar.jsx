@@ -20,8 +20,8 @@ export default function UserAvatar({ id, profilePic, name, size = 'md', lazy = f
   const src = lazy ? lazyUrl : eagerUrl
   if (lazy) {
     return (
-      <span ref={lazyRef} className={`inline-block ${className}`}>
-        <Avatar name={name} size={size} src={src || undefined} />
+      <span ref={lazyRef} className="inline-block rounded-full leading-none">
+        <Avatar name={name} size={size} src={src || undefined} className={className} />
       </span>
     )
   }
