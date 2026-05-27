@@ -75,10 +75,10 @@ function ComboboxTrabajadores({ trabajadores, value, onChange }) {
   const filtered = trabajadores.filter(t => {
     const q = search.trim().toLowerCase()
     if (!q) return true
+    const fullName = `${t.nombre || ''} ${t.nombre_apellidos || ''}`.toLowerCase()
     return (
       t.no_empleado?.toLowerCase().includes(q) ||
-      t.nombre_apellidos?.toLowerCase().includes(q) ||
-      t.nombre?.toLowerCase().includes(q)
+      fullName.includes(q)
     )
   })
 
@@ -95,7 +95,7 @@ function ComboboxTrabajadores({ trabajadores, value, onChange }) {
       </div>
 
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-700 rounded-md shadow-lg overflow-hidden flex flex-col">
+        <div className="absolute z-50 w-full mb-1 bottom-full bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-700 rounded-md shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] overflow-hidden flex flex-col">
           <div className="p-2 border-b border-ink-100 dark:border-ink-800">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
@@ -258,7 +258,7 @@ export default function Usuarios() {
       if (trabajadores.length === 0 && !loadingTrab) {
         setLoadingTrab(true)
         // per_page=5000 para cargar todos los activos al editar.
-        listarTrabajadores({ page: 1, perPage: 5000, estado: 'activos' })
+        listarTrabajadores({ page: 1, perPage: 5000, estado: 'todos' })
           .then((res) => setTrabajadores(res?.items || []))
           .catch(() => toast.error('No se pudieron cargar los empleados'))
           .finally(() => setLoadingTrab(false))
