@@ -117,6 +117,12 @@ export const MENUS = {
         { path: '/inventario/herramientas/incidencias', label: 'Incidencias y bajas', icon: AlertTriangle },
       ],
     },
+    {
+      label: 'Ayuda',
+      items: [
+        { path: '/inventario/manual', label: 'Manual de uso', icon: BookOpen },
+      ],
+    },
   ],
 
   // Solicitante de material: pide material + herramientas, ve sus incidencias

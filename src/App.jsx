@@ -57,6 +57,7 @@ import HorasMovil from './pages/horas/HorasMovil'
 import HorasAdminQR from './pages/horas/HorasAdminQR'
 import ManualAdmin from './pages/manual/ManualAdmin'
 import ManualCoordinador from './pages/manual/ManualCoordinador'
+import ManualInventario from './pages/manual/ManualInventario'
 
 function FullPageSpinner() {
   return (
@@ -161,6 +162,7 @@ export default function App() {
         <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
         <Route path="inventario/tomas"       element={<RoleRoute allow={isInventario}><Tomas /></RoleRoute>} />
         <Route path="inventario/tomas/:id"   element={<RoleRoute allow={isInventario}><TomaDetalle /></RoleRoute>} />
+        <Route path="inventario/manual"      element={<RoleRoute allow={isInventario}><ManualInventario /></RoleRoute>} />
 
         {/* Pedir material: todos los roles pueden solicitarlo */}
         <Route path="inventario/mis-pedidos" element={<RoleRoute allow={canSolicit}><MisPedidos /></RoleRoute>} />
