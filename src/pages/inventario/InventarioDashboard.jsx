@@ -34,25 +34,25 @@ function greeting() {
 
 function StatCard({ tone, label, value, Icon, to }) {
   const tones = {
-    blue:   { border: 'border-l-sky-400',     iconWrap: 'bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/30' },
-    green:  { border: 'border-l-emerald-400', iconWrap: 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/30' },
-    purple: { border: 'border-l-violet-400',  iconWrap: 'bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30' },
-    orange: { border: 'border-l-amber-400',   iconWrap: 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/30' },
-    red:    { border: 'border-l-rose-400',    iconWrap: 'bg-rose-500/20 text-rose-200 ring-1 ring-rose-400/30' },
+    blue:   { border: 'border-l-sky-500',     iconWrap: 'bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-200 ring-1 ring-sky-300/50 dark:ring-sky-400/30' },
+    green:  { border: 'border-l-emerald-500', iconWrap: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200 ring-1 ring-emerald-300/50 dark:ring-emerald-400/30' },
+    purple: { border: 'border-l-violet-500',  iconWrap: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-200 ring-1 ring-violet-300/50 dark:ring-violet-400/30' },
+    orange: { border: 'border-l-amber-500',   iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-200 ring-1 ring-amber-300/50 dark:ring-amber-400/30' },
+    red:    { border: 'border-l-rose-500',    iconWrap: 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-200 ring-1 ring-rose-300/50 dark:ring-rose-400/30' },
   }
   const t = tones[tone] || tones.blue
   const Wrap = to ? Link : 'div'
   return (
     <Wrap
       to={to}
-      className={`bg-white/[0.07] rounded-xl border border-white/15 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)] ring-1 ring-white/5 ${to ? 'cursor-pointer' : ''}`}
+      className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-sm ${to ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
     >
       <div className={`h-12 w-12 rounded-full inline-flex items-center justify-center flex-shrink-0 ${t.iconWrap}`}>
         <Icon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider font-semibold text-white/60">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-white mt-0.5">{value}</p>
+        <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">{label}</p>
+        <p className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5">{value}</p>
       </div>
     </Wrap>
   )
@@ -60,10 +60,10 @@ function StatCard({ tone, label, value, Icon, to }) {
 
 function Panel({ title, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white/[0.07] rounded-xl border border-white/15 ring-1 ring-white/5 p-5 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)] ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3 mb-4">
-        <div className="flex items-center gap-2 text-white/85 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-white/60" />}
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-5 shadow-sm ${className}`}>
+      <div className="flex items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-700 pb-3 mb-4">
+        <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
+          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" />}
           {title}
         </div>
         {action}
@@ -256,9 +256,7 @@ export default function InventarioDashboard() {
 
   const { user } = useAuth()
   const { theme } = useTheme()
-  // Forzamos apariencia oscura (video + glass): los charts también usan
-  // tooltip y grid en modo dark sin importar el tema global del usuario.
-  const isDark = true
+  const isDark = theme === 'dark'
   void theme
 
   const [productos, setProductos] = useState([])
@@ -348,19 +346,7 @@ export default function InventarioDashboard() {
 
   if (loading) {
     return (
-      <div className="dark space-y-5 relative" style={{ isolation: 'isolate' }}>
-        <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-          <video
-            autoPlay muted loop playsInline preload="auto" disablePictureInPicture
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
-            aria-hidden="true"
-          >
-            <source src="/login-bg.mp4" type="video/mp4" />
-          </video>
-          <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
-        </div>
+      <div className="space-y-5">
         <Skeleton className="h-24 rounded-xl" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
@@ -377,39 +363,16 @@ export default function InventarioDashboard() {
   }
 
   return (
-    <div className="dark space-y-5 relative" style={{ isolation: 'isolate' }}>
-      {/* Video corporativo de fondo — solo en el inicio del rol inventario.
-          OPTIMIZACIÓN: una sola capa con backdrop-blur sobre el video (en lugar
-          de aplicar backdrop-blur a cada tarjeta) elimina ghosting/artefactos
-          al hacer hover y baja el costo de pintura. translateZ(0) promueve el
-          video a su propia capa GPU. */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          disablePictureInPicture
-          className="absolute inset-0 w-full h-full object-cover"
-          style={{ transform: 'translateZ(0)', willChange: 'transform' }}
-          aria-hidden="true"
-        >
-          <source src="/login-bg.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 backdrop-blur-2xl backdrop-saturate-150 bg-gradient-to-br from-black/65 via-black/55 to-brand-950/65" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.45)_100%)]" />
-      </div>
-
-      {/* Welcome banner — glass */}
-      <div className="bg-white/[0.07] rounded-xl border border-white/15 ring-1 ring-white/5 p-6 shadow-[0_20px_40px_-12px_rgba(0,0,0,0.55)]">
-        <h1 className="text-xl font-bold text-white">
+    <div className="space-y-5">
+      {/* Welcome banner */}
+      <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-6 shadow-sm">
+        <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100">
           {greeting()},{' '}
-          <span className="text-sky-300 capitalize">
+          <span className="text-brand-600 dark:text-sky-300 capitalize">
             {user?.full_name || user?.username}
           </span>!
         </h1>
-        <p className="text-sm text-white/65 mt-1">
+        <p className="text-sm text-ink-500 dark:text-ink-400 mt-1">
           Panel principal de control de inventario y almacenes.
         </p>
       </div>
@@ -614,22 +577,22 @@ export default function InventarioDashboard() {
             { name: 'Escáner',     icon: ScanLine,       to: '/inventario/scanner',      tone: 'orange' },
           ].map((mod) => {
             const tones = {
-              blue:   'bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/30',
-              green:  'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/30',
-              purple: 'bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30',
-              orange: 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-400/30',
+              blue:   'bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-200 ring-1 ring-sky-300/40 dark:ring-sky-400/30',
+              green:  'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200 ring-1 ring-emerald-300/40 dark:ring-emerald-400/30',
+              purple: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-200 ring-1 ring-violet-300/40 dark:ring-violet-400/30',
+              orange: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-200 ring-1 ring-amber-300/40 dark:ring-amber-400/30',
             }
             const Icon = mod.icon
             return (
               <Link
                 key={mod.to}
                 to={mod.to}
-                className="group flex flex-col items-center gap-2 p-3 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-center"
+                className="group flex flex-col items-center gap-2 p-3 rounded-lg border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/50 hover:bg-ink-100 dark:hover:bg-ink-800 text-center transition-colors"
               >
                 <div className={`h-10 w-10 rounded-lg inline-flex items-center justify-center ${tones[mod.tone]}`}>
                   <Icon size={18} />
                 </div>
-                <span className="text-xs font-semibold text-white/85 group-hover:text-white">
+                <span className="text-xs font-semibold text-ink-700 dark:text-ink-300 group-hover:text-ink-900 dark:group-hover:text-ink-100">
                   {mod.name}
                 </span>
               </Link>
@@ -638,7 +601,7 @@ export default function InventarioDashboard() {
         </div>
       </Panel>
 
-      <div className="text-center pt-4 text-xs text-white/40 border-t border-white/10">
+      <div className="text-center pt-4 text-xs text-ink-400 dark:text-ink-500 border-t border-ink-200 dark:border-ink-700">
         Skilled © {new Date().getFullYear()}
       </div>
     </div>
