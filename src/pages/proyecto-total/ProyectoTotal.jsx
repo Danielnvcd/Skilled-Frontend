@@ -10,6 +10,7 @@ import {
 } from '../../components/ui'
 import { listarProyectoTotal, exportarExcelProyecto } from '../../api/proyectoTotal'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 
 const PER_PAGE = 20
 
@@ -227,21 +228,21 @@ export default function ProyectoTotal() {
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const [q, setQ] = useState(searchParams.get('q') || '')
   const [qInput, setQInput] = useState(q)
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
+
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    ['proyecto-total', { page, q }],
+    () => listarProyectoTotal({ page, q, perPage: PER_PAGE }),
+    { staleMs: 60_000 },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarProyectoTotal({ page, q, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error(extractApiError(err, 'Error al cargar proyectos'))
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q])
+    if (error) toast.error(extractApiError(error, 'Error al cargar proyectos'))
+  }, [error])
 
   useEffect(() => {
     const next = new URLSearchParams()

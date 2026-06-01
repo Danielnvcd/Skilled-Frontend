@@ -9,6 +9,7 @@ import {
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { listarProyectos } from '../../api/proyectos'
+import { useResource } from '../../hooks/useResource'
 import ProyectoFormModal from './ProyectoFormModal'
 
 const ICON_PALETTE = [
@@ -45,26 +46,30 @@ function tiempoRelativo(iso) {
 
 export default function ProyectosList() {
   const { isAdmin } = useAuth()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [qInput, setQInput] = useState('')
   const [estado, setEstado] = useState('todos')
   const [modalOpen, setModalOpen] = useState(false)
   const [editId, setEditId] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
+
+  const {
+    data: rawData,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['proyectos', { q, estado }],
+    () => listarProyectos({ q, estado }),
+    {
+      staleMs: 30_000,
+      invalidateOn: ['proyecto:changed'],
+    },
+  )
+  const items = rawData?.items ?? []
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarProyectos({ q, estado })
-      .then((res) => { if (!cancelled) setItems(res.items || []) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar proyectos')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [q, estado, reloadKey])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar proyectos')
+  }, [error])
 
   const onSearch = (e) => {
     e.preventDefault()
@@ -74,7 +79,7 @@ export default function ProyectosList() {
   const openNew = () => { setEditId(null); setModalOpen(true) }
   const openEdit = (id) => { setEditId(id); setModalOpen(true) }
   const closeModal = () => setModalOpen(false)
-  const onSaved = () => setReloadKey((k) => k + 1)
+  const onSaved = () => { refetch() }
 
   const total = useMemo(() => items.length, [items])
 

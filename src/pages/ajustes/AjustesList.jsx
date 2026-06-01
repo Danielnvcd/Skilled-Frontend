@@ -7,6 +7,7 @@ import {
   Badge, EmptyState, Pagination, Skeleton,
 } from '../../components/ui'
 import { listarPeriodos } from '../../api/ajustes'
+import { useResource } from '../../hooks/useResource'
 import PeriodoCrearModal from './PeriodoCrearModal'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
@@ -24,22 +25,22 @@ export default function AjustesList() {
   const [page, setPage] = useState(1)
   const [q, setQ] = useState('')
   const [qInput, setQInput] = useState('')
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
+
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    ['ajustes', { page, q }],
+    () => listarPeriodos({ page, q, perPage: PER_PAGE }),
+    { staleMs: 30_000, invalidateOn: ['ajuste:changed'] },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarPeriodos({ page, q, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar periodos')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q, reloadKey])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar periodos')
+  }, [error])
 
   const onSearch = (e) => {
     e.preventDefault()
@@ -156,7 +157,7 @@ export default function AjustesList() {
       <PeriodoCrearModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        onCreated={(newId) => { setReloadKey((k) => k + 1); navigate(`/ajustes/${newId}`) }}
+        onCreated={(newId) => { navigate(`/ajustes/${newId}`) }}
       />
     </>
   )

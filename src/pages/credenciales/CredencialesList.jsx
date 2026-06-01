@@ -11,6 +11,7 @@ import {
 import { useAuth } from '../../context/AuthContext'
 import { listarCredencialesPlanta, guardarCredencialesPlanta } from '../../api/credenciales'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 
 const PER_PAGE = 20
@@ -385,8 +386,6 @@ export default function CredencialesList() {
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const [q, setQ] = useState(searchParams.get('q') || '')
   const [qInput, setQInput] = useState(q)
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
 
   const [fichaTrabajador, setFichaTrabajador] = useState(null)
   const [editTrabajador, setEditTrabajador] = useState(null)
@@ -397,26 +396,23 @@ export default function CredencialesList() {
     return d
   }, [])
 
-  const refresh = () => {
-    setLoading(true)
-    listarCredencialesPlanta({ page, q, perPage: PER_PAGE })
-      .then(setData)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar credenciales')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawData,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['credenciales', { page, q }],
+    () => listarCredencialesPlanta({ page, q, perPage: PER_PAGE }),
+    { staleMs: 30_000, invalidateOn: ['credencial:changed'] },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarCredencialesPlanta({ page, q, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error(extractApiError(err, 'Error al cargar credenciales'))
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q])
+    if (error) toast.error(extractApiError(error, 'Error al cargar credenciales'))
+  }, [error])
+
+  const refresh = () => { refetch() }
 
   useEffect(() => {
     const next = new URLSearchParams()

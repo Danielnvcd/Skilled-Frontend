@@ -9,6 +9,7 @@ import {
   PageHeader, Button, Input, EmptyState, Pagination, Skeleton,
 } from '../../components/ui'
 import { listarReportes } from '../../api/horas'
+import { useResource } from '../../hooks/useResource'
 import AbrirReporteModal from './AbrirReporteModal'
 
 const PER_PAGE = 20
@@ -204,11 +205,7 @@ export default function ReportesList() {
   const [qInput, setQInput] = useState('')
   const [q, setQ] = useState('')
   const [estado, setEstado] = useState('')
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
-  const [reloadKey, setReloadKey] = useState(0)
-  const [stats, setStats] = useState({ borrador: 0, terminado: 0, cerrada: 0, total: 0 })
 
   // Debounce de búsqueda — 300ms para no spammear el backend mientras escribe.
   useEffect(() => {
@@ -221,43 +218,49 @@ export default function ReportesList() {
     return () => clearTimeout(t)
   }, [qInput, q])
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarReportes({ page, q, estado, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error cargando reportes')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q, estado, reloadKey])
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    ['reportes-horas', { page, q, estado }],
+    () => listarReportes({ page, q, estado, perPage: PER_PAGE }),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 
-  // KPIs: piden el conteo global por estado (independiente del filtro actual).
-  // Como no hay endpoint de stats, los traemos en una llamada extra sin filtro.
   useEffect(() => {
-    let cancelled = false
-    listarReportes({ page: 1, perPage: 1 })
-      .then((res) => {
-        if (cancelled) return
-        // Si no hay un endpoint /stats, derivamos del total y de búsquedas paralelas.
-        // Para mantener la UI simple, derivamos desde 'total' y la página actual.
-        setStats((s) => ({ ...s, total: res.total }))
-      })
-      .catch(() => {})
-    // Conteos por estado en paralelo (3 llamadas baratas con perPage=1).
-    Promise.all([
-      listarReportes({ page: 1, perPage: 1, estado: 'BORRADOR' }),
-      listarReportes({ page: 1, perPage: 1, estado: 'TERMINADO' }),
-      listarReportes({ page: 1, perPage: 1, estado: 'PRENOMINA_CERRADA' }),
-    ])
-      .then(([b, t, c]) => {
-        if (cancelled) return
-        setStats((s) => ({ ...s, borrador: b.total, terminado: t.total, cerrada: c.total }))
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [reloadKey])
+    if (error) toast.error(error.response?.data?.error || 'Error cargando reportes')
+  }, [error])
+
+  // KPIs por estado — llaves dentro del mismo namespace 'reportes-horas' para
+  // que un único 'reporte:lista_changed' invalide listado + KPIs a la vez.
+  const { data: kpiTotalRaw } = useResource(
+    ['reportes-horas', { kpi: 'total' }],
+    () => listarReportes({ page: 1, perPage: 1 }),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
+  const { data: kpiBorradorRaw } = useResource(
+    ['reportes-horas', { kpi: 'BORRADOR' }],
+    () => listarReportes({ page: 1, perPage: 1, estado: 'BORRADOR' }),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
+  const { data: kpiTerminadoRaw } = useResource(
+    ['reportes-horas', { kpi: 'TERMINADO' }],
+    () => listarReportes({ page: 1, perPage: 1, estado: 'TERMINADO' }),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
+  const { data: kpiCerradaRaw } = useResource(
+    ['reportes-horas', { kpi: 'PRENOMINA_CERRADA' }],
+    () => listarReportes({ page: 1, perPage: 1, estado: 'PRENOMINA_CERRADA' }),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
+  const stats = {
+    total: kpiTotalRaw?.total ?? 0,
+    borrador: kpiBorradorRaw?.total ?? 0,
+    terminado: kpiTerminadoRaw?.total ?? 0,
+    cerrada: kpiCerradaRaw?.total ?? 0,
+  }
 
   const onSetEstado = (next) => {
     setEstado((prev) => (prev === next ? '' : next))
@@ -396,7 +399,6 @@ export default function ReportesList() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onCreated={(newId) => {
-          setReloadKey((k) => k + 1)
           navigate(`/horas/${newId}`)
         }}
       />

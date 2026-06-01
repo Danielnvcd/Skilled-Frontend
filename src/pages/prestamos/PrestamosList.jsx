@@ -6,6 +6,7 @@ import {
   Badge, EmptyState, Pagination, Skeleton,
 } from '../../components/ui'
 import { listarPrestamos, exportarExcelPrestamos } from '../../api/prestamos'
+import { useResource } from '../../hooks/useResource'
 import PrestamoFormModal from './PrestamoFormModal'
 import PrestamoDetalleModal from './PrestamoDetalleModal'
 
@@ -29,24 +30,25 @@ export default function PrestamosList() {
   const [q, setQ] = useState('')
   const [qInput, setQInput] = useState('')
   const [estado, setEstado] = useState('')
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editPrestamo, setEditPrestamo] = useState(null)
   const [detalleId, setDetalleId] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
+
+  const {
+    data: rawData,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['prestamos', { page, q, estado }],
+    () => listarPrestamos({ page, q, estado, perPage: PER_PAGE }),
+    { staleMs: 30_000, invalidateOn: ['prestamo:changed'] },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarPrestamos({ page, q, estado, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar préstamos')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q, estado, reloadKey])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar préstamos')
+  }, [error])
 
   const onSearch = (e) => {
     e.preventDefault()
@@ -56,7 +58,7 @@ export default function PrestamosList() {
 
   const openNuevo = () => { setEditPrestamo(null); setFormOpen(true) }
   const openEditar = (p) => { setEditPrestamo(p); setFormOpen(true) }
-  const reload = () => setReloadKey((k) => k + 1)
+  const reload = () => { refetch() }
 
   const onExportExcel = async (p) => {
     try {

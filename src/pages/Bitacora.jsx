@@ -10,6 +10,7 @@ import {
 } from '../components/ui'
 import { listarBitacora, detalleLog } from '../api/bitacora'
 import { extractApiError } from '../utils/apiError'
+import { useResource } from '../hooks/useResource'
 
 const PER_PAGE = 50
 
@@ -127,22 +128,22 @@ export default function Bitacora() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const [fechaFiltro, setFechaFiltro] = useState(searchParams.get('fecha_filtro') || '')
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
   const [detailLogId, setDetailLogId] = useState(null)
 
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    ['bitacora', { page, fechaFiltro }],
+    () => listarBitacora({ page, fechaFiltro, perPage: PER_PAGE }),
+    { staleMs: 60_000 },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarBitacora({ page, fechaFiltro, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error(extractApiError(err, 'Error al cargar bitácora'))
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, fechaFiltro])
+    if (error) toast.error(extractApiError(error, 'Error al cargar bitácora'))
+  }, [error])
 
   useEffect(() => {
     const next = new URLSearchParams()

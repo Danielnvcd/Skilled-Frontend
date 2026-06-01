@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { PageHeader, Skeleton, EmptyState } from '../../components/ui'
 import { listarSemanas } from '../../api/prenomina'
+import { useResource } from '../../hooks/useResource'
 
 const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
@@ -29,22 +30,23 @@ function weekNumber(d) {
 
 export default function PrenominaList() {
   const navigate = useNavigate()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all') // all | pending | done
   const [fechaFilter, setFechaFilter] = useState('')
 
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    'prenomina',
+    () => listarSemanas(),
+    { staleMs: 30_000, invalidateOn: ['prenomina:changed'] },
+  )
+  const items = rawData?.items ?? []
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarSemanas()
-      .then((res) => { if (!cancelled) setItems(res.items || []) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar semanas')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar semanas')
+  }, [error])
 
   const stats = useMemo(() => {
     const total = items.length

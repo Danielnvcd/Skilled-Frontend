@@ -15,6 +15,7 @@ import {
 import { useTheme } from '../context/ThemeContext'
 import { getMetricas } from '../api/metricas'
 import { extractApiError } from '../utils/apiError'
+import { useResource } from '../hooks/useResource'
 
 const CHART_COLORS = [
   '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444',
@@ -188,21 +189,29 @@ export default function Metricas() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [activePlanta, setActivePlanta] = useState(null)
   const [searchPlanta, setSearchPlanta] = useState('')
   const [searchDC3, setSearchDC3] = useState('')
 
+  const {
+    data,
+    loading,
+    error,
+  } = useResource(
+    'metricas',
+    () => getMetricas(),
+    { staleMs: 120_000 },
+  )
+
   useEffect(() => {
-    getMetricas()
-      .then((d) => {
-        setData(d)
-        if (d?.plantas?.length) setActivePlanta(d.plantas[0].planta)
-      })
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar métricas')))
-      .finally(() => setLoading(false))
-  }, [])
+    if (error) toast.error(extractApiError(error, 'Error al cargar métricas'))
+  }, [error])
+
+  useEffect(() => {
+    if (!activePlanta && data?.plantas?.length) {
+      setActivePlanta(data.plantas[0].planta)
+    }
+  }, [data, activePlanta])
 
   const totales = data?.totales || {}
   const plantas = data?.plantas || []

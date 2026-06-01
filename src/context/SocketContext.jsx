@@ -63,9 +63,17 @@ export function SocketProvider({ children }) {
     s.on('disconnect', () => setConnected(false))
     s.on('connect_error', () => setConnected(false))
 
+    // Pulso de presencia. Mantiene `user.last_seen` fresco en el backend
+    // mientras el SPA esté abierto (incluso si el usuario solo lee, sin
+    // hacer requests HTTP). El servidor lo usa para el indicador "en línea".
+    const heartbeatId = setInterval(() => {
+      if (s.connected) s.emit('heartbeat')
+    }, 90_000)
+
     setSocket(s)
 
     return () => {
+      clearInterval(heartbeatId)
       s.removeAllListeners()
       s.disconnect()
       setSocket(null)
