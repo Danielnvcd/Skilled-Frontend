@@ -8,6 +8,7 @@ import {
   PageHeader, Input, EmptyState, Skeleton, Badge, Button,
 } from '../../components/ui'
 import { listarMisProyectos } from '../../api/proyectos'
+import { useResource } from '../../hooks/useResource'
 
 function ProyectoCard({ proyecto, onOpenHoras }) {
   const [open, setOpen] = useState(false)
@@ -89,23 +90,27 @@ function ProyectoCard({ proyecto, onOpenHoras }) {
 
 export default function MisProyectos() {
   const navigate = useNavigate()
-  const [loading, setLoading] = useState(true)
-  const [proyectos, setProyectos] = useState([])
   const [q, setQ] = useState('')
 
   const onOpenHoras = () => navigate('/horas')
 
+  // Reusa el namespace 'proyectos' compartido con admin/ProyectosList.jsx.
+  // Cuando admin edita un proyecto y emite `proyecto:changed`, esta lista
+  // también se invalida (aunque el contenido difiera por filtros de rol).
+  const {
+    data: rawProyectos,
+    loading,
+    error,
+  } = useResource(
+    ['proyectos', 'mios'],
+    () => listarMisProyectos(),
+    { staleMs: 30_000, invalidateOn: ['proyecto:changed'] },
+  )
+  const proyectos = rawProyectos ?? []
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarMisProyectos()
-      .then((res) => { if (!cancelled) setProyectos(res || []) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error al cargar proyectos')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar proyectos')
+  }, [error])
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase()

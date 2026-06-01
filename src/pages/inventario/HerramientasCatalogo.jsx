@@ -11,6 +11,7 @@ import {
   getClasificaciones,
 } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { USO_HERRAMIENTA, ESTADO_LABEL, ESTADO_TONE } from './herramientasShared'
 
 const FORM_INICIAL = {
@@ -19,9 +20,7 @@ const FORM_INICIAL = {
 }
 
 export default function HerramientasCatalogo() {
-  const [items, setItems] = useState([])
   const [clasifs, setClasifs] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [clasifFiltro, setClasifFiltro] = useState('')
   const [serFiltro, setSerFiltro] = useState('')
@@ -34,16 +33,25 @@ export default function HerramientasCatalogo() {
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
-  const load = () => {
-    setLoading(true)
-    getHerramientas()
-      .then(setItems)
-      .catch((e) => toast.error(extractApiError(e, 'Error cargando herramientas')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawItems,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['herramientas', 'catalogo'],
+    () => getHerramientas(),
+    { staleMs: 30_000, invalidateOn: ['herramienta:changed'] },
+  )
+  const items = rawItems ?? []
 
   useEffect(() => {
-    load()
+    if (error) toast.error(extractApiError(error, 'Error cargando herramientas'))
+  }, [error])
+
+  const load = () => { refetch() }
+
+  useEffect(() => {
     getClasificaciones().then(setClasifs).catch(() => {})
   }, [])
 

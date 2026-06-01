@@ -12,6 +12,7 @@ import {
 import { getProductos, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
 import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 
 // ─── Catálogo visual de categorías (fallback cuando no hay imagen) ────────────
 const CAT_CFG = {
@@ -200,10 +201,6 @@ function HerramientaCard({ herramienta, enCart, onClick }) {
 export default function MisPedidos() {
   const [tab, setTab] = useState('materiales')   // 'materiales' | 'herramientas'
 
-  const [productos, setProductos] = useState([])
-  const [herramientas, setHerramientas] = useState([])
-  const [proyectos, setProyectos] = useState([])
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const [search, setSearch] = useState('')
@@ -217,20 +214,32 @@ export default function MisPedidos() {
   const [qtyModal, setQtyModal] = useState(null)   // material { producto, cantidad }
   const [herrModal, setHerrModal] = useState(null) // herramienta { herr, cantidad, fechas, justif, complem }
 
+  // El solicitante necesita ver el catálogo actualizado. Reusamos los
+  // mismos namespaces que el rol inventario para compartir caché.
+  const { data: rawProductos, error: errProd } = useResource(
+    ['productos', { limit: 500 }],
+    () => getProductos({ limit: 500 }),
+    { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  )
+  const { data: rawHerramientas, error: errHerr } = useResource(
+    ['herramientas', 'catalogo'],
+    () => getHerramientas({ limit: 500 }),
+    { staleMs: 60_000, invalidateOn: ['herramienta:changed'] },
+  )
+  const { data: rawProyectos, error: errProj } = useResource(
+    ['proyectos-inventario'],
+    () => getProyectosInventario(),
+    { staleMs: 120_000, invalidateOn: ['proyecto:changed'] },
+  )
+  const productos = rawProductos ?? []
+  const herramientas = rawHerramientas ?? []
+  const proyectos = rawProyectos ?? []
+  const loading = !rawProductos && !rawHerramientas && !rawProyectos
+
   useEffect(() => {
-    Promise.all([
-      getProductos({ limit: 500 }),
-      getProyectosInventario().catch(() => []),
-      getHerramientas({ limit: 500 }).catch(() => []),
-    ])
-      .then(([prods, projs, herrs]) => {
-        setProductos(prods)
-        setProyectos(projs)
-        setHerramientas(herrs)
-      })
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar catálogo')))
-      .finally(() => setLoading(false))
-  }, [])
+    const err = errProd || errHerr || errProj
+    if (err) toast.error(extractApiError(err, 'Error al cargar catálogo'))
+  }, [errProd, errHerr, errProj])
 
   // ─── Herramientas ─────────────────────────────────────────────────────────
   const herramientasFiltradas = useMemo(() => {

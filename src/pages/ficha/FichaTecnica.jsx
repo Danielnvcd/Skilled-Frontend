@@ -8,6 +8,7 @@ import {
   PageHeader, Input, EmptyState, Skeleton, Button, ImageViewer,
 } from '../../components/ui'
 import { obtenerFichaTecnica } from '../../api/trabajadores'
+import { useResource } from '../../hooks/useResource'
 import useIsMobile from '../../hooks/useIsMobile'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 
@@ -181,22 +182,26 @@ function FichaAccordion({ trabajador, onPreview }) {
 
 export default function FichaTecnica() {
   const isMobile = useIsMobile()
-  const [loading, setLoading] = useState(true)
-  const [trabajadores, setTrabajadores] = useState([])
   const [q, setQ] = useState('')
   const [viewerDoc, setViewerDoc] = useState(null)
 
+  // Comparte namespace 'empleados' con la vista admin: cuando admin edita
+  // datos médicos / contacto de emergencia de un trabajador, el coord recibe
+  // `empleado:changed` y la ficha se refresca automáticamente.
+  const {
+    data: rawData,
+    loading,
+    error,
+  } = useResource(
+    ['empleados', 'ficha-tecnica'],
+    () => obtenerFichaTecnica(),
+    { staleMs: 60_000, invalidateOn: ['empleado:changed'] },
+  )
+  const trabajadores = rawData?.items ?? []
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    obtenerFichaTecnica()
-      .then((res) => { if (!cancelled) setTrabajadores(res.items || []) })
-      .catch((err) => {
-        if (!cancelled) toast.error(err.response?.data?.error || 'Error cargando fichas')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
+    if (error) toast.error(error.response?.data?.error || 'Error cargando fichas')
+  }, [error])
 
   const filtrados = useMemo(() => {
     const term = q.trim().toLowerCase()

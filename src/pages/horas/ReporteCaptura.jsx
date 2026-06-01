@@ -6,6 +6,7 @@ import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog,
 } from '../../components/ui'
 import { detalleReporte, cerrarReporte } from '../../api/horas'
+import { useResource } from '../../hooks/useResource'
 import RegistroModal from './RegistroModal'
 import CapturaMovil from './CapturaMovil'
 import useIsMobile from '../../hooks/useIsMobile'
@@ -36,25 +37,32 @@ export default function ReporteCaptura() {
   const navigate = useNavigate()
   const isMobile = useIsMobile()
 
-  const [reporte, setReporte] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [cellOpen, setCellOpen] = useState(false)
   const [cellCtx, setCellCtx] = useState(null) // { trabajador, fecha, fechaLabel, existing }
   const [confirmClose, setConfirmClose] = useState(false)
   const [closing, setClosing] = useState(false)
 
-  const cargar = () => {
-    setLoading(true)
-    detalleReporte(id)
-      .then(setReporte)
-      .catch((err) => {
-        toast.error(err.response?.data?.error || 'Error al cargar reporte')
-        navigate('/horas')
-      })
-      .finally(() => setLoading(false))
-  }
+  // `reporte:lista_changed` cubre el caso "admin cerró el reporte / cambió
+  // estado" mientras el coord lo tenía abierto. Los cambios de registros
+  // internos (otro coord capturando) van por sala (reporte:registros_cambio)
+  // y se mantiene la actualización optimista local vía refetch tras mutar.
+  const {
+    data: reporte,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['horas-reporte', { id }],
+    () => detalleReporte(id),
+    { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
+  )
 
-  useEffect(() => { cargar() }, [id])
+  useEffect(() => {
+    if (error) {
+      toast.error(error.response?.data?.error || 'Error al cargar reporte')
+      navigate('/horas')
+    }
+  }, [error, navigate])
 
   // Lookup rápido por (trabajador_id, fecha) -> registro
   const grid = useMemo(() => {
@@ -77,20 +85,8 @@ export default function ReporteCaptura() {
     setCellOpen(true)
   }
 
-  const onRegistroSaved = (saved) => {
-    setReporte((prev) => {
-      if (!prev) return prev
-      const idx = prev.registros.findIndex((r) => r.id === saved.id)
-      const next = idx >= 0
-        ? prev.registros.map((r) => r.id === saved.id ? saved : r)
-        : [...prev.registros, saved]
-      return { ...prev, registros: next }
-    })
-  }
-
-  const onRegistroDeleted = (deletedId) => {
-    setReporte((prev) => prev ? { ...prev, registros: prev.registros.filter((r) => r.id !== deletedId) } : prev)
-  }
+  const onRegistroSaved = () => { refetch() }
+  const onRegistroDeleted = () => { refetch() }
 
   const handleCerrar = async () => {
     setClosing(true)
@@ -98,7 +94,7 @@ export default function ReporteCaptura() {
       await cerrarReporte(id)
       toast.success('Reporte cerrado')
       setConfirmClose(false)
-      cargar()
+      await refetch()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al cerrar')
     } finally {

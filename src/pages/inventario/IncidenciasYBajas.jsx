@@ -11,30 +11,48 @@ import {
   getSolicitudesBaja, autorizarBaja, rechazarBaja, ejecutarBaja,
 } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { TIPO_INCIDENCIA_LABEL, formatDateTime } from './herramientasShared'
 
 const TABS = ['incidencias', 'bajas']
 
 export default function IncidenciasYBajas() {
   const [tab, setTab] = useState('incidencias')
-  const [incs, setIncs] = useState([])
-  const [bajas, setBajas] = useState([])
-  const [loading, setLoading] = useState(true)
   const [estadoInc, setEstadoInc] = useState('ABIERTA')
   const [estadoBaja, setEstadoBaja] = useState('PENDIENTE')
   const [atender, setAtender] = useState(null)
   const [busy, setBusy] = useState(false)
 
-  const load = () => {
-    setLoading(true)
-    Promise.all([
-      getIncidencias(estadoInc ? { estado: estadoInc } : {}).catch(() => []),
-      getSolicitudesBaja(estadoBaja ? { estado: estadoBaja } : {}).catch(() => []),
-    ]).then(([i, b]) => { setIncs(i); setBajas(b) })
-    .finally(() => setLoading(false))
-  }
+  const {
+    data: rawIncs,
+    loading: loadingIncs,
+    error: errorIncs,
+    refetch: refetchIncs,
+  } = useResource(
+    ['incidencias-herramienta', { estado: estadoInc || null }],
+    () => getIncidencias(estadoInc ? { estado: estadoInc } : {}),
+    { staleMs: 30_000, invalidateOn: ['incidencia:changed'] },
+  )
+  const {
+    data: rawBajas,
+    loading: loadingBajas,
+    error: errorBajas,
+    refetch: refetchBajas,
+  } = useResource(
+    ['solicitudes-baja-herramienta', { estado: estadoBaja || null }],
+    () => getSolicitudesBaja(estadoBaja ? { estado: estadoBaja } : {}),
+    { staleMs: 30_000, invalidateOn: ['baja:changed'] },
+  )
+  const incs = rawIncs ?? []
+  const bajas = rawBajas ?? []
+  const loading = loadingIncs || loadingBajas
 
-  useEffect(() => { load() }, [estadoInc, estadoBaja])
+  useEffect(() => {
+    const err = errorIncs || errorBajas
+    if (err) toast.error(extractApiError(err, 'Error'))
+  }, [errorIncs, errorBajas])
+
+  const load = () => { refetchIncs(); refetchBajas() }
 
   const handleEjecutar = async (id) => {
     if (!confirm('¿Ejecutar la baja? La unidad quedará DADA_DE_BAJA.')) return

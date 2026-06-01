@@ -13,11 +13,10 @@ import {
   getProductoStocks,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { Upload } from 'lucide-react'
 
 export default function CatalogoProductos() {
-  const [productos, setProductos] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [categorias, setCategorias] = useState([])
@@ -76,13 +75,23 @@ export default function CatalogoProductos() {
     return () => { cancel = true }
   }, [stocksModal])
 
-  const load = () => {
-    setLoading(true)
-    getProductos()
-      .then(setProductos)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar productos')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawProductos,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['productos', 'all'],
+    () => getProductos(),
+    { staleMs: 30_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  )
+  const productos = rawProductos ?? []
+
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error al cargar productos'))
+  }, [error])
+
+  const load = () => { refetch() }
 
   const loadCategorias = async () => {
     try {
@@ -99,7 +108,6 @@ export default function CatalogoProductos() {
   }
 
   useEffect(() => {
-    load()
     loadCategorias()
   }, [])
 
@@ -150,7 +158,7 @@ export default function CatalogoProductos() {
     setDeleting(true)
     try {
       await deleteProducto(confirmDel.id)
-      setProductos((prev) => prev.filter((p) => p.id !== confirmDel.id))
+      await refetch()
       toast.success('Producto eliminado')
       setConfirmDel(null)
     } catch (err) {

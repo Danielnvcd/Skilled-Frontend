@@ -12,6 +12,7 @@ import {
 } from '../../api/herramientas'
 import { listarProyectos } from '../../api/proyectos'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { CONDICION, formatDateTime } from './herramientasShared'
 import api from '../../api/axios'
 
@@ -30,8 +31,6 @@ const FORM_INICIAL = {
 }
 
 export default function AsignacionesHerramienta() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [estadoFiltro, setEstadoFiltro] = useState('ACTIVA')
   const [search, setSearch] = useState('')
 
@@ -42,17 +41,27 @@ export default function AsignacionesHerramienta() {
   const [trabajadores, setTrabajadores] = useState([])
   const [proyectos, setProyectos] = useState([])
 
-  const load = () => {
-    setLoading(true)
-    const params = {}
-    if (estadoFiltro) params.estado = estadoFiltro
-    getAsignaciones(params)
-      .then(setItems)
-      .catch((e) => toast.error(extractApiError(e, 'Error')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawItems,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['asignaciones-herramienta', { estado: estadoFiltro || null }],
+    () => {
+      const params = {}
+      if (estadoFiltro) params.estado = estadoFiltro
+      return getAsignaciones(params)
+    },
+    { staleMs: 30_000, invalidateOn: ['asignacion:changed'] },
+  )
+  const items = rawItems ?? []
 
-  useEffect(() => { load() }, [estadoFiltro])
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error'))
+  }, [error])
+
+  const load = () => { refetch() }
 
   useEffect(() => {
     if (openForm) {

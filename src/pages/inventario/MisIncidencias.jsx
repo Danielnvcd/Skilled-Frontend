@@ -5,21 +5,39 @@ import { AlertTriangle, Ban } from 'lucide-react'
 import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui'
 import { getIncidencias, getSolicitudesBaja } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { TIPO_INCIDENCIA_LABEL, formatDateTime } from './herramientasShared'
 
 export default function MisIncidencias() {
-  const [incs, setIncs] = useState([])
-  const [bajas, setBajas] = useState([])
-  const [loading, setLoading] = useState(true)
+  // Backend filtra a las propias del solicitante. Reusa los mismos
+  // namespaces que IncidenciasYBajas para compartir cache cuando el rol
+  // cambia entre vistas.
+  const {
+    data: rawIncs,
+    loading: loadingIncs,
+    error: errIncs,
+  } = useResource(
+    ['incidencias-herramienta', 'mias'],
+    () => getIncidencias(),
+    { staleMs: 30_000, invalidateOn: ['incidencia:changed'] },
+  )
+  const {
+    data: rawBajas,
+    loading: loadingBajas,
+    error: errBajas,
+  } = useResource(
+    ['solicitudes-baja-herramienta', 'mias'],
+    () => getSolicitudesBaja(),
+    { staleMs: 30_000, invalidateOn: ['baja:changed'] },
+  )
+  const incs = rawIncs ?? []
+  const bajas = rawBajas ?? []
+  const loading = loadingIncs || loadingBajas
 
   useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      getIncidencias().catch(() => []),
-      getSolicitudesBaja().catch(() => []),
-    ]).then(([i, b]) => { setIncs(i); setBajas(b) })
-      .finally(() => setLoading(false))
-  }, [])
+    const err = errIncs || errBajas
+    if (err) toast.error(extractApiError(err, 'Error'))
+  }, [errIncs, errBajas])
 
   if (loading) return <div className="p-6"><Skeleton className="h-32 w-full" /></div>
 

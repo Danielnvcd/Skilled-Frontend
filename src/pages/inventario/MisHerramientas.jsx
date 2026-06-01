@@ -6,20 +6,32 @@ import { Card, PageHeader, Badge, EmptyState, Skeleton, Button } from '../../com
 import { getUnidades, fotoUrl } from '../../api/herramientas'
 import { useAuth } from '../../context/AuthContext'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { ESTADO_LABEL, ESTADO_TONE, formatDateTime } from './herramientasShared'
 
 export default function MisHerramientas() {
   const { user } = useAuth()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+
+  // El backend filtra por user en getUnidades() para solicitante_material:
+  // devuelve solo las unidades ASIGNADA al trabajador del usuario.
+  // Reusa namespace 'herramientas-unidades' compartido con la vista admin.
+  const {
+    data: rawItems,
+    loading,
+    error,
+  } = useResource(
+    ['herramientas-unidades', 'mias'],
+    () => getUnidades(),
+    {
+      staleMs: 30_000,
+      invalidateOn: ['asignacion:changed', 'herramienta:changed', 'mantenimiento:changed', 'baja:changed'],
+    },
+  )
+  const items = rawItems ?? []
 
   useEffect(() => {
-    setLoading(true)
-    getUnidades()
-      .then(setItems)
-      .catch((e) => toast.error(extractApiError(e, 'Error')))
-      .finally(() => setLoading(false))
-  }, [])
+    if (error) toast.error(extractApiError(error, 'Error'))
+  }, [error])
 
   if (loading) {
     return <div className="p-6 space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>

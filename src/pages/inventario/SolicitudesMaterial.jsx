@@ -14,6 +14,7 @@ import {
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useAuth } from '../../context/AuthContext'
+import { useResource } from '../../hooks/useResource'
 
 const TABS = [
   { key: 'TODAS',     label: 'Todas',      icon: ListTodo,   color: 'text-ink-600' },
@@ -29,8 +30,6 @@ export default function SolicitudesMaterial() {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin' || user?.role === 'inventario'
 
-  const [solicitudes, setSolicitudes] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState('TODAS')
 
@@ -53,15 +52,23 @@ export default function SolicitudesMaterial() {
     }
   }
 
-  const load = () => {
-    setLoading(true)
-    getSolicitudes({ limit: 200 })
-      .then(setSolicitudes)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar solicitudes')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawSolicitudes,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['solicitudes', { limit: 200 }],
+    () => getSolicitudes({ limit: 200 }),
+    { staleMs: 30_000, invalidateOn: ['solicitud:changed'] },
+  )
+  const solicitudes = rawSolicitudes ?? []
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error al cargar solicitudes'))
+  }, [error])
+
+  const load = () => { refetch() }
 
   const stats = useMemo(() => {
     const acc = { TOTAL: solicitudes.length, PENDIENTE: 0, APROBADA: 0, RECHAZADA: 0, ENTREGADA: 0 }

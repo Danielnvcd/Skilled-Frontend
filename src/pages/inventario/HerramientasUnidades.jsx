@@ -11,6 +11,7 @@ import {
 } from '../../api/herramientas'
 import { getAlmacenes, getEstantesPorAlmacen } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import { ESTADOS_UNIDAD, ESTADO_LABEL, ESTADO_TONE, formatDate } from './herramientasShared'
 
 const FORM_INICIAL = {
@@ -30,11 +31,9 @@ export default function HerramientasUnidades() {
   const [searchParams, setSearchParams] = useSearchParams()
   const herramientaFiltro = searchParams.get('herramienta_id') || ''
 
-  const [unidades, setUnidades] = useState([])
   const [herramientas, setHerramientas] = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [estantes, setEstantes] = useState([])
-  const [loading, setLoading] = useState(true)
 
   const [search, setSearch] = useState('')
   const [estadoFiltro, setEstadoFiltro] = useState('')
@@ -44,20 +43,32 @@ export default function HerramientasUnidades() {
   const [form, setForm] = useState(FORM_INICIAL)
   const [serializadaSel, setSerializadaSel] = useState(true)
 
-  const load = () => {
-    setLoading(true)
-    const params = {}
-    if (herramientaFiltro) params.herramienta_id = herramientaFiltro
-    if (estadoFiltro) params.estado = estadoFiltro
-    getUnidades(params)
-      .then(setUnidades)
-      .catch((e) => toast.error(extractApiError(e, 'Error cargando unidades')))
-      .finally(() => setLoading(false))
-  }
+  const unidadParams = { herramienta_id: herramientaFiltro || null, estado: estadoFiltro || null }
+  const {
+    data: rawUnidades,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['herramientas-unidades', unidadParams],
+    () => {
+      const params = {}
+      if (herramientaFiltro) params.herramienta_id = herramientaFiltro
+      if (estadoFiltro) params.estado = estadoFiltro
+      return getUnidades(params)
+    },
+    {
+      staleMs: 30_000,
+      invalidateOn: ['herramienta:changed', 'asignacion:changed', 'mantenimiento:changed', 'incidencia:changed', 'baja:changed'],
+    },
+  )
+  const unidades = rawUnidades ?? []
 
   useEffect(() => {
-    load()
-  }, [herramientaFiltro, estadoFiltro])
+    if (error) toast.error(extractApiError(error, 'Error cargando unidades'))
+  }, [error])
+
+  const load = () => { refetch() }
 
   useEffect(() => {
     getHerramientas().then(setHerramientas).catch(() => {})

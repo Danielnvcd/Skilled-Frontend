@@ -16,6 +16,7 @@ import {
   descargarPdfDesdeUrl,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 
 const URGENCIA_META = {
   critico:  { label: 'Crítico',    tone: 'danger',  rowBg: 'bg-rose-50/60 dark:bg-rose-900/10', icon: '🔥', sub: '< 7 días' },
@@ -25,23 +26,29 @@ const URGENCIA_META = {
 }
 
 export default function BajoMinimo() {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [urgenciaFiltro, setUrgenciaFiltro] = useState('')
   const [selected, setSelected] = useState(() => new Set())
   const [ocModalOpen, setOcModalOpen] = useState(false)
 
-  const cargar = () => {
-    setLoading(true)
-    getProductosBajoMinimo()
-      .then(setItems)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar productos bajo mínimo')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawItems,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['productos', 'bajo-minimo'],
+    () => getProductosBajoMinimo(),
+    { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  )
+  const items = rawItems ?? []
 
-  useEffect(() => { cargar() }, [])
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error al cargar productos bajo mínimo'))
+  }, [error])
+
+  const cargar = () => { refetch() }
 
   const categorias = useMemo(() => {
     const set = new Set(items.map((i) => i.categoria).filter(Boolean))

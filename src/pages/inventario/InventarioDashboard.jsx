@@ -18,7 +18,19 @@ import {
 } from '../../api/inventario'
 import { getStatsHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { useResource } from '../../hooks/useResource'
 import useIsMobileDevice from '../../hooks/useIsMobileDevice'
+
+// Eventos que invalidan stocks/listados de inventario:
+// - `producto:changed` — alta/edición/baja de producto
+// - `movimiento:changed` — alta de movimiento (también cambia stock visible)
+// - `solicitud:changed` — alta/cambio estado/entrega de solicitud
+// - `herramienta:changed` y derivados — recargan stats de herramientas
+const PRODUCTO_EVENTS = ['producto:changed', 'movimiento:changed']
+const HERR_STATS_EVENTS = [
+  'herramienta:changed', 'asignacion:changed', 'mantenimiento:changed',
+  'incidencia:changed', 'baja:changed',
+]
 
 const CHART_COLORS = [
   '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444',
@@ -169,18 +181,19 @@ const TIPO_STYLE = {
 
 function MobileInventarioHome() {
   const { user } = useAuth()
-  const [bajoMinimo, setBajoMinimo] = useState([])
-  const [solicitudesPend, setSolicitudesPend] = useState(0)
 
-  useEffect(() => {
-    Promise.all([
-      getProductosBajoMinimo().catch(() => []),
-      getSolicitudes({ limit: 100 }).catch(() => []),
-    ]).then(([bajos, sols]) => {
-      setBajoMinimo(bajos)
-      setSolicitudesPend(sols.filter(s => s.estatus === 'PENDIENTE').length)
-    })
-  }, [])
+  const { data: rawBajoMinimo } = useResource(
+    ['productos', 'bajo-minimo'],
+    () => getProductosBajoMinimo(),
+    { staleMs: 60_000, invalidateOn: PRODUCTO_EVENTS },
+  )
+  const { data: rawSolicitudes } = useResource(
+    ['solicitudes', { limit: 100 }],
+    () => getSolicitudes({ limit: 100 }),
+    { staleMs: 60_000, invalidateOn: ['solicitud:changed'] },
+  )
+  const bajoMinimo = rawBajoMinimo ?? []
+  const solicitudesPend = (rawSolicitudes ?? []).filter((s) => s.estatus === 'PENDIENTE').length
 
   return (
     <div className="max-w-md mx-auto space-y-5 pt-2">
@@ -259,31 +272,49 @@ export default function InventarioDashboard() {
   const isDark = theme === 'dark'
   void theme
 
-  const [productos, setProductos] = useState([])
-  const [bajoMinimo, setBajoMinimo] = useState([])
-  const [movimientos, setMovimientos] = useState([])
-  const [solicitudes, setSolicitudes] = useState([])
-  const [herrStats, setHerrStats] = useState(null)
-  const [loading, setLoading] = useState(true)
+  // 5 fuentes con namespaces compartidos por otras páginas de inventario
+  // (Catalogo, BajoMinimo, Movimientos, Solicitudes, Herramientas/*). Cuando
+  // el backend emite los eventos correspondientes, todas las vistas que
+  // dependan del namespace se invalidan a la vez.
+  const { data: rawProductos, error: errProd } = useResource(
+    ['productos', { limit: 500 }],
+    () => getProductos({ limit: 500 }),
+    { staleMs: 60_000, invalidateOn: ['producto:changed'] },
+  )
+  const { data: rawBajoMinimo, error: errBajo } = useResource(
+    ['productos', 'bajo-minimo'],
+    () => getProductosBajoMinimo(),
+    { staleMs: 60_000, invalidateOn: PRODUCTO_EVENTS },
+  )
+  const { data: rawMovimientos, error: errMov } = useResource(
+    ['movimientos', { limit: 300 }],
+    () => getMovimientos({ limit: 300 }),
+    { staleMs: 60_000, invalidateOn: ['movimiento:changed'] },
+  )
+  const { data: rawSolicitudes, error: errSol } = useResource(
+    ['solicitudes', { limit: 100 }],
+    () => getSolicitudes({ limit: 100 }),
+    { staleMs: 60_000, invalidateOn: ['solicitud:changed'] },
+  )
+  const { data: herrStatsData, error: errHerr } = useResource(
+    ['herramientas', 'stats'],
+    () => getStatsHerramientas(),
+    { staleMs: 60_000, invalidateOn: HERR_STATS_EVENTS },
+  )
+  const productos = rawProductos ?? []
+  const bajoMinimo = rawBajoMinimo ?? []
+  const movimientos = rawMovimientos ?? []
+  const solicitudes = rawSolicitudes ?? []
+  const herrStats = herrStatsData ?? null
+
+  // Spinner mientras llega el primer set (cualquiera de las 5 fuentes).
+  const loading =
+    !rawProductos && !rawBajoMinimo && !rawMovimientos && !rawSolicitudes && !herrStatsData
 
   useEffect(() => {
-    Promise.all([
-      getProductos({ limit: 500 }).catch(() => []),
-      getProductosBajoMinimo().catch(() => []),
-      getMovimientos({ limit: 300 }).catch(() => []),
-      getSolicitudes({ limit: 100 }).catch(() => []),
-      getStatsHerramientas().catch(() => null),
-    ])
-      .then(([prods, bajos, movs, sols, hStats]) => {
-        setProductos(prods)
-        setBajoMinimo(bajos)
-        setMovimientos(movs)
-        setSolicitudes(sols)
-        setHerrStats(hStats)
-      })
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar el dashboard')))
-      .finally(() => setLoading(false))
-  }, [])
+    const err = errProd || errBajo || errMov || errSol || errHerr
+    if (err) toast.error(extractApiError(err, 'Error al cargar el dashboard'))
+  }, [errProd, errBajo, errMov, errSol, errHerr])
 
   // ── Cálculos derivados ──────────────────────────────────────────────────
   const solicitudesPendientes = useMemo(
