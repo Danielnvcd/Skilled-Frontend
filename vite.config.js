@@ -35,6 +35,10 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
       },
+      // Nota: NO proxiamos /socket.io. El proxy WS de Vite v8 está bugueado
+      // (chunks `ECONNABORTED` en cada handshake). En dev local define
+      // VITE_API_URL=http://localhost:5000/api en `.env.local` para que el
+      // socket vaya directo al backend sin pasar por este proxy.
     },
   },
   build: {
@@ -46,11 +50,13 @@ export default defineConfig({
     // Minify con esbuild (más rápido que terser, similar resultado).
     minify: 'esbuild',
   },
-  esbuild: {
+  oxc: {
     // Elimina debugger statements y console.log/info/debug del bundle de
-    // producción. Mitiga fugas accidentales de tokens / IDs / payloads si
-    // algún console.log queda en el código. console.error / console.warn
-    // se conservan porque son útiles para reportes de Sentry/LogRocket.
+    // producción. Vite v8 reemplazó esbuild por oxc, así que la opción se
+    // movió aquí — antes era `esbuild: { drop, pure }`. Mitiga fugas
+    // accidentales de tokens / IDs / payloads si algún console.log queda
+    // en el código. console.error / console.warn se conservan porque son
+    // útiles para reportes de Sentry/LogRocket.
     drop: ['debugger'],
     pure: ['console.log', 'console.info', 'console.debug', 'console.trace'],
   },

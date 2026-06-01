@@ -1,17 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Trash2 } from 'lucide-react'
-import { Modal, Button, Select } from '../../components/ui'
+import { Modal, Button, Select, Input } from '../../components/ui'
 import { crearRegistro, editarRegistro, eliminarRegistro } from '../../api/horas'
 
-function buildHorasDropdown() {
-  const out = []
-  for (let h = 0; h < 24; h++) {
-    out.push(`${String(h).padStart(2, '0')}:00`)
-    out.push(`${String(h).padStart(2, '0')}:30`)
-  }
-  return out
-}
+// El kiosko RFID guarda horas EXACTAS (ej. 14:37). Usamos <input type="time">
+// en vez de un dropdown HH:00/HH:30 para que esos registros se muestren tal
+// como llegaron y se puedan editar al minuto desde aquí también.
 
 const EMPTY = {
   hora_entrada: '',
@@ -33,7 +28,6 @@ export default function RegistroModal({
   onSaved,
   onDeleted,
 }) {
-  const horas = useMemo(buildHorasDropdown, [])
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -135,24 +129,22 @@ export default function RegistroModal({
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <Select
+          <Input
             label="Hora entrada"
+            type="time"
+            step={60}
             value={form.hora_entrada}
             onChange={(e) => setForm({ ...form, hora_entrada: e.target.value })}
             disabled={!editable}
-          >
-            <option value="">—</option>
-            {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-          </Select>
-          <Select
+          />
+          <Input
             label="Hora salida"
+            type="time"
+            step={60}
             value={form.hora_salida}
             onChange={(e) => setForm({ ...form, hora_salida: e.target.value })}
             disabled={!editable}
-          >
-            <option value="">—</option>
-            {horas.map((h) => <option key={h} value={h}>{h}</option>)}
-          </Select>
+          />
         </div>
 
         <Select

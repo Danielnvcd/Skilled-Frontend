@@ -2,8 +2,11 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Bell, Check, CheckCheck, ExternalLink, Sparkles, FileCheck2, Wallet } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { obtenerResumen, marcarLeida, marcarTodas } from '../api/notificaciones'
+import { useSocket } from '../context/SocketContext'
 
-const POLL_MS = 60_000
+// Fallback de polling: solo si el socket está caído. Cuando hay WS, el bell
+// se actualiza por push y este intervalo no dispara fetch.
+const FALLBACK_POLL_MS = 120_000
 
 const TIPO_META = {
   REPORTE_CERRADO: { icon: FileCheck2, tone: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30' },
@@ -21,6 +24,7 @@ export default function NotificacionesBell() {
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const wrapperRef = useRef(null)
+  const { socket, connected, on } = useSocket()
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -34,11 +38,55 @@ export default function NotificacionesBell() {
     }
   }, [])
 
+  // Carga inicial: una sola vez al montar.
   useEffect(() => {
     cargar()
-    const id = setInterval(cargar, POLL_MS)
-    return () => clearInterval(id)
   }, [cargar])
+
+  // Push en tiempo real vía Socket.IO. notif:new añade al inicio del listado;
+  // notif:read / notif:read_all actualizan el contador y el flag local.
+  useEffect(() => {
+    if (!socket) return
+    const offNew = on('notif:new', (payload) => {
+      const n = payload?.notif
+      if (!n) return
+      setData((prev) => {
+        // Evita duplicar si el mismo evento llega dos veces (reconexión).
+        if (prev.items.some((x) => x.id === n.id)) return prev
+        const items = [n, ...prev.items].slice(0, 15)
+        const no_leidas =
+          typeof payload.no_leidas === 'number'
+            ? payload.no_leidas
+            : prev.no_leidas + (n.leida ? 0 : 1)
+        return { no_leidas, items }
+      })
+    })
+    const offRead = on('notif:read', (payload) => {
+      setData((prev) => ({
+        no_leidas: typeof payload?.no_leidas === 'number'
+          ? payload.no_leidas
+          : Math.max(0, prev.no_leidas - 1),
+        items: prev.items.map((n) => (n.id === payload?.id ? { ...n, leida: true } : n)),
+      }))
+    })
+    const offReadAll = on('notif:read_all', () => {
+      setData((prev) => ({
+        no_leidas: 0,
+        items: prev.items.map((n) => ({ ...n, leida: true })),
+      }))
+    })
+    return () => {
+      offNew(); offRead(); offReadAll()
+    }
+  }, [socket, on])
+
+  // Fallback de polling: solo corre cuando el socket NO está conectado.
+  // Si vuelve a conectar, el efecto se re-monta y limpia el intervalo.
+  useEffect(() => {
+    if (connected) return
+    const id = setInterval(cargar, FALLBACK_POLL_MS)
+    return () => clearInterval(id)
+  }, [connected, cargar])
 
   useEffect(() => {
     if (!open) return

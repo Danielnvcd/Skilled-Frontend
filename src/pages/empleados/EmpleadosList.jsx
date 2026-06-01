@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -15,6 +15,7 @@ import {
   exportarTodos,
 } from '../../api/trabajadores'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
+import { useResource } from '../../hooks/useResource'
 
 const PER_PAGE = 20
 
@@ -46,8 +47,6 @@ export default function EmpleadosList({ variante = 'activos' }) {
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const [q, setQ] = useState(searchParams.get('q') || '')
   const [qInput, setQInput] = useState(q)
-  const [data, setData] = useState({ items: [], total: 0, page: 1, pages: 1 })
-  const [loading, setLoading] = useState(true)
   const [confirmId, setConfirmId] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null) // 'baja' | 'reactivar'
   const [busy, setBusy] = useState(false)
@@ -55,18 +54,27 @@ export default function EmpleadosList({ variante = 'activos' }) {
 
   const titulo = variante === 'bajas' ? 'Empleados dados de baja' : 'Empleados'
 
+  const {
+    data: rawData,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['empleados', { page, q, variante }],
+    () => listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE }),
+    {
+      staleMs: 30_000,
+      // 'empleado:changed' lo emitirá el backend cuando agreguemos
+      // emit_to_role() en api_trabajadores. Mientras tanto la caché se
+      // mantiene fresca con staleMs + revalidateOnFocus.
+      invalidateOn: ['empleado:changed'],
+    },
+  )
+  const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE })
-      .then((res) => { if (!cancelled) setData(res) })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error(err.response?.data?.error || 'Error al cargar empleados')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [page, q, variante])
+    if (error) toast.error(error.response?.data?.error || 'Error al cargar empleados')
+  }, [error])
 
   useEffect(() => {
     const next = new URLSearchParams()
@@ -93,8 +101,7 @@ export default function EmpleadosList({ variante = 'activos' }) {
         toast.success('Empleado reactivado')
       }
       setConfirmId(null)
-      const res = await listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE })
-      setData(res)
+      await refetch()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error en la operación')
     } finally {

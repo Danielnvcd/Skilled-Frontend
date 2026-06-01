@@ -15,6 +15,7 @@ import {
   subirFotoUsuario,
 } from '../api/users'
 import { listarTrabajadores } from '../api/trabajadores'
+import { useResource } from '../hooks/useResource'
 
 const ROLE_LABELS = {
   super_admin: 'Super administrador',
@@ -143,8 +144,6 @@ function ComboboxTrabajadores({ trabajadores, value, onChange }) {
 
 export default function Usuarios() {
   const { user: currentUser } = useAuth()
-  const [users, setUsers] = useState([])
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   const [openCreate, setOpenCreate] = useState(false)
@@ -174,15 +173,24 @@ export default function Usuarios() {
   const [loadingTrab, setLoadingTrab] = useState(false)
   const [trabSearch, setTrabSearch] = useState('')
 
-  const load = () => {
-    setLoading(true)
-    listarUsuarios()
-      .then(setUsers)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar usuarios')))
-      .finally(() => setLoading(false))
-  }
+  const {
+    data: rawUsers,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    'usuarios',
+    () => listarUsuarios(),
+    {
+      staleMs: 30_000,
+      invalidateOn: ['usuario:changed'],
+    },
+  )
+  const users = rawUsers ?? []
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error al cargar usuarios'))
+  }, [error])
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users
@@ -202,7 +210,7 @@ export default function Usuarios() {
       toast.success('Usuario creado')
       setOpenCreate(false)
       setForm({ username: '', password: '', role: 'coordinador' })
-      load()
+      await refetch()
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo crear el usuario'))
     } finally {
@@ -215,9 +223,9 @@ export default function Usuarios() {
     setDeleting(true)
     try {
       await eliminarUsuario(confirmDel.id)
-      setUsers((prev) => prev.filter((u) => u.id !== confirmDel.id))
       toast.success('Usuario eliminado')
       setConfirmDel(null)
+      await refetch()
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo eliminar el usuario'))
     } finally {
@@ -305,14 +313,12 @@ export default function Usuarios() {
       // 1. Texto: PUT JSON. trabajador_id puede ser '' (= desvincular) o int.
       const payload = { ...editForm }
       payload.trabajador_id = payload.trabajador_id === '' ? null : Number(payload.trabajador_id)
-      const updated = await actualizarUsuario(openEdit.id, payload)
+      await actualizarUsuario(openEdit.id, payload)
       // 2. Foto: POST multipart (solo si el admin eligió una nueva)
-      const withPhoto = photoFile
-        ? await subirFotoUsuario(openEdit.id, photoFile)
-        : updated
-      setUsers((prev) => prev.map((u) => (u.id === withPhoto.id ? { ...u, ...withPhoto } : u)))
+      if (photoFile) await subirFotoUsuario(openEdit.id, photoFile)
       toast.success(photoFile ? 'Usuario y foto actualizados' : 'Usuario actualizado')
       closeEdit()
+      await refetch()
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo actualizar el usuario'))
     } finally {
