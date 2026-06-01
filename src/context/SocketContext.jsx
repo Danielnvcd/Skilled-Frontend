@@ -71,7 +71,14 @@ export function SocketProvider({ children }) {
       setSocket(null)
       setConnected(false)
     }
-  }, [user])
+    // Dep en primitivos (id + role) en lugar del objeto `user`. AuthContext
+    // hace dos setUser() al montar (uno desde localStorage, otro tras /me) y
+    // updateUser() a veces, lo que cambia la referencia del objeto user
+    // aunque id/role sigan iguales. Sin esto, cada cambio de referencia
+    // tiraba el socket y abría uno nuevo (cycle observable como doClose →
+    // open en la consola del browser). Reconectamos SOLO si cambia el user
+    // físico (login/logout) o el rol (que define la sala `role:{rol}`).
+  }, [user?.id, user?.role])
 
   const value = useMemo(
     () => ({
