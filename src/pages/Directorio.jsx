@@ -6,6 +6,7 @@ import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../components/ui'
 import UserAvatar from '../components/UserAvatar'
 import { listarDirectorio } from '../api/auth'
 import { extractApiError } from '../utils/apiError'
+import { useResource } from '../hooks/useResource'
 
 const ROLE_TONES = {
   super_admin: 'brand',
@@ -31,20 +32,27 @@ function isOnline(lastSeen) {
 }
 
 export default function Directorio() {
-  const [users, setUsers] = useState([])
   const [search, setSearch] = useState('')
   const [areaFilter, setAreaFilter] = useState('todas')
-  const [loading, setLoading] = useState(true)
+
+  const {
+    data: rawUsers,
+    loading,
+    error,
+  } = useResource(
+    'directorio',
+    () => listarDirectorio(),
+    // Comparte fuente con /usuarios. El backend ya emite `usuario:changed`
+    // tras crear/editar/eliminar usuario, así que aquí se invalida solo.
+    // Nota: el emit solo va a admin/super_admin; coordinador/inventario
+    // confían en staleMs + revalidateOnFocus para refrescar.
+    { staleMs: 60_000, invalidateOn: ['usuario:changed'] },
+  )
+  const users = rawUsers ?? []
 
   useEffect(() => {
-    listarDirectorio()
-      .then(setUsers)
-      .catch((err) => {
-        toast.error(extractApiError(err, 'Error al cargar directorio'))
-        setUsers([])
-      })
-      .finally(() => setLoading(false))
-  }, [])
+    if (error) toast.error(extractApiError(error, 'Error al cargar directorio'))
+  }, [error])
 
   const areas = useMemo(() => {
     const set = new Set(users.map((u) => u.area).filter(Boolean))

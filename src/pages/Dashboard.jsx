@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { obtenerDashboard } from '../api/dashboard'
 import { extractApiError } from '../utils/apiError'
+import { useResource } from '../hooks/useResource'
 import AvatarFoto from '../components/empleados/AvatarFoto'
 
 const CHART_COLORS = [
@@ -188,15 +189,24 @@ export default function Dashboard() {
   const { user } = useAuth()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+
+  const {
+    data,
+    loading,
+    error,
+  } = useResource(
+    'dashboard',
+    () => obtenerDashboard(),
+    // Endpoint agregado pesado. staleMs alto + invalidación selectiva: solo
+    // refrescamos cuando hay cambios fuertes (alta/baja de empleado, nuevo
+    // proyecto). Actividad reciente y cumpleaños se actualizan al
+    // revalidateOnFocus o al expirar el staleMs.
+    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'proyecto:changed'] },
+  )
 
   useEffect(() => {
-    obtenerDashboard()
-      .then(setData)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar el dashboard')))
-      .finally(() => setLoading(false))
-  }, [])
+    if (error) toast.error(extractApiError(error, 'Error al cargar el dashboard'))
+  }, [error])
 
   const stats = data?.stats
   const proyectosData = useMemo(() => data?.empleados_por_proyecto || [], [data])

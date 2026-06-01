@@ -200,7 +200,7 @@ export default function Metricas() {
   } = useResource(
     'metricas',
     () => getMetricas(),
-    { staleMs: 120_000 },
+    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'credencial:changed'] },
   )
 
   useEffect(() => {

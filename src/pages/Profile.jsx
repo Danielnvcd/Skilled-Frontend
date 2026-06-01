@@ -17,6 +17,7 @@ import {
   obtenerUsuario, updateProfile, changeOwnPassword,
   setupTwoFa, confirmTwoFa, disableTwoFa,
 } from '../api/auth'
+import { useResource } from '../hooks/useResource'
 
 export default function Profile() {
   const { id } = useParams()
@@ -25,7 +26,6 @@ export default function Profile() {
   const isOwn = !viewingId || viewingId === me?.id
   const readonly = !isOwn
 
-  const [user, setUser] = useState(null)
   const [form, setForm] = useState({ full_name: '', area: '', position: '', factory: '', contact_info: '' })
   const [profilePicFile, setProfilePicFile] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -48,27 +48,38 @@ export default function Profile() {
   const [disableForm, setDisableForm] = useState({ currentPassword: '', code: '' })
   const [disableSubmitting, setDisableSubmitting] = useState(false)
 
-  const reload = async () => {
-    try {
-      const data = isOwn
-        ? (await api.get('/auth/me')).data
-        : await obtenerUsuario(viewingId)
-      setUser(data)
-      if (isOwn) {
-        setForm({
-          full_name: data.full_name || '',
-          area: data.area || '',
-          position: data.position || '',
-          factory: data.factory || '',
-          contact_info: data.contact_info || '',
-        })
-      }
-    } catch (err) {
-      toast.error(extractApiError(err, 'Error al cargar el perfil'))
-    }
-  }
+  const {
+    data: user,
+    error,
+    refetch,
+  } = useResource(
+    ['perfil', { id: isOwn ? 'me' : viewingId }],
+    async () => (isOwn ? (await api.get('/auth/me')).data : await obtenerUsuario(viewingId)),
+    // Comparte fuente con /usuarios y /directorio: si admin edita este
+    // usuario, llega `usuario:changed` y refrescamos automáticamente.
+    { staleMs: 30_000, invalidateOn: ['usuario:changed'] },
+  )
 
-  useEffect(() => { reload() }, [viewingId])
+  useEffect(() => {
+    if (error) toast.error(extractApiError(error, 'Error al cargar el perfil'))
+  }, [error])
+
+  // Sincroniza el form al cargar el perfil propio. Dep en user.id (no en el
+  // objeto completo) para no sobrescribir lo que el usuario esté editando
+  // cuando llegue un refetch silencioso por staleMs o invalidación.
+  useEffect(() => {
+    if (isOwn && user) {
+      setForm({
+        full_name: user.full_name || '',
+        area: user.area || '',
+        position: user.position || '',
+        factory: user.factory || '',
+        contact_info: user.contact_info || '',
+      })
+    }
+  }, [isOwn, user?.id])
+
+  const reload = refetch
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -80,9 +91,9 @@ export default function Profile() {
         formData.append('profile_pic', profilePicFile)
       }
       const data = await updateProfile(formData)
-      setUser(data)
       if (isOwn) updateUser(data)
       setProfilePicFile(null)
+      await refetch()
       toast.success('Perfil actualizado')
     } catch (err) {
       toast.error(extractApiError(err, 'Error al actualizar perfil'))
