@@ -39,11 +39,19 @@ export function SocketProvider({ children }) {
       // usa el token fresco en vez del que capturamos al montar.
       auth: (cb) => cb({ token: localStorage.getItem('token') || '' }),
       path: '/socket.io',
-      // Polling primero (HTTP plano) y luego upgrade a WebSocket. Esto sobrevive
-      // mejor detrás de proxies que cuesta forwarden los headers Upgrade/
-      // Sec-WebSocket-Key (visto en Vite v8 dev server). Si el upgrade falla,
-      // se queda en polling y todo sigue funcionando.
-      transports: ['polling', 'websocket'],
+      // WebSocket-only — saltamos la fase de polling de Socket.IO.
+      //
+      // Prod usa gunicorn con 4 workers (--worker-class gthread). Cada worker
+      // tiene su propia tabla de sesiones engineio en memoria; el polling
+      // requiere que TODAS las requests del mismo sid lleguen al MISMO worker
+      // (sticky sessions). Como gunicorn + un solo bind no soporta sticky
+      // sessions, los poll-requests rebotan con 400 cuando caen en otro
+      // worker. WebSocket no tiene este problema: una vez abierta la conexión
+      // es persistente y vive en un único worker.
+      //
+      // Si en algún proxy futuro el Upgrade fallara, la alternativa es bajar
+      // a --workers 1 (en Gunicorn .config) y devolver 'polling' a esta lista.
+      transports: ['websocket'],
       withCredentials: true,
       reconnection: true,
       reconnectionDelay: 1000,
