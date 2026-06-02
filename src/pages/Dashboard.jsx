@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   Users, Briefcase, FolderOpen, Zap, History, Cake, AlertTriangle,
   ShieldAlert, FileText, IdCard, CheckCircle2, ChevronRight, Info,
+  UserPlus, FolderPlus, Calculator, Clock, Wallet,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -17,9 +18,14 @@ import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
 import AvatarFoto from '../components/empleados/AvatarFoto'
 
+// Paleta sobria tipo dashboard SaaS: 5 tonos discretos en lugar de 10
+// saturados. Reduce el ruido visual cuando hay muchos slices/bars.
 const CHART_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444',
-  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#db2777',
+  '#0ea5e9', // sky-500
+  '#10b981', // emerald-500
+  '#8b5cf6', // violet-500
+  '#f59e0b', // amber-500
+  '#64748b', // slate-500 — neutro para el resto
 ]
 
 function greeting() {
@@ -29,34 +35,25 @@ function greeting() {
   return 'Buenas noches'
 }
 
+// StatCard estilo SaaS: tarjeta blanca con icono monocromo en chip sutil. El
+// valor numérico es lo dominante; el color solo aparece como acento mínimo en
+// el chip del icono.
 function StatCard({ tone, label, value, Icon }) {
-  const tones = {
-    blue: {
-      border: 'border-l-sky-500',
-      iconWrap: 'bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-200 ring-1 ring-sky-300/50 dark:ring-sky-400/30',
-    },
-    green: {
-      border: 'border-l-emerald-500',
-      iconWrap: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200 ring-1 ring-emerald-300/50 dark:ring-emerald-400/30',
-    },
-    purple: {
-      border: 'border-l-violet-500',
-      iconWrap: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-200 ring-1 ring-violet-300/50 dark:ring-violet-400/30',
-    },
-    orange: {
-      border: 'border-l-amber-500',
-      iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-200 ring-1 ring-amber-300/50 dark:ring-amber-400/30',
-    },
+  const iconTones = {
+    blue:   'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
+    green:  'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
+    purple: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
+    orange: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
   }
-  const t = tones[tone]
+  const t = iconTones[tone] || iconTones.blue
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-sm`}>
-      <div className={`h-12 w-12 rounded-full inline-flex items-center justify-center flex-shrink-0 ${t.iconWrap}`}>
-        <Icon size={20} />
+    <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4">
+      <div className={`h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 ${t}`}>
+        <Icon size={22} strokeWidth={1.8} />
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
+        <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
       </div>
     </div>
   )
@@ -170,12 +167,43 @@ function fmtFecha(iso) {
   }
 }
 
+// Acceso rápido: tarjeta neutra con un pequeño chip de color en el icono.
+// La superficie es siempre la misma (white/ink-900) para look unificado tipo
+// dashboard SaaS; el tono solo aparece como acento en el chip del icono.
+const QA_ICON_TONES = {
+  sky:     'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
+  emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+  violet:  'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+  amber:   'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+  rose:    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+  slate:   'bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200',
+}
+
+function QuickAccessCard({ to, Icon, label, hint, tone = 'slate' }) {
+  const iconTone = QA_ICON_TONES[tone] || QA_ICON_TONES.slate
+  return (
+    <Link
+      to={to}
+      className="group flex items-center gap-4 p-4 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all"
+    >
+      <div className={`h-11 w-11 rounded-lg inline-flex items-center justify-center flex-shrink-0 ${iconTone}`}>
+        <Icon size={18} strokeWidth={2} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-tight">{label}</div>
+        {hint && <div className="text-xs text-ink-500 dark:text-ink-400 leading-tight mt-1">{hint}</div>}
+      </div>
+      <ChevronRight size={16} className="text-ink-300 dark:text-ink-600 group-hover:text-ink-500 dark:group-hover:text-ink-400 flex-shrink-0 transition-colors" />
+    </Link>
+  )
+}
+
 function Panel({ title, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-5 shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-700 pb-3 mb-4">
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
         <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" />}
+          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
           {title}
         </div>
         {action}
@@ -232,18 +260,40 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Welcome banner */}
-      <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100">
-          {greeting()},{' '}
-          <span className="text-brand-600 dark:text-sky-300 capitalize">
-            {user?.full_name || user?.username}
-          </span>!
-        </h1>
-        <p className="text-sm text-ink-500 dark:text-ink-400 mt-1">
-          Resumen general de la operación.
+    <div className="space-y-6">
+      {/* Welcome — header sin caja: solo título + subtítulo + fecha */}
+      <div className="flex items-end justify-between gap-3 flex-wrap pt-1">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink-900 dark:text-ink-100 tracking-tight">
+            {greeting()},{' '}
+            <span className="text-brand-600 dark:text-sky-300 capitalize">
+              {user?.full_name || user?.username}
+            </span>!
+          </h1>
+          <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5">
+            Resumen general de la operación.
+          </p>
+        </div>
+        <p className="text-sm text-ink-500 dark:text-ink-400 tabular-nums">
+          {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
         </p>
+      </div>
+
+      {/* Accesos rápidos */}
+      <div>
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <p className="text-xs uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">
+            Accesos rápidos
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <QuickAccessCard to="/empleados/nuevo" Icon={UserPlus} label="Nuevo empleado" hint="Alta de RRHH" tone="sky" />
+          <QuickAccessCard to="/proyectos" Icon={FolderPlus} label="Proyectos" hint="Crear / asignar" tone="violet" />
+          <QuickAccessCard to="/horas" Icon={Clock} label="Horas" hint="Reportes semanales" tone="emerald" />
+          <QuickAccessCard to="/prenomina" Icon={Calculator} label="Prenómina" hint="Generar / cerrar" tone="amber" />
+          <QuickAccessCard to="/prestamos" Icon={Wallet} label="Préstamos" hint="Otorgar / abonar" tone="rose" />
+          <QuickAccessCard to="/bitacora" Icon={History} label="Bitácora" hint="Auditoría" tone="slate" />
+        </div>
       </div>
 
       {/* Stat cards */}
@@ -269,64 +319,92 @@ export default function Dashboard() {
         <Panel
           title="Actividad reciente"
           Icon={History}
+          action={
+            <Link
+              to="/bitacora"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-sky-300 hover:underline"
+            >
+              Ver bitácora <ChevronRight size={11} />
+            </Link>
+          }
         >
-          <ul className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+          <ul className="space-y-1 max-h-80 overflow-y-auto scrollbar-thin">
             {data?.actividad_reciente?.length ? data.actividad_reciente.map((log) => {
               const sospechoso = isSuspicious(log.action)
               return (
-                <li
-                  key={log.id}
-                  className={`relative flex items-start gap-3 px-3 py-2.5 rounded-md ${
-                    sospechoso
-                      ? 'bg-gradient-to-r from-red-50 to-transparent dark:from-red-900/20 dark:to-transparent border-l-4 border-red-500'
-                      : ''
-                  }`}
-                >
-                  {sospechoso && (
-                    <span className="absolute top-1 right-2 text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded shadow">
-                      SOSPECHOSO
-                    </span>
-                  )}
-                  <div className={`h-8 w-8 rounded-full inline-flex items-center justify-center flex-shrink-0 ${
-                    sospechoso
-                      ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300 animate-pulse'
-                      : 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300'
-                  }`}>
-                    {sospechoso ? <ShieldAlert size={14} /> : <History size={14} />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className={`text-xs leading-snug break-words ${sospechoso ? 'text-red-700 dark:text-red-300 font-medium' : 'text-ink-800 dark:text-ink-200'}`}>
-                      {log.action}
-                    </p>
-                    <p className="text-[10px] text-ink-500 dark:text-ink-400 mt-0.5">
-                      {log.user} · {fmtRelative(log.created_at)}
-                    </p>
-                  </div>
+                <li key={log.id}>
+                  <Link
+                    to="/bitacora"
+                    className={`relative flex items-start gap-3 px-3 py-2.5 rounded-md hover:bg-ink-50 dark:hover:bg-ink-800/40 transition-colors ${
+                      sospechoso
+                        ? 'bg-gradient-to-r from-red-50 to-transparent dark:from-red-900/20 dark:to-transparent border-l-4 border-red-500'
+                        : ''
+                    }`}
+                  >
+                    {sospechoso && (
+                      <span className="absolute top-1 right-2 text-[9px] bg-red-500 text-white font-bold px-1.5 py-0.5 rounded shadow">
+                        SOSPECHOSO
+                      </span>
+                    )}
+                    <div className={`h-8 w-8 rounded-full inline-flex items-center justify-center flex-shrink-0 ${
+                      sospechoso
+                        ? 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300 animate-pulse'
+                        : 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300'
+                    }`}>
+                      {sospechoso ? <ShieldAlert size={14} /> : <History size={14} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-xs leading-snug break-words ${sospechoso ? 'text-red-700 dark:text-red-300 font-medium' : 'text-ink-800 dark:text-ink-200'}`}>
+                        {log.action}
+                      </p>
+                      <p className="text-[10px] text-ink-500 dark:text-ink-400 mt-0.5">
+                        {log.user} · {fmtRelative(log.created_at)}
+                      </p>
+                    </div>
+                  </Link>
                 </li>
               )
             }) : (
-              <li className="text-xs italic text-ink-500 dark:text-ink-400">No hay actividad reciente registrada.</li>
+              <li className="text-xs italic text-ink-500 dark:text-ink-400 px-3 py-2">
+                No hay actividad reciente registrada.
+              </li>
             )}
           </ul>
         </Panel>
 
-        <Panel title="Cumpleaños del mes" Icon={Cake}>
-          <ul className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+        <Panel
+          title="Cumpleaños del mes"
+          Icon={Cake}
+          action={
+            <Link
+              to="/empleados"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-sky-300 hover:underline"
+            >
+              Ver todos <ChevronRight size={11} />
+            </Link>
+          }
+        >
+          <ul className="space-y-1 max-h-80 overflow-y-auto scrollbar-thin">
             {data?.cumpleañeros?.length ? data.cumpleañeros.map((e) => {
               const fullName = `${e.nombre || ''} ${e.nombre_apellidos || ''}`.trim()
               return (
-                <li key={e.id} className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors">
-                  <AvatarFoto
-                    id={e.id}
-                    hasFoto={Boolean(e.foto_perfil)}
-                    name={fullName}
-                    size="sm"
-                    lazy
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-ink-900 dark:text-ink-100 uppercase truncate">{fullName}</p>
-                    <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Día {e.dia}</p>
-                  </div>
+                <li key={e.id}>
+                  <Link
+                    to={`/empleados/${e.id}`}
+                    className="flex items-center gap-3 px-2 py-2 rounded-md hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors"
+                  >
+                    <AvatarFoto
+                      id={e.id}
+                      hasFoto={Boolean(e.foto_perfil)}
+                      name={fullName}
+                      size="sm"
+                      lazy
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-ink-900 dark:text-ink-100 uppercase truncate">{fullName}</p>
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Día {e.dia}</p>
+                    </div>
+                  </Link>
                 </li>
               )
             }) : (
@@ -344,36 +422,42 @@ export default function Dashboard() {
             Documentos por vencer
           </span>}
         >
-          <ul className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
+          <ul className="space-y-1 max-h-80 overflow-y-auto scrollbar-thin">
             {data?.docs_por_vencer?.length ? data.docs_por_vencer.map((item, idx) => {
               const ItemIcon = item.tipo === 'credencial' ? IdCard : FileText
+              const href = item.trabajador_id ? `/empleados/${item.trabajador_id}` : '/empleados'
               return (
-                <li key={idx} className="flex items-start gap-3 px-2 py-2 rounded-md hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors">
-                  <div className={`h-8 w-8 rounded-full inline-flex items-center justify-center flex-shrink-0 ${
-                    item.vencido
-                      ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'
-                      : 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300'
-                  }`}>
-                    <ItemIcon size={13} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold text-ink-900 dark:text-ink-100 uppercase truncate" title={item.nombre_trabajador}>
-                      {item.nombre_trabajador}
-                    </p>
-                    <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate" title={item.descripcion}>
-                      {item.descripcion}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-ink-500 dark:text-ink-400">{fmtFecha(item.fecha)}</span>
-                      <span className={`text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded ${
-                        item.vencido
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
-                          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-                      }`}>
-                        {item.vencido ? 'VENCIDO' : 'POR VENCER'}
-                      </span>
+                <li key={idx}>
+                  <Link
+                    to={href}
+                    className="flex items-start gap-3 px-2 py-2 rounded-md hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors"
+                  >
+                    <div className={`h-8 w-8 rounded-full inline-flex items-center justify-center flex-shrink-0 ${
+                      item.vencido
+                        ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300'
+                        : 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300'
+                    }`}>
+                      <ItemIcon size={13} />
                     </div>
-                  </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-ink-900 dark:text-ink-100 uppercase truncate" title={item.nombre_trabajador}>
+                        {item.nombre_trabajador}
+                      </p>
+                      <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate" title={item.descripcion}>
+                        {item.descripcion}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-ink-500 dark:text-ink-400">{fmtFecha(item.fecha)}</span>
+                        <span className={`text-[9px] font-bold tracking-wider px-1.5 py-0.5 rounded ${
+                          item.vencido
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                        }`}>
+                          {item.vencido ? 'VENCIDO' : 'POR VENCER'}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
                 </li>
               )
             }) : (
