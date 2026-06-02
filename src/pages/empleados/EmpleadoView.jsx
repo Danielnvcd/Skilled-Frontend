@@ -9,6 +9,7 @@ import {
   PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog, ImageViewer,
 } from '../../components/ui'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
+import EmpleadoTimeline from '../../components/empleados/EmpleadoTimeline'
 import {
   obtenerTrabajador, exportarEmpleado, descargarDocumento,
   darBajaTrabajador, reactivarTrabajador,
@@ -352,6 +353,11 @@ export default function EmpleadoView() {
           </ul>
         )}
       </Card>
+
+      {/* ── Timeline (eventos cronológicos del trabajador) ───────────── */}
+      <div className="mt-6">
+        <EmpleadoTimeline trabajadorId={Number(id)} />
+      </div>
 
       <ConfirmDialog
         open={confirmAction !== null}

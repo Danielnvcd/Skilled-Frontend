@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   Plus, Search, Upload, Download, Pencil, UserMinus, UserCheck,
-  FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard,
+  FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard, X,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Table, THead, TH, TBody, TR, TD,
@@ -12,10 +12,11 @@ import {
 import { useAuth } from '../../context/AuthContext'
 import {
   listarTrabajadores, darBajaTrabajador, reactivarTrabajador,
-  exportarTodos,
+  exportarTodos, bulkAccionTrabajadores, exportarSeleccion,
 } from '../../api/trabajadores'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 import { useResource } from '../../hooks/useResource'
+import { useSocket } from '../../context/SocketContext'
 
 const PER_PAGE = 20
 
@@ -52,6 +53,14 @@ export default function EmpleadosList({ variante = 'activos' }) {
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
 
+  // Selección múltiple. Per-página: cambiar de página/búsqueda limpia la
+  // selección para evitar acciones sorpresa sobre filas que ya no se ven.
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [confirmBulk, setConfirmBulk] = useState(false)
+  const [busyBulk, setBusyBulk] = useState(false)
+  const [exportingSel, setExportingSel] = useState(false)
+  const headerCbRef = useRef(null)
+
   const titulo = variante === 'bajas' ? 'Empleados dados de baja' : 'Empleados'
 
   const {
@@ -82,6 +91,112 @@ export default function EmpleadosList({ variante = 'activos' }) {
     if (page !== 1) next.set('page', String(page))
     setSearchParams(next, { replace: true })
   }, [q, page])
+
+  // ── Selección múltiple ─────────────────────────────────────────────────────
+  // Selección acumulativa entre páginas y búsquedas: el usuario puede armar
+  // un lote navegando varias páginas o ajustando filtros sin perder lo que ya
+  // marcó. Solo limpiamos al cambiar de `variante` (activos↔bajas) porque ese
+  // sí es un cambio de scope semántico — los IDs de bajas no aplican a las
+  // acciones de activos y viceversa. Para limpiar manualmente está el botón
+  // "Limpiar" en la barra de selección.
+  useEffect(() => { setSelectedIds(new Set()) }, [variante])
+
+  // Podar IDs huérfanos: cuando otro admin (o tú desde otra pestaña) mueve
+  // un trabajador fuera del scope actual (baja en variante=activos o
+  // reactivación en variante=bajas), su ID ya no debe contar en la selección.
+  // Sin esto, el contador queda inflado con IDs que la lista ya no muestra.
+  const { on: onSocket } = useSocket()
+  useEffect(() => {
+    const off = onSocket('empleado:changed', (payload) => {
+      if (!payload) return
+      const action = payload.action
+      const ids = payload.ids || (payload.id != null ? [payload.id] : [])
+      if (!ids.length) return
+      const fueraDeScope = (
+        (variante === 'activos' && (action === 'baja' || action === 'bulk_baja')) ||
+        (variante === 'bajas' && (action === 'reactivado' || action === 'bulk_reactivar'))
+      )
+      if (!fueraDeScope) return
+      setSelectedIds((prev) => {
+        let cambio = false
+        const next = new Set(prev)
+        for (const id of ids) {
+          if (next.delete(id)) cambio = true
+        }
+        return cambio ? next : prev
+      })
+    })
+    return off
+  }, [onSocket, variante])
+
+  const visibleIds = data.items.map((t) => t.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id))
+  const visibleSelectedCount = visibleIds.reduce((acc, id) => acc + (selectedIds.has(id) ? 1 : 0), 0)
+
+  // El estado `indeterminate` solo se puede setear vía propiedad JS, no atributo.
+  useEffect(() => {
+    if (headerCbRef.current) {
+      headerCbRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
+    }
+  }, [someVisibleSelected, allVisibleSelected])
+
+  const toggleOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        visibleIds.forEach((id) => next.delete(id))
+      } else {
+        visibleIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const onExportarSeleccion = async () => {
+    if (selectedIds.size === 0) return
+    setExportingSel(true)
+    try {
+      await exportarSeleccion(Array.from(selectedIds))
+      toast.success(`Exportados ${selectedIds.size} empleado${selectedIds.size === 1 ? '' : 's'}`)
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al exportar selección')
+    } finally {
+      setExportingSel(false)
+    }
+  }
+
+  const onBulkAction = async () => {
+    const action = variante === 'activos' ? 'baja' : 'reactivar'
+    setBusyBulk(true)
+    try {
+      const res = await bulkAccionTrabajadores({
+        ids: Array.from(selectedIds),
+        action,
+      })
+      const verbo = action === 'baja' ? 'dado de baja' : 'reactivado'
+      const plural = res.affected === 1 ? '' : 's'
+      toast.success(`${res.affected} empleado${plural} ${verbo}${plural}`)
+      if (res.skipped?.length) {
+        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}`, { icon: 'ℹ️' })
+      }
+      setSelectedIds(new Set())
+      setConfirmBulk(false)
+      await refetch()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error en operación en lote')
+    } finally {
+      setBusyBulk(false)
+    }
+  }
 
   const onSearch = (e) => {
     e.preventDefault()
@@ -182,6 +297,57 @@ export default function EmpleadosList({ variante = 'activos' }) {
         </div>
       </form>
 
+      {isAdmin && selectedIds.size > 0 && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+            {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+            {selectedIds.size > visibleSelectedCount && (
+              <span className="ml-1 text-xs font-normal text-brand-700 dark:text-brand-300">
+                ({visibleSelectedCount} en esta vista)
+              </span>
+            )}
+          </span>
+          <div className="flex-1" />
+          {variante === 'activos' && (
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<UserMinus size={14} />}
+              onClick={() => setConfirmBulk(true)}
+            >
+              Dar de baja
+            </Button>
+          )}
+          {variante === 'bajas' && (
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<UserCheck size={14} />}
+              onClick={() => setConfirmBulk(true)}
+            >
+              Reactivar
+            </Button>
+          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Download size={14} />}
+            loading={exportingSel}
+            onClick={onExportarSeleccion}
+          >
+            Exportar selección
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<X size={14} />}
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Limpiar
+          </Button>
+        </div>
+      )}
+
       {loading ? (
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
@@ -201,6 +367,18 @@ export default function EmpleadosList({ variante = 'activos' }) {
         <>
           <Table>
             <THead>
+              {isAdmin && (
+                <TH className="w-10">
+                  <input
+                    ref={headerCbRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    aria-label="Seleccionar todos los visibles"
+                    className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                  />
+                </TH>
+              )}
               <TH>Empleado</TH>
               <TH>Área / Puesto</TH>
               <TH>Tipo nómina</TH>
@@ -212,6 +390,17 @@ export default function EmpleadosList({ variante = 'activos' }) {
             <TBody>
               {data.items.map((t) => (
                 <TR key={t.id}>
+                  {isAdmin && (
+                    <TD className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(t.id)}
+                        onChange={() => toggleOne(t.id)}
+                        aria-label={`Seleccionar ${t.nombre || ''} ${t.nombre_apellidos || ''}`.trim()}
+                        className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                      />
+                    </TD>
+                  )}
                   <TD>
                     <div className="flex items-center gap-3">
                       <AvatarFoto
@@ -315,6 +504,25 @@ export default function EmpleadosList({ variante = 'activos' }) {
           : 'El empleado volverá a aparecer en las operaciones activas. ¿Continuar?'}
         confirmLabel={confirmAction === 'baja' ? 'Dar de baja' : 'Reactivar'}
         tone={confirmAction === 'baja' ? 'danger' : 'warning'}
+      />
+
+      <ConfirmDialog
+        open={confirmBulk}
+        onClose={() => setConfirmBulk(false)}
+        onConfirm={onBulkAction}
+        loading={busyBulk}
+        title={
+          variante === 'activos'
+            ? `Dar de baja a ${selectedIds.size} empleado${selectedIds.size === 1 ? '' : 's'}`
+            : `Reactivar ${selectedIds.size} empleado${selectedIds.size === 1 ? '' : 's'}`
+        }
+        description={
+          variante === 'activos'
+            ? 'Los empleados seleccionados pasarán a la lista de bajas y dejarán de aparecer en las operaciones activas. ¿Continuar?'
+            : 'Los empleados seleccionados volverán a aparecer en las operaciones activas. ¿Continuar?'
+        }
+        confirmLabel={variante === 'activos' ? 'Dar de baja' : 'Reactivar'}
+        tone={variante === 'activos' ? 'danger' : 'warning'}
       />
     </>
   )

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Lock, CheckCircle2, Plus, Edit3 } from 'lucide-react'
+import { ArrowLeft, Lock, CheckCircle2, Plus, Edit3, ClipboardPaste } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog,
 } from '../../components/ui'
 import { detalleReporte, cerrarReporte } from '../../api/horas'
 import { useResource } from '../../hooks/useResource'
 import RegistroModal from './RegistroModal'
+import PegarExcelModal from './PegarExcelModal'
 import CapturaMovil from './CapturaMovil'
 import useIsMobile from '../../hooks/useIsMobile'
 
@@ -41,6 +42,7 @@ export default function ReporteCaptura() {
   const [cellCtx, setCellCtx] = useState(null) // { trabajador, fecha, fechaLabel, existing }
   const [confirmClose, setConfirmClose] = useState(false)
   const [closing, setClosing] = useState(false)
+  const [pegarOpen, setPegarOpen] = useState(false)
 
   // `reporte:lista_changed` cubre el caso "admin cerró el reporte / cambió
   // estado" mientras el coord lo tenía abierto. Los cambios de registros
@@ -133,14 +135,25 @@ export default function ReporteCaptura() {
         }
         actions={
           editable ? (
-            <Button
-              variant="success"
-              leftIcon={<CheckCircle2 size={14} />}
-              onClick={() => setConfirmClose(true)}
-              disabled={reporte.registros.length === 0}
-            >
-              Cerrar reporte
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {!isMobile && reporte.trabajadores.length > 0 && (
+                <Button
+                  variant="secondary"
+                  leftIcon={<ClipboardPaste size={14} />}
+                  onClick={() => setPegarOpen(true)}
+                >
+                  Pegar desde Excel
+                </Button>
+              )}
+              <Button
+                variant="success"
+                leftIcon={<CheckCircle2 size={14} />}
+                onClick={() => setConfirmClose(true)}
+                disabled={reporte.registros.length === 0}
+              >
+                Cerrar reporte
+              </Button>
+            </div>
           ) : (
             <Badge tone="neutral" leftIcon={<Lock size={11} />}>Solo lectura</Badge>
           )
@@ -275,6 +288,16 @@ export default function ReporteCaptura() {
         description="Una vez cerrado ya no podrás agregar ni editar registros. Se enviará a prenómina."
         confirmLabel="Cerrar reporte"
         tone="warning"
+      />
+
+      <PegarExcelModal
+        open={pegarOpen}
+        onClose={() => setPegarOpen(false)}
+        reporteId={reporte.id}
+        trabajadores={reporte.trabajadores}
+        semanaFechas={reporte.semana_fechas}
+        incidencias={reporte.incidencias}
+        onAplicado={() => refetch()}
       />
     </>
   )

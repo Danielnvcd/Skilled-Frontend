@@ -79,6 +79,15 @@ export async function enviarCorreoTodos(fechaStr) {
   return data
 }
 
+// Envío selectivo: solo a los IDs marcados. Devuelve la misma forma que
+// `enviarCorreoTodos` para reusar EnvioCorreoModal sin cambios.
+export async function enviarCorreoBulk(fechaStr, trabajadorIds) {
+  const { data } = await api.post(`${BASE}/semanas/${fechaStr}/correo/bulk`, {
+    trabajador_ids: trabajadorIds,
+  })
+  return data
+}
+
 export async function exportarExcel(fechaStr) {
   const res = await api.get(`${BASE}/semanas/${fechaStr}/excel`, { responseType: 'blob' })
   const cd = res.headers['content-disposition'] || ''

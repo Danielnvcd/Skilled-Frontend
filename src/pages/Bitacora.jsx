@@ -137,7 +137,7 @@ export default function Bitacora() {
   } = useResource(
     ['bitacora', { page, fechaFiltro }],
     () => listarBitacora({ page, fechaFiltro, perPage: PER_PAGE }),
-    { staleMs: 60_000 },
+    { staleMs: 60_000, invalidateOn: ['bitacora:new'] },
   )
   const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 

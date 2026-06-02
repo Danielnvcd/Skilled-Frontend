@@ -199,9 +199,10 @@ export default function Dashboard() {
     () => obtenerDashboard(),
     // Endpoint agregado pesado. staleMs alto + invalidación selectiva: solo
     // refrescamos cuando hay cambios fuertes (alta/baja de empleado, nuevo
-    // proyecto). Actividad reciente y cumpleaños se actualizan al
-    // revalidateOnFocus o al expirar el staleMs.
-    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'proyecto:changed'] },
+    // proyecto, o nueva entrada de auditoría para "actividad reciente").
+    // Cumpleaños y docs por vencer se actualizan al revalidateOnFocus o al
+    // expirar el staleMs.
+    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'proyecto:changed', 'bitacora:new'] },
   )
 
   useEffect(() => {

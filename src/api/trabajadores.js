@@ -41,6 +41,24 @@ export async function reactivarTrabajador(id) {
   return data
 }
 
+// Acción en lote (baja o reactivar). El backend emite un solo
+// `empleado:changed` con `action: 'bulk_baja' | 'bulk_reactivar'`,
+// así otras pestañas refrescan una vez vía useResource.
+export async function bulkAccionTrabajadores({ ids, action }) {
+  const { data } = await api.post(`${BASE}/bulk`, { ids, action })
+  return data
+}
+
+// Timeline consolidado: horas, ausencias, ajustes, préstamos, abonos, docs.
+export async function obtenerTimeline(id, { desde, hasta, limit } = {}) {
+  const params = {}
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
+  if (limit) params.limit = limit
+  const { data } = await api.get(`${BASE}/${id}/timeline`, { params })
+  return data
+}
+
 export async function guardarCredenciales(id, payload) {
   // payload = { observaciones?, credenciales: [{planta, credencial_id, fecha_caducidad}] }
   const { data } = await api.post(`${BASE}/${id}/credenciales`, payload)
@@ -100,6 +118,12 @@ export async function exportarEmpleado(id, nombreSugerido) {
 export async function exportarTodos() {
   const res = await api.get(`${BASE}/exportar-todos`, { responseType: 'blob' })
   triggerDownload(res, `empleados_${new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+// Exportar solo la selección. Tope de 200 IDs en el backend.
+export async function exportarSeleccion(ids) {
+  const res = await api.post(`${BASE}/bulk-exportar`, { ids }, { responseType: 'blob' })
+  triggerDownload(res, `empleados_seleccion_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
 function triggerDownload(res, fallbackName) {

@@ -39,6 +39,16 @@ export async function eliminarDescuento(descuentoId) {
   return data
 }
 
+// Eliminar varios descuentos en una sola transacción.
+// El backend salta (no falla) los que estén cobrados o pertenezcan a
+// periodos cerrados y los reporta en `skipped`.
+export async function bulkEliminarDescuentos(descuentoIds) {
+  const { data } = await api.post(`${BASE}/descuentos/bulk-delete`, {
+    descuento_ids: descuentoIds,
+  })
+  return data
+}
+
 export async function exportarExcelPeriodo(periodoId, nombreSugerido) {
   const res = await api.get(`${BASE}/periodos/${periodoId}/excel`, { responseType: 'blob' })
   const cd = res.headers['content-disposition'] || ''

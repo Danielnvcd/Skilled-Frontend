@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle, FileSpreadsheet,
+  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle, FileSpreadsheet, Trash2,
 } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog, EmptyState,
 } from '../../components/ui'
-import { detallePeriodo, cerrarPeriodo, eliminarDescuento, exportarExcelPeriodo } from '../../api/ajustes'
+import {
+  detallePeriodo, cerrarPeriodo, eliminarDescuento, exportarExcelPeriodo,
+  bulkEliminarDescuentos,
+} from '../../api/ajustes'
 import AgregarDescuentoModal from './AgregarDescuentoModal'
+import { useResource } from '../../hooks/useResource'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
 
@@ -22,24 +26,39 @@ function fmt(iso) {
 export default function AjustePeriodoDetalle() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   const [closing, setClosing] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
 
-  const cargar = () => {
-    setLoading(true)
-    detallePeriodo(id)
-      .then(setData)
-      .catch((err) => {
-        toast.error(err.response?.data?.error || 'Error al cargar periodo')
-        navigate('/ajustes')
-      })
-      .finally(() => setLoading(false))
-  }
+  // Selección múltiple sobre descuentos. Solo cuenta descuentos elegibles
+  // (no cobrados y periodo abierto); el resto tiene checkbox deshabilitado.
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [confirmBulk, setConfirmBulk] = useState(false)
+  const [busyBulk, setBusyBulk] = useState(false)
+  const headerCbRef = useRef(null)
 
-  useEffect(() => { cargar() }, [id])
+  // useResource + invalidateOn: cuando otro admin agrega/quita descuentos
+  // o cierra el periodo, este detalle se refresca solo.
+  const {
+    data,
+    loading,
+    error,
+    refetch,
+  } = useResource(
+    ['ajuste-detalle', { id }],
+    () => detallePeriodo(id),
+    {
+      staleMs: 30_000,
+      invalidateOn: ['ajuste:changed'],
+    },
+  )
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error.response?.data?.error || 'Error al cargar periodo')
+      navigate('/ajustes')
+    }
+  }, [error, navigate])
 
   const handleCerrar = async () => {
     setClosing(true)
@@ -47,7 +66,7 @@ export default function AjustePeriodoDetalle() {
       await cerrarPeriodo(id)
       toast.success('Periodo cerrado')
       setConfirmCerrar(false)
-      cargar()
+      await refetch()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al cerrar')
     } finally {
@@ -61,9 +80,84 @@ export default function AjustePeriodoDetalle() {
     try {
       await eliminarDescuento(descId)
       toast.success('Descuento eliminado')
-      cargar()
+      await refetch()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al eliminar')
+    }
+  }
+
+  // ── Selección múltiple ─────────────────────────────────────────────────────
+  // Limpiar al recargar (otra fecha o tras una acción): la selección es
+  // per-vista, no acumulativa.
+  useEffect(() => { setSelectedIds(new Set()) }, [id])
+
+  const elegibleIds = useMemo(() => {
+    if (!data?.editable) return []
+    const out = []
+    for (const t of (data?.trabajadores || [])) {
+      for (const d of t.descuentos) {
+        if (!d.cobrado) out.push(d.id)
+      }
+    }
+    return out
+  }, [data])
+
+  const allElegiblesSelected = elegibleIds.length > 0 && elegibleIds.every((id) => selectedIds.has(id))
+  const someElegiblesSelected = elegibleIds.some((id) => selectedIds.has(id))
+
+  useEffect(() => {
+    if (headerCbRef.current) {
+      headerCbRef.current.indeterminate = someElegiblesSelected && !allElegiblesSelected
+    }
+  }, [someElegiblesSelected, allElegiblesSelected])
+
+  const toggleOne = (descId) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(descId)) next.delete(descId); else next.add(descId)
+      return next
+    })
+  }
+
+  const toggleAllElegibles = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allElegiblesSelected) {
+        elegibleIds.forEach((descId) => next.delete(descId))
+      } else {
+        elegibleIds.forEach((descId) => next.add(descId))
+      }
+      return next
+    })
+  }
+
+  const onBulkDelete = async () => {
+    setBusyBulk(true)
+    try {
+      const res = await bulkEliminarDescuentos(Array.from(selectedIds))
+      const plural = res.deleted === 1 ? '' : 's'
+      toast.success(`${res.deleted} descuento${plural} eliminado${plural}`)
+      if (res.skipped?.length) {
+        // Resumen amistoso de skips (no_encontrado, periodo_cerrado, ya_cobrado).
+        const conteo = res.skipped.reduce((acc, s) => {
+          acc[s.reason] = (acc[s.reason] || 0) + 1
+          return acc
+        }, {})
+        const labels = {
+          no_encontrado: 'no existe(n)',
+          periodo_cerrado: 'periodo cerrado',
+          ya_cobrado: 'ya cobrado(s)',
+        }
+        const partes = Object.entries(conteo).map(([k, v]) => `${v} ${labels[k] || k}`)
+        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}: ${partes.join(', ')}`, { icon: 'ℹ️' })
+      }
+      setSelectedIds(new Set())
+      setConfirmBulk(false)
+      await refetch()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar en lote')
+    } finally {
+      setBusyBulk(false)
     }
   }
 
@@ -131,6 +225,45 @@ export default function AjustePeriodoDetalle() {
         }
       />
 
+      {editable && elegibleIds.length > 0 && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-ink-700 dark:text-ink-200 cursor-pointer">
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allElegiblesSelected}
+              onChange={toggleAllElegibles}
+              className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+            />
+            <span>Seleccionar elegibles ({elegibleIds.length})</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs font-semibold text-brand-700 dark:text-brand-300">
+                {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+              </span>
+              <div className="flex-1" />
+              <Button
+                variant="danger"
+                size="sm"
+                leftIcon={<Trash2 size={14} />}
+                onClick={() => setConfirmBulk(true)}
+              >
+                Eliminar selección
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<X size={14} />}
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Limpiar
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {data.trabajadores.length === 0 ? (
         <EmptyState title="Sin trabajadores" description="Este periodo no tiene trabajadores asignados." />
       ) : (
@@ -172,6 +305,17 @@ export default function AjustePeriodoDetalle() {
                   {t.descuentos.map((d) => (
                     <li key={d.id} className="flex items-center justify-between px-3 py-2 text-sm">
                       <div className="flex items-center gap-3 min-w-0">
+                        {editable && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(d.id)}
+                            onChange={() => toggleOne(d.id)}
+                            disabled={d.cobrado}
+                            aria-label={`Seleccionar descuento ${fmt(d.fecha_descuento)}`}
+                            title={d.cobrado ? 'No se puede seleccionar: ya cobrado' : 'Seleccionar para eliminar en lote'}
+                            className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                          />
+                        )}
                         <span className="font-mono text-xs text-ink-500">{fmt(d.fecha_descuento)}</span>
                         {d.cobrado && (
                           <span className="inline-flex items-center gap-1 text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -214,7 +358,7 @@ export default function AjustePeriodoDetalle() {
         fechaMin={data.fecha_inicio}
         fechaMax={data.fecha_fin}
         trabajadores={data.trabajadores}
-        onAgregado={cargar}
+        onAgregado={refetch}
       />
 
       <ConfirmDialog
@@ -226,6 +370,17 @@ export default function AjustePeriodoDetalle() {
         description="Una vez cerrado ya no podrás agregar ni eliminar descuentos."
         confirmLabel="Cerrar periodo"
         tone="warning"
+      />
+
+      <ConfirmDialog
+        open={confirmBulk}
+        onClose={() => setConfirmBulk(false)}
+        onConfirm={onBulkDelete}
+        loading={busyBulk}
+        title={`Eliminar ${selectedIds.size} descuento${selectedIds.size === 1 ? '' : 's'}`}
+        description="Esta acción no se puede deshacer. Los descuentos ya cobrados se omitirán automáticamente."
+        confirmLabel="Eliminar selección"
+        tone="danger"
       />
     </>
   )

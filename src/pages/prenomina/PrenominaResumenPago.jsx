@@ -1,14 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Search, FileSpreadsheet, Wallet, CreditCard,
   Banknote, Users, DollarSign, CheckCircle2, Lock, Printer,
+  Mail, X,
 } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, EmptyState,
 } from '../../components/ui'
-import { detalleEditor, exportarExcel, imprimirConsolidado } from '../../api/prenomina'
+import {
+  detalleEditor, exportarExcel, imprimirConsolidado, enviarCorreoBulk,
+} from '../../api/prenomina'
+import EnvioCorreoModal from './EnvioCorreoModal'
+import { useResource } from '../../hooks/useResource'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
 
@@ -38,25 +43,41 @@ const METODO_META = {
 export default function PrenominaResumenPago() {
   const { fecha } = useParams()
   const navigate = useNavigate()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
   const [busqueda, setBusqueda] = useState('')
   const [descargando, setDescargando] = useState(false)
   const [imprimiendo, setImprimiendo] = useState(false)
 
+  // useResource + invalidateOn permite que cuando otro admin agregue/quite
+  // descuentos o depósitos en la misma semana, esta pantalla se refresque
+  // sola sin recarga manual.
+  const {
+    data,
+    loading,
+    error,
+  } = useResource(
+    ['prenomina-resumen', { fecha }],
+    () => detalleEditor(fecha),
+    {
+      staleMs: 30_000,
+      invalidateOn: ['prenomina:changed'],
+    },
+  )
+
+  // Selección múltiple para envío de recibos por correo.
+  // Clave: trabajador_id (no prenómina id) porque el endpoint individual
+  // ya existente lo identifica por trabajador.
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [enviando, setEnviando] = useState(false)
+  const [resultadoEnvio, setResultadoEnvio] = useState(null)
+  const [modalOpen, setModalOpen] = useState(false)
+  const headerCbRef = useRef(null)
+
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    detalleEditor(fecha)
-      .then((d) => { if (!cancelled) setData(d) })
-      .catch((err) => {
-        if (cancelled) return
-        toast.error(err.response?.data?.error || 'Error al cargar resumen de pago')
-        navigate('/prenomina')
-      })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [fecha, navigate])
+    if (error) {
+      toast.error(error.response?.data?.error || 'Error al cargar resumen de pago')
+      navigate('/prenomina')
+    }
+  }, [error, navigate])
 
   const filtradas = useMemo(() => {
     if (!data?.prenominas) return []
@@ -112,6 +133,66 @@ export default function PrenominaResumenPago() {
       toast.error(err.response?.data?.error || 'Error al generar PDF')
     } finally {
       setImprimiendo(false)
+    }
+  }
+
+  // ── Selección múltiple ─────────────────────────────────────────────────────
+  // Limpiar al cambiar de semana o de búsqueda: la selección es per-vista,
+  // no acumulativa, para evitar enviar correos a filas que ya no se ven.
+  useEffect(() => { setSelectedIds(new Set()) }, [fecha, busqueda])
+
+  const visibleIds = useMemo(
+    () => filtradas.map((p) => p.trabajador_id).filter(Boolean),
+    [filtradas],
+  )
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someVisibleSelected = visibleIds.some((id) => selectedIds.has(id))
+
+  useEffect(() => {
+    if (headerCbRef.current) {
+      headerCbRef.current.indeterminate = someVisibleSelected && !allVisibleSelected
+    }
+  }, [someVisibleSelected, allVisibleSelected])
+
+  const toggleOne = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleAllVisible = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (allVisibleSelected) {
+        visibleIds.forEach((id) => next.delete(id))
+      } else {
+        visibleIds.forEach((id) => next.add(id))
+      }
+      return next
+    })
+  }
+
+  const handleEnviarSeleccion = async () => {
+    if (selectedIds.size === 0) return
+    setEnviando(true)
+    try {
+      const res = await enviarCorreoBulk(fecha, Array.from(selectedIds))
+      setResultadoEnvio(res)
+      setModalOpen(true)
+      if (res.enviados > 0) {
+        toast.success(`${res.enviados} recibo${res.enviados === 1 ? '' : 's'} enviado${res.enviados === 1 ? '' : 's'}`)
+      }
+      // Limpiar selección solo si hubo envíos exitosos. Si todos fallaron,
+      // dejamos la selección para que el usuario pueda reintentar.
+      if (res.enviados > 0 && res.errores === 0) {
+        setSelectedIds(new Set())
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al enviar recibos')
+    } finally {
+      setEnviando(false)
     }
   }
 
@@ -209,6 +290,46 @@ export default function PrenominaResumenPago() {
         </div>
       </div>
 
+      {filtradas.length > 0 && (
+        <div className="mb-3 px-3 py-2 rounded-lg bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 flex flex-wrap items-center gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-ink-700 dark:text-ink-200 cursor-pointer">
+            <input
+              ref={headerCbRef}
+              type="checkbox"
+              checked={allVisibleSelected}
+              onChange={toggleAllVisible}
+              className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+            />
+            <span>Seleccionar visibles ({filtradas.length})</span>
+          </label>
+          {selectedIds.size > 0 && (
+            <>
+              <span className="text-xs font-semibold text-brand-700 dark:text-brand-300">
+                {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
+              </span>
+              <div className="flex-1" />
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<Mail size={14} />}
+                loading={enviando}
+                onClick={handleEnviarSeleccion}
+              >
+                Enviar recibo por correo
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<X size={14} />}
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Limpiar
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {filtradas.length === 0 ? (
         <EmptyState
           icon={Users}
@@ -247,6 +368,13 @@ export default function PrenominaResumenPago() {
                         key={p.id}
                         className="flex items-center gap-3 px-4 py-2 hover:bg-ink-50/60 dark:hover:bg-ink-800/40 transition-colors"
                       >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(p.trabajador_id)}
+                          onChange={() => toggleOne(p.trabajador_id)}
+                          aria-label={`Seleccionar ${p.trabajador?.nombre_completo || ''}`}
+                          className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer flex-shrink-0"
+                        />
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-ink-900 dark:text-ink-100 truncate text-sm">
                             {p.trabajador?.nombre_completo || '—'}
@@ -286,6 +414,12 @@ export default function PrenominaResumenPago() {
           </div>
         </div>
       )}
+
+      <EnvioCorreoModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        resultado={resultadoEnvio}
+      />
     </>
   )
 }

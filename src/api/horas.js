@@ -34,6 +34,16 @@ export async function crearRegistro(reporteId, payload) {
   return data
 }
 
+// Bulk upsert (usado por "Pegar desde Excel"). Devuelve
+// { created, updated, skipped: [{idx, reason}] }.
+export async function bulkUpsertRegistros(reporteId, registros) {
+  const { data } = await api.post(
+    `${BASE}/reportes/${reporteId}/registros/bulk`,
+    { registros },
+  )
+  return data
+}
+
 export async function editarRegistro(registroId, payload) {
   const { data } = await api.put(`${BASE}/registros/${registroId}`, payload)
   return data

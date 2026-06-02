@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
 import NotificacionesBell from './NotificacionesBell'
+import AlertasBell from './AlertasBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
 
@@ -46,6 +47,7 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
+          {isAdmin && <AlertasBell />}
           {isAdmin && <NotificacionesBell />}
 
           <Link to="/perfil" className="hidden sm:flex items-center gap-2 pl-3 ml-1 py-1 border-l border-ink-200 dark:border-ink-800 hover:bg-ink-50 dark:hover:bg-ink-800/50 transition-colors rounded-r-md">
