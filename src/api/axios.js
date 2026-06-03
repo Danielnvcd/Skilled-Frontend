@@ -34,6 +34,7 @@ function performRefresh() {
         if (res.data.user) {
           localStorage.setItem('user', JSON.stringify(res.data.user))
         }
+        armProactiveRefresh(res.data.token)
         return res.data.token
       })
       .finally(() => {
@@ -43,7 +44,74 @@ function performRefresh() {
   return refreshPromise
 }
 
+// ── Refresh proactivo ──────────────────────────────────────────────────────
+// Programa un refresh ~60s antes de que el access token expire, para que el
+// usuario no vea 401s en consola al volver a la pestaña tras inactividad.
+// El interceptor reactivo de abajo sigue siendo la red de seguridad (cubre
+// timers throttled en pestañas en background, clock skew, etc.).
+const REFRESH_LEAD_MS = 60 * 1000
+let refreshTimer = null
+
+function getTokenExpiryMs(token) {
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/')
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4)
+    const payload = JSON.parse(atob(padded))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+export function cancelProactiveRefresh() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+export function armProactiveRefresh(token) {
+  cancelProactiveRefresh()
+  const tk = token || localStorage.getItem('token')
+  if (!tk) return
+  const expMs = getTokenExpiryMs(tk)
+  if (!expMs) return
+  const delay = expMs - Date.now() - REFRESH_LEAD_MS
+  if (delay <= 0) {
+    // Token ya expiró o está dentro del lead time: refresh inmediato.
+    // El .then re-arma; si falla, el interceptor reactivo lo manejará en el
+    // próximo request (no llamamos a bounceToLogin aquí para no patear al
+    // usuario por un blip de red mientras la pestaña está en background).
+    performRefresh().catch(() => {})
+    return
+  }
+  refreshTimer = setTimeout(() => {
+    performRefresh().catch(() => {})
+  }, delay)
+}
+
+// Browsers throttlean setTimeout en pestañas inactivas (típicamente a 1/min
+// después de unos minutos). Cuando la pestaña vuelve a ser visible, re-evaluamos
+// el token: si está a punto de expirar o ya expiró, refresh inmediato.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      armProactiveRefresh()
+    }
+  })
+}
+
+// Auto-armar al cargar la SPA si ya hay sesión persistida en localStorage.
+// AuthContext también llama a armProactiveRefresh() después de login/verify2fa
+// para cubrir el caso de iniciar sesión en la misma carga.
+if (typeof window !== 'undefined') {
+  armProactiveRefresh()
+}
+
 function bounceToLogin() {
+  cancelProactiveRefresh()
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   if (window.location.pathname !== '/login') {

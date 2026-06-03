@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo } from 'react'
-import api from '../api/axios'
+import api, { armProactiveRefresh, cancelProactiveRefresh } from '../api/axios'
 
 const AuthContext = createContext(null)
 
@@ -49,6 +49,7 @@ export function AuthProvider({ children }) {
     }
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('user', JSON.stringify(res.data.user))
+    armProactiveRefresh(res.data.token)
     setUser(res.data.user)
     return { requires2fa: false }
   }
@@ -57,6 +58,7 @@ export function AuthProvider({ children }) {
     const res = await api.post('/auth/verify-2fa', { stepToken, code })
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('user', JSON.stringify(res.data.user))
+    armProactiveRefresh(res.data.token)
     setUser(res.data.user)
   }
 
@@ -72,6 +74,7 @@ export function AuthProvider({ children }) {
     const root = document.documentElement
     root.classList.add('auth-transitioning')
     await new Promise((r) => setTimeout(r, 220))
+    cancelProactiveRefresh()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setUser(null)
