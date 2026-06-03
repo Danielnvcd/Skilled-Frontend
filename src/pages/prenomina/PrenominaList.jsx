@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  DollarSign, CalendarRange, CalendarDays, CheckCheck, Clock, Percent,
-  List, CheckCircle2, Calculator, Eye, FolderOpen, Layers, X, CalendarX,
-  Wallet,
+  CalendarRange, CalendarDays, BadgeCheck, Clock, Percent,
+  List, CheckCircle2, Calculator, Eye, FolderKanban, Layers, CalendarX,
+  Wallet, ReceiptText,
 } from 'lucide-react'
-import { PageHeader, Skeleton, EmptyState } from '../../components/ui'
+import { PageHeader, Skeleton, EmptyState, Badge, Button } from '../../components/ui'
 import { listarSemanas } from '../../api/prenomina'
 import { useResource } from '../../hooks/useResource'
 
@@ -88,7 +88,7 @@ export default function PrenominaList() {
   return (
     <>
       <PageHeader
-        icon={Calculator}
+        icon={ReceiptText}
         title="Generación de Prenómina"
         description="Calcula el pago de los trabajadores en base a los reportes de horas cerrados."
       />
@@ -109,30 +109,26 @@ export default function PrenominaList() {
       ) : (
         <>
           {/* KPI Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <KpiCard
-              tone="blue"
               icon={CalendarDays}
               label="Semanas totales"
               value={stats.total}
               sub="cerradas por coordinadores"
             />
             <KpiCard
-              tone="green"
-              icon={CheckCheck}
+              icon={BadgeCheck}
               label="Procesadas"
               value={stats.procesadas}
               sub="prenóminas generadas"
             />
             <KpiCard
-              tone="amber"
               icon={Clock}
               label="Pendientes"
               value={stats.pendientes}
               sub="listas para calcular"
             />
             <KpiCard
-              tone="violet"
               icon={Percent}
               label="Completado"
               value={`${stats.pct}%`}
@@ -149,7 +145,7 @@ export default function PrenominaList() {
                 type="date"
                 value={fechaFilter}
                 onChange={(e) => setFechaFilter(e.target.value)}
-                className="text-sm bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-md px-2 py-1 text-ink-900 dark:text-ink-100 focus:outline-none focus:ring-2 focus:ring-[#0b5fb4]/20 focus:border-[#0b5fb4]"
+                className="text-sm bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-md px-2 py-1 text-ink-900 dark:text-ink-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
               {fechaFilter && (
                 <button
@@ -197,30 +193,23 @@ export default function PrenominaList() {
 
 // ─── Componentes ─────────────────────────────────────────────────────────────
 
-const KPI_TONES = {
-  blue:   { bar: 'bg-[#0b5fb4]',  iconBg: 'bg-blue-100 dark:bg-blue-900/40 text-[#0b5fb4] dark:text-blue-300',     value: 'text-[#1e40af] dark:text-blue-200' },
-  green:  { bar: 'bg-emerald-600', iconBg: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300', value: 'text-emerald-700 dark:text-emerald-300' },
-  amber:  { bar: 'bg-amber-600',   iconBg: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300',         value: 'text-amber-700 dark:text-amber-300' },
-  violet: { bar: 'bg-violet-600',  iconBg: 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300',     value: 'text-violet-700 dark:text-violet-300' },
-}
-
-function KpiCard({ tone = 'blue', icon: Icon, label, value, sub, progress }) {
-  const t = KPI_TONES[tone] || KPI_TONES.blue
+// KPI sobrio estilo Dashboard StatCard: chip neutro + valor dominante. Sin
+// barras coloridas ni gradientes — el icono y el número hablan por sí solos.
+function KpiCard({ icon: Icon, label, value, sub, progress }) {
   return (
-    <div className="relative bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 rounded-xl px-4 py-3.5 flex items-center gap-3 overflow-hidden transition-shadow hover:shadow-md hover:-translate-y-0.5">
-      <span className={`absolute left-0 top-0 bottom-0 w-1 ${t.bar} opacity-85`} />
-      <div className={`flex-shrink-0 h-11 w-11 rounded-lg inline-flex items-center justify-center ${t.iconBg}`}>
-        <Icon size={18} />
+    <div className="bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 rounded-xl p-5 flex items-center gap-4">
+      <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+        <Icon size={22} strokeWidth={1.8} />
       </div>
-      <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</span>
-        <span className={`text-2xl font-extrabold leading-tight mt-0.5 ${t.value}`}>{value}</span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
+        <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
         {progress != null ? (
-          <div className="mt-1.5 h-1.5 bg-ink-200 dark:bg-ink-700 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-[#0b5fb4] to-blue-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+          <div className="mt-2 h-1.5 bg-ink-100 dark:bg-ink-800 rounded-full overflow-hidden">
+            <div className="h-full bg-brand-600 dark:bg-brand-500 transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
         ) : sub ? (
-          <span className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5">{sub}</span>
+          <p className="text-[11px] text-ink-500 dark:text-ink-400 mt-1">{sub}</p>
         ) : null}
       </div>
     </div>
@@ -232,16 +221,16 @@ function SegBtn({ active, onClick, count, icon: Icon, children }) {
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
         active
-          ? 'bg-white dark:bg-ink-700 text-[#0b5fb4] dark:text-blue-300 shadow-sm'
+          ? 'bg-white dark:bg-ink-700 text-ink-900 dark:text-ink-100 shadow-sm ring-1 ring-ink-200 dark:ring-ink-600'
           : 'text-ink-500 dark:text-ink-400 hover:text-ink-800 dark:hover:text-ink-200'
       }`}
     >
       <Icon size={12} />
       {children}
       <span className={`inline-flex items-center justify-center min-w-[20px] px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-        active ? 'bg-blue-100 dark:bg-blue-900/50 text-[#0b5fb4] dark:text-blue-200' : 'bg-ink-200 dark:bg-ink-700 text-ink-600 dark:text-ink-300'
+        active ? 'bg-ink-100 dark:bg-ink-800 text-ink-700 dark:text-ink-200' : 'bg-ink-200 dark:bg-ink-700 text-ink-600 dark:text-ink-300'
       }`}>{count}</span>
     </button>
   )
@@ -258,62 +247,95 @@ function MonthSep({ label }) {
   )
 }
 
+// Cada estado tiene su propia paleta sobria: borde-izquierdo + acento del día
+// + tono del badge. Sin gradientes ni fondos saturados — solo un toque de
+// color para que el estado se lea de un vistazo.
+const ESTADO_STYLE = {
+  PENDIENTE: {
+    border:     'border-l-brand-500',
+    dateAccent: 'text-brand-700 dark:text-brand-300',
+    badgeTone:  'brand',
+    badgeLabel: 'Lista p/cálculo',
+    btnVariant: 'primary',
+    BtnIcon:    Calculator,
+    btnLabel:   'Calcular prenómina',
+  },
+  ABIERTA: {
+    border:     'border-l-amber-500',
+    dateAccent: 'text-amber-700 dark:text-amber-300',
+    badgeTone:  'warning',
+    badgeLabel: 'En edición',
+    btnVariant: 'secondary',
+    BtnIcon:    Calculator,
+    btnLabel:   'Continuar edición',
+  },
+  APROBADO: {
+    border:     'border-l-emerald-500',
+    dateAccent: 'text-emerald-700 dark:text-emerald-300',
+    badgeTone:  'success',
+    badgeLabel: 'Aprobada',
+    btnVariant: 'secondary',
+    BtnIcon:    Eye,
+    btnLabel:   'Ver recibos',
+  },
+}
+
 function SemanaCard({ semana, onClick, onResumenPago }) {
-  const isDone = semana.estado_prenomina !== 'PENDIENTE'
-  const isAprobada = semana.estado_prenomina === 'APROBADO'
+  const estado = semana.estado_prenomina === 'APROBADO'
+    ? 'APROBADO'
+    : semana.estado_prenomina === 'ABIERTA'
+      ? 'ABIERTA'
+      : 'PENDIENTE'
+  const st = ESTADO_STYLE[estado]
+  // Resumen de pago solo cuando ya hay cálculos (ABIERTA o APROBADO).
+  const showResumen = estado !== 'PENDIENTE'
+
   const inicio = parseDate(semana.fecha_inicio)
   const fin = parseDate(semana.fecha_fin)
   const wk = weekNumber(inicio)
-
-  const panelGradient = isDone
-    ? 'from-emerald-600 to-emerald-700'
-    : 'from-[#0b5fb4] to-[#094d8f]'
-  const borderLeft = isDone ? 'border-l-emerald-500' : 'border-l-[#0b5fb4]'
 
   const projects = semana.proyectos.slice(0, 5)
   const restantes = semana.proyectos.length - projects.length
 
   return (
     <div
-      className={`grid grid-cols-1 md:grid-cols-[175px_1fr_auto] items-stretch overflow-hidden rounded-2xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 border-l-[5px] ${borderLeft} shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200`}
+      className={`grid grid-cols-1 md:grid-cols-[160px_1fr_auto] items-stretch overflow-hidden rounded-xl bg-white dark:bg-ink-900 border border-ink-200 dark:border-ink-800 border-l-[3px] ${st.border} hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all`}
     >
-      {/* Panel de fecha */}
-      <div className={`relative bg-gradient-to-br ${panelGradient} text-white px-3 py-4 flex flex-col items-center justify-center text-center`}>
-        <span className="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wide bg-white/20 px-2 py-0.5 rounded-full">
-          SEM {wk}
+      {/* Panel de fecha sobrio */}
+      <div className="bg-ink-50/60 dark:bg-ink-800/30 px-3 py-3 flex flex-col items-center justify-center text-center md:border-r md:border-ink-200 md:dark:border-ink-800">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">
+          Semana {wk}
         </span>
-        <span className="text-[10px] font-semibold uppercase tracking-wide opacity-85">Inicia</span>
-        <div className="text-3xl font-extrabold mt-1 leading-none">{String(inicio.getDate()).padStart(2, '0')}</div>
-        <div className="text-xs font-semibold uppercase tracking-wide mt-1 opacity-95">
-          {MESES[inicio.getMonth() + 1].slice(0, 3)} · {inicio.getFullYear()}
+        <div className={`text-3xl font-bold mt-1 leading-none tabular-nums ${st.dateAccent}`}>
+          {String(inicio.getDate()).padStart(2, '0')}
         </div>
-        <div className="flex items-center gap-1.5 my-1.5 text-[10px] opacity-70 w-full justify-center">
-          <span className="h-px w-4 bg-white/40" /> al <span className="h-px w-4 bg-white/40" />
+        <div className="text-[11px] font-semibold uppercase tracking-wide mt-1 text-ink-700 dark:text-ink-200">
+          {MESES[inicio.getMonth() + 1].slice(0, 3)} {inicio.getFullYear()}
         </div>
-        <div className="text-sm font-bold opacity-95">
-          {String(fin.getDate()).padStart(2, '0')} {MESES[fin.getMonth() + 1].slice(0, 3)}
+        <div className="text-[10px] text-ink-500 dark:text-ink-400 mt-1 tabular-nums">
+          al {String(fin.getDate()).padStart(2, '0')} {MESES[fin.getMonth() + 1].slice(0, 3)}
         </div>
-        <div className="inline-flex items-center gap-1 mt-2 px-2.5 py-0.5 rounded-full bg-white/20 text-[11px] font-semibold whitespace-nowrap">
-          <FolderOpen size={11} /> {semana.proyectos.length} proyecto{semana.proyectos.length === 1 ? '' : 's'}
+        <div className="inline-flex items-center gap-1 mt-2 text-[10px] text-ink-500 dark:text-ink-400">
+          <FolderKanban size={10} /> {semana.proyectos.length} proyecto{semana.proyectos.length === 1 ? '' : 's'}
         </div>
       </div>
 
       {/* Panel de proyectos */}
-      <div className="px-5 py-4 md:border-r md:border-ink-200 md:dark:border-ink-800 flex flex-col justify-center gap-2 min-w-0">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-ink-500 dark:text-ink-400">
+      <div className="px-4 py-3 flex flex-col justify-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">
           <Layers size={11} /> Proyectos consolidados
         </div>
         <div className="flex flex-wrap gap-1.5">
           {projects.map((p) => (
             <span
               key={p.id}
-              className="inline-flex items-center gap-1.5 bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-200 dark:hover:border-blue-700 transition-colors pl-1 pr-2.5 py-0.5 rounded-full text-xs font-medium text-ink-700 dark:text-ink-200"
+              className="inline-flex items-center gap-1.5 bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 pl-1 pr-2.5 py-0.5 rounded-full text-xs text-ink-700 dark:text-ink-200"
               title={`${p.nombre}${p.coordinador_nombre ? ` · ${p.coordinador_nombre}` : ' · Sin coordinador'}`}
             >
-              <span className={`h-5 w-5 rounded-full inline-flex items-center justify-center text-[9px] font-bold uppercase text-white ${
+              <span className={`h-5 w-5 rounded-full inline-flex items-center justify-center text-[9px] font-bold uppercase ${
                 p.coordinador_nombre
-                  ? 'bg-gradient-to-br from-[#0b5fb4] to-blue-500'
-                  : 'bg-ink-300 dark:bg-ink-600 text-ink-500 dark:text-ink-300'
+                  ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200'
+                  : 'bg-ink-200 text-ink-500 dark:bg-ink-700 dark:text-ink-400'
               }`}>
                 {p.coordinador_initials || '?'}
               </span>
@@ -329,43 +351,30 @@ function SemanaCard({ semana, onClick, onResumenPago }) {
       </div>
 
       {/* Panel de acciones */}
-      <div className="px-5 py-4 flex flex-col items-stretch md:items-end justify-center gap-2 md:min-w-[200px]">
-        {isDone ? (
-          <span className="inline-flex items-center gap-1.5 self-end px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:border-emerald-700/60">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-            {isAprobada ? 'Aprobada' : 'Procesada'}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 self-end px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-[#0b5fb4] border border-blue-200 dark:bg-blue-900/40 dark:text-blue-200 dark:border-blue-700/60">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#0b5fb4] animate-pulse" />
-            Lista p/cálculo
-          </span>
-        )}
+      <div className="px-4 py-3 flex flex-col items-stretch md:items-end justify-center gap-2 md:min-w-[200px] md:border-l md:border-ink-200 md:dark:border-ink-800">
+        <Badge tone={st.badgeTone} dot className="self-start md:self-end">
+          {st.badgeLabel}
+        </Badge>
 
-        <button
-          type="button"
+        <Button
+          variant={st.btnVariant}
+          size="sm"
+          leftIcon={<st.BtnIcon size={13} />}
           onClick={onClick}
-          className={`inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
-            isDone
-              ? 'bg-blue-50 text-[#0b5fb4] border border-blue-200 hover:bg-blue-100 hover:border-blue-300 dark:bg-blue-900/20 dark:text-blue-200 dark:border-blue-700/60 dark:hover:bg-blue-900/40'
-              : 'bg-gradient-to-br from-[#0b5fb4] to-[#094d8f] text-white shadow-md hover:shadow-lg hover:brightness-110 -translate-y-0'
-          }`}
         >
-          {isDone
-            ? <><Eye size={14} /> Ver recibos</>
-            : <><Calculator size={14} /> Calcular prenómina</>
-          }
-        </button>
+          {st.btnLabel}
+        </Button>
 
-        {isDone && (
-          <button
-            type="button"
+        {showResumen && (
+          <Button
+            variant="success"
+            size="sm"
+            leftIcon={<Wallet size={13} />}
             onClick={(e) => { e.stopPropagation(); onResumenPago() }}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-md hover:shadow-lg hover:brightness-110"
             title="Ver cuánto se le paga a cada empleado"
           >
-            <Wallet size={14} /> Resumen de pago
-          </button>
+            Resumen de pago
+          </Button>
         )}
       </div>
     </div>

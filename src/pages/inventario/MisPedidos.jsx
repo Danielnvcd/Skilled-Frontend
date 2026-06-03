@@ -14,17 +14,20 @@ import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
 
-// ─── Catálogo visual de categorías (fallback cuando no hay imagen) ────────────
+// ─── Catálogo visual de categorías ────────────────────────────────────────────
+// Paleta unificada en slate/ink. La distinción visual viene del icono, no del
+// color — evita un mosaico tipo arcoíris cuando se ven muchas categorías a la
+// vez. La selección activa usa el color brand del producto.
 const CAT_CFG = {
-  'Tornillería':        { color: '#4F46E5', bg: '#EEF2FF', Icon: Wrench },
-  'Tuercas':            { color: '#B45309', bg: '#FFFBEB', Icon: Hexagon },
-  'Rondanas':           { color: '#0891B2', bg: '#ECFEFF', Icon: Circle },
-  'Pijas':              { color: '#7C3AED', bg: '#F5F3FF', Icon: ArrowDown },
-  'Abrazaderas':        { color: '#059669', bg: '#ECFDF5', Icon: GitBranch },
-  'Soportería':         { color: '#DC2626', bg: '#FEF2F2', Icon: BoxesIcon },
-  'Tubería/Accesorios': { color: '#0284C7', bg: '#F0F9FF', Icon: Pipette },
+  'Tornillería':        { Icon: Wrench },
+  'Tuercas':            { Icon: Hexagon },
+  'Rondanas':           { Icon: Circle },
+  'Pijas':              { Icon: ArrowDown },
+  'Abrazaderas':        { Icon: GitBranch },
+  'Soportería':         { Icon: BoxesIcon },
+  'Tubería/Accesorios': { Icon: Pipette },
 }
-const CAT_DEFAULT = { color: '#6B7280', bg: '#F3F4F6', Icon: Package }
+const CAT_DEFAULT = { Icon: Package }
 const getCatCfg = (cat) => CAT_CFG[cat] || CAT_DEFAULT
 
 // ─── Imagen con fallback seguro ─────────────────────────────────────────────
@@ -55,8 +58,8 @@ function QtyStepper({ value, onChange, step = 1, min = 0.1, unidad = '' }) {
   return (
     <div className="flex items-center justify-center gap-3">
       <button type="button" onClick={dec}
-        className="w-12 h-12 rounded-xl bg-ink-100 dark:bg-ink-800 hover:bg-ink-200 dark:hover:bg-ink-700 text-ink-700 dark:text-ink-200 flex items-center justify-center transition-colors">
-        <Minus size={18} strokeWidth={2.5} />
+        className="w-10 h-10 rounded-lg bg-ink-100 dark:bg-ink-800 hover:bg-ink-200 dark:hover:bg-ink-700 text-ink-700 dark:text-ink-200 flex items-center justify-center transition-colors">
+        <Minus size={16} strokeWidth={2} />
       </button>
       <div className="flex flex-col items-center">
         <input
@@ -65,15 +68,15 @@ function QtyStepper({ value, onChange, step = 1, min = 0.1, unidad = '' }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={(e) => e.target.select()}
-          className="w-32 h-14 text-center text-3xl font-black text-ink-900 dark:text-ink-100 rounded-xl border-2 border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/20 outline-none"
+          className="w-28 h-12 text-center text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
         />
         {unidad && (
-          <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500 mt-1">{unidad}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 mt-1">{unidad}</span>
         )}
       </div>
       <button type="button" onClick={inc}
-        className="w-12 h-12 rounded-xl bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors shadow-sm">
-        <Plus size={18} strokeWidth={2.5} />
+        className="w-10 h-10 rounded-lg bg-brand-700 hover:bg-brand-800 text-white flex items-center justify-center transition-colors">
+        <Plus size={16} strokeWidth={2} />
       </button>
     </div>
   )
@@ -90,10 +93,10 @@ function ProductoCard({ producto, enCart, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`group relative flex flex-col bg-white dark:bg-ink-900 border rounded-2xl text-left overflow-hidden transition-all
+      className={`group relative flex flex-col bg-white dark:bg-ink-900 border rounded-xl text-left overflow-hidden transition-all
         ${enCart
-          ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30 shadow-md'
-          : 'border-ink-200 dark:border-ink-800 hover:border-brand-400 dark:hover:border-brand-500 hover:shadow-lg hover:-translate-y-0.5'}`}
+          ? 'border-emerald-500 ring-1 ring-emerald-300 dark:ring-emerald-700/50'
+          : 'border-ink-200 dark:border-ink-800 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm'}`}
     >
       {/* Imagen */}
       <div className="relative aspect-square bg-ink-50 dark:bg-ink-950 overflow-hidden">
@@ -101,44 +104,40 @@ function ProductoCard({ producto, enCart, onClick }) {
           src={producto.imagen_url}
           alt={producto.descripcion}
           fallback={
-            <div className="w-full h-full flex items-center justify-center"
-                 style={{ background: cfg.bg }}>
-              <Icon size={48} strokeWidth={1.5} style={{ color: cfg.color }} />
+            <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
+              <Icon size={44} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
             </div>
           }
           className="w-full h-full"
         />
         {/* Badge categoría flotante */}
-        <span
-          className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full"
-          style={{ background: cfg.bg, color: cfg.color }}
-        >
+        <span className="absolute top-2 left-2 text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/90 dark:bg-ink-900/90 text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 backdrop-blur-sm">
           {producto.categoria || 'General'}
         </span>
         {/* Indicador en carrito */}
         {enCart && (
-          <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-emerald-500 text-white inline-flex items-center justify-center shadow-md">
-            <Check size={14} strokeWidth={3} />
+          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center">
+            <Check size={12} strokeWidth={3} />
           </div>
         )}
       </div>
       {/* Info */}
       <div className="p-3 flex flex-col gap-1.5">
-        <p className="text-[13px] font-bold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
+        <p className="text-[13px] font-semibold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
           {producto.descripcion}
         </p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 px-1.5 py-0.5 rounded uppercase font-mono">
+          <span className="text-[10px] font-mono font-semibold bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 px-1.5 py-0.5 rounded">
             {producto.codigo}
           </span>
-          <span className={`text-[11px] font-bold ${bajo ? 'text-rose-500' : 'text-emerald-500'}`}>
+          <span className={`text-[11px] font-semibold tabular-nums ${bajo ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
             {Number.isInteger(stock) ? stock : stock.toFixed(1)} {producto.unidad}
           </span>
         </div>
       </div>
       {/* Botón hover */}
-      <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-brand-500 group-hover:bg-brand-600 text-white inline-flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-        {enCart ? <Settings2 size={16} strokeWidth={2.5} /> : <Plus size={18} strokeWidth={3} />}
+      <div className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-brand-700 group-hover:bg-brand-800 text-white inline-flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+        {enCart ? <Settings2 size={14} strokeWidth={2} /> : <Plus size={16} strokeWidth={2.5} />}
       </div>
     </button>
   )
@@ -150,48 +149,48 @@ function HerramientaCard({ herramienta, enCart, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`group relative flex flex-col bg-white dark:bg-ink-900 border rounded-2xl text-left overflow-hidden transition-all
+      className={`group relative flex flex-col bg-white dark:bg-ink-900 border rounded-xl text-left overflow-hidden transition-all
         ${enCart
-          ? 'border-emerald-400 dark:border-emerald-500 ring-2 ring-emerald-400/30 shadow-md'
-          : 'border-ink-200 dark:border-ink-800 hover:border-amber-400 dark:hover:border-amber-500 hover:shadow-lg hover:-translate-y-0.5'}`}
+          ? 'border-emerald-500 ring-1 ring-emerald-300 dark:ring-emerald-700/50'
+          : 'border-ink-200 dark:border-ink-800 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm'}`}
     >
       <div className="relative aspect-square bg-ink-50 dark:bg-ink-950 overflow-hidden">
         <SafeImage
           src={herramienta.imagen_url}
           alt={herramienta.descripcion}
           fallback={
-            <div className="w-full h-full flex items-center justify-center bg-amber-50 dark:bg-amber-950/30">
-              <Hammer size={48} strokeWidth={1.5} className="text-amber-500 dark:text-amber-400" />
+            <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
+              <Hammer size={44} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
             </div>
           }
           className="w-full h-full"
         />
-        <span className="absolute top-2 left-2 text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+        <span className="absolute top-2 left-2 text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/90 dark:bg-ink-900/90 text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 backdrop-blur-sm">
           {herramienta.clasificacion || 'Herramienta'}
         </span>
         {enCart && (
-          <div className="absolute top-2 right-2 w-7 h-7 rounded-full bg-emerald-500 text-white inline-flex items-center justify-center shadow-md">
-            <Check size={14} strokeWidth={3} />
+          <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-emerald-600 text-white inline-flex items-center justify-center">
+            <Check size={12} strokeWidth={3} />
           </div>
         )}
       </div>
       <div className="p-3 flex flex-col gap-1.5">
-        <p className="text-[13px] font-bold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
+        <p className="text-[13px] font-semibold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
           {herramienta.descripcion}
         </p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-black bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 px-1.5 py-0.5 rounded uppercase font-mono">
+          <span className="text-[10px] font-mono font-semibold bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 px-1.5 py-0.5 rounded">
             {herramienta.sku}
           </span>
           {(herramienta.marca || herramienta.modelo) && (
-            <span className="text-[11px] font-semibold text-ink-500 dark:text-ink-400 truncate">
+            <span className="text-[11px] text-ink-500 dark:text-ink-400 truncate">
               {herramienta.marca || ''} {herramienta.modelo || ''}
             </span>
           )}
         </div>
       </div>
-      <div className="absolute bottom-3 right-3 w-9 h-9 rounded-full bg-amber-500 group-hover:bg-amber-600 text-white inline-flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
-        {enCart ? <Settings2 size={16} strokeWidth={2.5} /> : <Plus size={18} strokeWidth={3} />}
+      <div className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-brand-700 group-hover:bg-brand-800 text-white inline-flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+        {enCart ? <Settings2 size={14} strokeWidth={2} /> : <Plus size={16} strokeWidth={2.5} />}
       </div>
     </button>
   )
@@ -455,20 +454,20 @@ export default function MisPedidos() {
         {/* ─── Catálogo ─── */}
         <div className="space-y-4 min-w-0">
           {/* Tabs */}
-          <Card className="!p-1.5 inline-flex w-full sm:w-auto gap-1">
+          <Card className="!p-1 inline-flex w-full sm:w-auto gap-1">
             <button
               type="button"
               onClick={() => setTab('materiales')}
-              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2 transition-all
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-md text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors
                 ${tab === 'materiales'
-                  ? 'bg-brand-500 text-white shadow-sm'
+                  ? 'bg-brand-700 text-white'
                   : 'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800'}`}
             >
-              <Package size={16} strokeWidth={2.5} />
+              <Package size={15} strokeWidth={2} />
               Materiales
               {cart.length > 0 && (
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full
-                  ${tab === 'materiales' ? 'bg-white/25 text-white' : 'bg-brand-500 text-white'}`}>
+                <span className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full
+                  ${tab === 'materiales' ? 'bg-white/25 text-white' : 'bg-ink-200 dark:bg-ink-700 text-ink-700 dark:text-ink-200'}`}>
                   {cart.length}
                 </span>
               )}
@@ -476,16 +475,16 @@ export default function MisPedidos() {
             <button
               type="button"
               onClick={() => setTab('herramientas')}
-              className={`flex-1 sm:flex-initial px-5 py-2.5 rounded-lg text-sm font-bold inline-flex items-center justify-center gap-2 transition-all
+              className={`flex-1 sm:flex-initial px-4 py-2 rounded-md text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors
                 ${tab === 'herramientas'
-                  ? 'bg-amber-500 text-white shadow-sm'
+                  ? 'bg-brand-700 text-white'
                   : 'text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800'}`}
             >
-              <Hammer size={16} strokeWidth={2.5} />
+              <Hammer size={15} strokeWidth={2} />
               Herramientas
               {cartHerr.length > 0 && (
-                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full
-                  ${tab === 'herramientas' ? 'bg-white/25 text-white' : 'bg-amber-500 text-white'}`}>
+                <span className={`text-[10px] font-bold tabular-nums px-1.5 py-0.5 rounded-full
+                  ${tab === 'herramientas' ? 'bg-white/25 text-white' : 'bg-ink-200 dark:bg-ink-700 text-ink-700 dark:text-ink-200'}`}>
                   {cartHerr.length}
                 </span>
               )}
@@ -508,29 +507,20 @@ export default function MisPedidos() {
             {tab === 'materiales' && (
               <div className="flex flex-wrap gap-1.5">
                 {categorias.map((cat) => {
-                  const isAll = cat === 'Todas'
-                  const cfg = isAll ? null : getCatCfg(cat)
+                  const cfg = cat === 'Todas' ? null : getCatCfg(cat)
                   const isActive = cat === activeCat
-                  const style = cfg
-                    ? {
-                        color: isActive ? 'white' : cfg.color,
-                        background: isActive ? cfg.color : cfg.bg,
-                        borderColor: isActive ? cfg.color : 'transparent',
-                      }
-                    : {
-                        color: isActive ? 'white' : '#374151',
-                        background: isActive ? '#111827' : '#F3F4F6',
-                        borderColor: 'transparent',
-                      }
                   const Icon = cfg?.Icon || Sparkles
                   return (
                     <button
                       key={cat}
                       onClick={() => setActiveCat(cat)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all hover:scale-105 active:scale-95"
-                      style={style}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-colors ${
+                        isActive
+                          ? 'bg-brand-700 text-white border-brand-700'
+                          : 'bg-ink-50 text-ink-700 border-ink-200 hover:bg-ink-100 hover:border-ink-300 dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700 dark:hover:bg-ink-700'
+                      }`}
                     >
-                      <Icon size={12} strokeWidth={2.5} />
+                      <Icon size={12} strokeWidth={2} />
                       {cat}
                     </button>
                   )
@@ -601,13 +591,13 @@ export default function MisPedidos() {
         <div className="xl:sticky xl:top-4 xl:self-start">
           <Card className="!p-0 overflow-hidden">
             {/* Header */}
-            <div className="p-4 bg-gradient-to-r from-brand-500 to-brand-600 text-white">
+            <div className="px-4 py-3 bg-brand-800 dark:bg-brand-600 text-white">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold inline-flex items-center gap-2">
-                  <ShoppingCart size={18} strokeWidth={2.5} />
+                <h3 className="font-semibold inline-flex items-center gap-2 text-sm">
+                  <ShoppingCart size={16} strokeWidth={2} />
                   Mi solicitud
                 </h3>
-                <span className="text-xs font-black bg-white/25 px-2.5 py-1 rounded-full">
+                <span className="text-xs font-semibold tabular-nums bg-white/20 px-2 py-0.5 rounded-full">
                   {cartCount} {cartCount === 1 ? 'ítem' : 'ítems'}
                 </span>
               </div>
@@ -625,26 +615,26 @@ export default function MisPedidos() {
                 <>
                   {cartHerr.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-300 mb-2 flex items-center gap-1 px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2 flex items-center gap-1 px-1">
                         <Hammer size={11} /> Herramientas ({cartHerr.length})
                       </p>
                       <div className="space-y-2">
                         {cartHerr.map((item) => (
                           <div key={item.herramienta_id}
-                               className="flex items-center gap-2.5 p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                               className="flex items-center gap-2.5 p-2.5 bg-ink-50 dark:bg-ink-800/50 rounded-lg border border-ink-200 dark:border-ink-800">
                             <SafeImage
                               src={item.imagen_url}
                               alt={item.descripcion}
                               fallback={
-                                <div className="w-full h-full bg-amber-200 dark:bg-amber-800 flex items-center justify-center">
-                                  <Hammer size={16} strokeWidth={2.5} className="text-amber-700 dark:text-amber-200" />
+                                <div className="w-full h-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center">
+                                  <Hammer size={16} strokeWidth={1.8} className="text-ink-500 dark:text-ink-400" />
                                 </div>
                               }
-                              className="w-10 h-10 rounded-lg flex-shrink-0"
+                              className="w-10 h-10 rounded-md flex-shrink-0"
                             />
                             <div className="min-w-0 flex-1">
-                              <p className="text-[11px] font-bold truncate leading-tight text-ink-900 dark:text-ink-100">{item.descripcion}</p>
-                              <p className="text-[9px] font-black text-ink-400 uppercase">{item.sku} · {item.cantidad}u</p>
+                              <p className="text-[11px] font-semibold truncate leading-tight text-ink-900 dark:text-ink-100">{item.descripcion}</p>
+                              <p className="text-[9px] font-mono text-ink-500 dark:text-ink-400">{item.sku} · {item.cantidad}u</p>
                               {item.fecha_uso_inicio && (
                                 <p className="text-[9px] text-ink-500 mt-0.5 inline-flex items-center gap-1">
                                   <CalendarRange size={9} />
@@ -653,7 +643,7 @@ export default function MisPedidos() {
                               )}
                             </div>
                             <button type="button" onClick={() => removeHerr(item.herramienta_id)}
-                                    className="text-ink-300 hover:text-rose-500 transition-colors p-1.5 rounded-lg hover:bg-white dark:hover:bg-ink-900 flex-shrink-0"
+                                    className="text-ink-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-white dark:hover:bg-ink-900 flex-shrink-0"
                                     title="Quitar">
                               <Trash2 size={14} />
                             </button>
@@ -666,7 +656,7 @@ export default function MisPedidos() {
                   {cart.length > 0 && (
                     <div>
                       {cartHerr.length > 0 && <div className="h-px bg-ink-200 dark:bg-ink-700 my-3" />}
-                      <p className="text-[10px] font-black uppercase tracking-wider text-brand-600 dark:text-brand-300 mb-2 flex items-center gap-1 px-1">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-2 flex items-center gap-1 px-1">
                         <Package size={11} /> Materiales ({cart.length})
                       </p>
                       <div className="space-y-2">
@@ -676,45 +666,45 @@ export default function MisPedidos() {
                           return (
                             <div
                               key={item.id}
-                              className="flex items-center gap-2.5 p-2.5 bg-ink-50 dark:bg-ink-800/50 rounded-xl border border-ink-200 dark:border-ink-800"
+                              className="flex items-center gap-2.5 p-2.5 bg-ink-50 dark:bg-ink-800/50 rounded-lg border border-ink-200 dark:border-ink-800"
                             >
                               <SafeImage
                                 src={item.imagen_url}
                                 alt={item.descripcion}
                                 fallback={
-                                  <div className="w-full h-full flex items-center justify-center" style={{ background: cfg.bg }}>
-                                    <Icon size={16} strokeWidth={2.5} style={{ color: cfg.color }} />
+                                  <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
+                                    <Icon size={16} strokeWidth={1.8} className="text-ink-500 dark:text-ink-400" />
                                   </div>
                                 }
-                                className="w-10 h-10 rounded-lg flex-shrink-0"
+                                className="w-10 h-10 rounded-md flex-shrink-0"
                               />
                               <div className="min-w-0 flex-1">
-                                <p className="text-[11px] font-bold text-ink-900 dark:text-ink-100 truncate leading-tight">
+                                <p className="text-[11px] font-semibold text-ink-900 dark:text-ink-100 truncate leading-tight">
                                   {item.descripcion}
                                 </p>
-                                <p className="text-[9px] font-black text-ink-400 uppercase">{item.codigo}</p>
+                                <p className="text-[9px] font-mono text-ink-500 dark:text-ink-400">{item.codigo}</p>
                               </div>
-                              <div className="inline-flex items-center gap-0.5 bg-white dark:bg-ink-900 rounded-lg border border-ink-200 dark:border-ink-700 px-0.5">
+                              <div className="inline-flex items-center gap-0.5 bg-white dark:bg-ink-900 rounded-md border border-ink-200 dark:border-ink-700 px-0.5">
                                 <button
                                   type="button"
                                   onClick={() => adjustCartQty(item.id, -1)}
-                                  className="w-6 h-6 inline-flex items-center justify-center text-ink-500 hover:text-brand-600 dark:hover:text-brand-300 rounded transition-colors"
+                                  className="w-6 h-6 inline-flex items-center justify-center text-ink-500 hover:text-ink-800 dark:hover:text-ink-200 rounded transition-colors"
                                 >
-                                  <Minus size={12} strokeWidth={3} />
+                                  <Minus size={12} strokeWidth={2} />
                                 </button>
-                                <span className="text-[11px] font-black min-w-[20px] text-center text-ink-900 dark:text-ink-100">{item.cantidad}</span>
+                                <span className="text-[11px] font-semibold tabular-nums min-w-[20px] text-center text-ink-900 dark:text-ink-100">{item.cantidad}</span>
                                 <button
                                   type="button"
                                   onClick={() => adjustCartQty(item.id, +1)}
-                                  className="w-6 h-6 inline-flex items-center justify-center text-ink-500 hover:text-brand-600 dark:hover:text-brand-300 rounded transition-colors"
+                                  className="w-6 h-6 inline-flex items-center justify-center text-ink-500 hover:text-ink-800 dark:hover:text-ink-200 rounded transition-colors"
                                 >
-                                  <Plus size={12} strokeWidth={3} />
+                                  <Plus size={12} strokeWidth={2} />
                                 </button>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => removeFromCart(item.id)}
-                                className="text-ink-300 hover:text-rose-500 transition-colors p-1.5 rounded-lg hover:bg-white dark:hover:bg-ink-900 flex-shrink-0"
+                                className="text-ink-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-1.5 rounded-md hover:bg-white dark:hover:bg-ink-900 flex-shrink-0"
                                 title="Quitar"
                               >
                                 <Trash2 size={14} />
@@ -732,7 +722,7 @@ export default function MisPedidos() {
             {/* Footer */}
             <div className="p-4 border-t border-ink-200 dark:border-ink-800 space-y-3 bg-ink-50/50 dark:bg-ink-950/50">
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-300 mb-1.5 block inline-flex items-center gap-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5 block inline-flex items-center gap-1.5">
                   <FolderKanban size={11} /> Proyecto
                 </label>
                 <Select
@@ -748,7 +738,7 @@ export default function MisPedidos() {
               </div>
 
               <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-300 mb-1.5 block inline-flex items-center gap-1.5">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5 block inline-flex items-center gap-1.5">
                   <FileText size={11} /> Observaciones (opcional)
                 </label>
                 <textarea
@@ -803,27 +793,26 @@ export default function MisPedidos() {
         {qtyModal && (
           <div className="space-y-5">
             {/* Card de producto con foto */}
-            <div className="flex gap-4 items-center p-3 rounded-xl bg-ink-50 dark:bg-ink-800/50 border border-ink-200 dark:border-ink-800">
+            <div className="flex gap-4 items-center p-3 rounded-lg bg-ink-50 dark:bg-ink-800/50 border border-ink-200 dark:border-ink-800">
               <SafeImage
                 src={qtyModal.producto.imagen_url}
                 alt={qtyModal.producto.descripcion}
                 fallback={
-                  <div className="w-full h-full flex items-center justify-center"
-                       style={{ background: getCatCfg(qtyModal.producto.categoria).bg }}>
+                  <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
                     {(() => {
                       const Icon = getCatCfg(qtyModal.producto.categoria).Icon
-                      return <Icon size={28} strokeWidth={1.5} style={{ color: getCatCfg(qtyModal.producto.categoria).color }} />
+                      return <Icon size={26} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
                     })()}
                   </div>
                 }
-                className="w-20 h-20 rounded-xl flex-shrink-0 border border-ink-200 dark:border-ink-700"
+                className="w-20 h-20 rounded-lg flex-shrink-0 border border-ink-200 dark:border-ink-700"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-base font-bold text-ink-900 dark:text-ink-100 leading-tight">{qtyModal.producto.descripcion}</p>
+                <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-tight">{qtyModal.producto.descripcion}</p>
                 <p className="text-xs text-ink-500 font-mono mt-1">{qtyModal.producto.codigo}</p>
                 <p className="text-[11px] text-ink-500 mt-1">
                   Stock disponible:{' '}
-                  <strong className="text-emerald-600 dark:text-emerald-400">
+                  <strong className="text-emerald-700 dark:text-emerald-400 tabular-nums">
                     {qtyModal.producto.stock_actual} {qtyModal.producto.unidad}
                   </strong>
                 </p>
@@ -861,19 +850,19 @@ export default function MisPedidos() {
         {herrModal && (
           <div className="space-y-5">
             {/* Card de herramienta con foto */}
-            <div className="flex gap-4 items-center p-3 rounded-xl bg-amber-50/60 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/50">
+            <div className="flex gap-4 items-center p-3 rounded-lg bg-ink-50 dark:bg-ink-800/50 border border-ink-200 dark:border-ink-800">
               <SafeImage
                 src={herrModal.herr.imagen_url}
                 alt={herrModal.herr.descripcion}
                 fallback={
-                  <div className="w-full h-full flex items-center justify-center bg-amber-100 dark:bg-amber-900/50">
-                    <Hammer size={28} strokeWidth={1.5} className="text-amber-600 dark:text-amber-300" />
+                  <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
+                    <Hammer size={26} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
                   </div>
                 }
-                className="w-20 h-20 rounded-xl flex-shrink-0 border border-amber-200 dark:border-amber-800/50"
+                className="w-20 h-20 rounded-lg flex-shrink-0 border border-ink-200 dark:border-ink-700"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-base font-bold text-ink-900 dark:text-ink-100 leading-tight">{herrModal.herr.descripcion}</p>
+                <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-tight">{herrModal.herr.descripcion}</p>
                 <p className="text-xs text-ink-500 font-mono mt-1">{herrModal.herr.sku}</p>
                 {(herrModal.herr.marca || herrModal.herr.modelo) && (
                   <p className="text-[11px] text-ink-500 mt-1">
@@ -913,8 +902,8 @@ export default function MisPedidos() {
             />
 
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-ink-600 dark:text-ink-300 mb-1.5 block inline-flex items-center gap-1.5">
-                <FileText size={11} /> Justificación <span className="text-rose-500">*</span>
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5 block inline-flex items-center gap-1.5">
+                <FileText size={11} /> Justificación <span className="text-red-600">*</span>
               </label>
               <textarea
                 value={herrModal.justificacion}

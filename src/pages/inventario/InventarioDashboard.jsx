@@ -32,9 +32,13 @@ const HERR_STATS_EVENTS = [
   'incidencia:changed', 'baja:changed',
 ]
 
+// Paleta sobria 5 tonos (igual al Dashboard) en lugar de 10 saturados.
 const CHART_COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444',
-  '#06b6d4', '#f97316', '#6366f1', '#14b8a6', '#db2777',
+  '#0ea5e9', // sky-500
+  '#10b981', // emerald-500
+  '#8b5cf6', // violet-500
+  '#f59e0b', // amber-500
+  '#64748b', // slate-500 — neutro
 ]
 
 function greeting() {
@@ -44,27 +48,24 @@ function greeting() {
   return 'Buenas noches'
 }
 
-function StatCard({ tone, label, value, Icon, to }) {
-  const tones = {
-    blue:   { border: 'border-l-sky-500',     iconWrap: 'bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-200 ring-1 ring-sky-300/50 dark:ring-sky-400/30' },
-    green:  { border: 'border-l-emerald-500', iconWrap: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200 ring-1 ring-emerald-300/50 dark:ring-emerald-400/30' },
-    purple: { border: 'border-l-violet-500',  iconWrap: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-200 ring-1 ring-violet-300/50 dark:ring-violet-400/30' },
-    orange: { border: 'border-l-amber-500',   iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-200 ring-1 ring-amber-300/50 dark:ring-amber-400/30' },
-    red:    { border: 'border-l-rose-500',    iconWrap: 'bg-rose-100 text-rose-600 dark:bg-rose-500/20 dark:text-rose-200 ring-1 ring-rose-300/50 dark:ring-rose-400/30' },
-  }
-  const t = tones[tone] || tones.blue
+// StatCard sobrio idéntico al del Dashboard: chip neutro slate + número
+// dominante. Mismo `h-12 w-12 rounded-lg` para que las dos páginas se
+// sientan parte del mismo producto.
+function StatCard({ label, value, Icon, to }) {
   const Wrap = to ? Link : 'div'
   return (
     <Wrap
       to={to}
-      className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-sm ${to ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4 ${
+        to ? 'hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all' : ''
+      }`}
     >
-      <div className={`h-12 w-12 rounded-full inline-flex items-center justify-center flex-shrink-0 ${t.iconWrap}`}>
-        <Icon size={20} />
+      <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+        <Icon size={22} strokeWidth={1.8} />
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
+        <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
       </div>
     </Wrap>
   )
@@ -72,10 +73,10 @@ function StatCard({ tone, label, value, Icon, to }) {
 
 function Panel({ title, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-5 shadow-sm ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-700 pb-3 mb-4">
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
         <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" />}
+          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
           {title}
         </div>
         {action}
@@ -208,51 +209,51 @@ function MobileInventarioHome() {
 
       <Link
         to="/inventario/scanner"
-        className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-brand-600 text-white py-10 shadow-lg active:scale-[0.98] transition-transform"
+        className="flex flex-col items-center justify-center gap-3 rounded-xl bg-brand-800 dark:bg-brand-600 text-white py-10 active:bg-brand-900 transition-colors"
       >
         <ScanLine size={48} strokeWidth={1.5} />
-        <span className="text-lg font-bold">Escanear QR</span>
+        <span className="text-lg font-semibold">Escanear QR</span>
         <span className="text-xs text-white/80">Estante, producto o herramienta</span>
       </Link>
 
       <div className="grid grid-cols-2 gap-3">
         <Link
           to="/inventario/bajo-minimo"
-          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:scale-[0.98] transition-transform"
+          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:bg-ink-50 dark:active:bg-ink-800 transition-colors"
         >
-          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-            <AlertTriangle size={16} />
-            <span className="text-[10px] uppercase font-bold tracking-wider">Bajo mínimo</span>
+          <div className="flex items-center gap-2 text-ink-500 dark:text-ink-400">
+            <AlertTriangle size={16} strokeWidth={1.8} />
+            <span className="text-[10px] uppercase font-semibold tracking-wider">Bajo mínimo</span>
           </div>
-          <p className="text-2xl font-bold mt-1 tabular-nums">{bajoMinimo.length}</p>
+          <p className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1">{bajoMinimo.length}</p>
         </Link>
         <Link
           to="/inventario/solicitudes"
-          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:scale-[0.98] transition-transform"
+          className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 active:bg-ink-50 dark:active:bg-ink-800 transition-colors"
         >
-          <div className="flex items-center gap-2 text-sky-600 dark:text-sky-400">
-            <ClipboardList size={16} />
-            <span className="text-[10px] uppercase font-bold tracking-wider">Solicitudes</span>
+          <div className="flex items-center gap-2 text-ink-500 dark:text-ink-400">
+            <ClipboardList size={16} strokeWidth={1.8} />
+            <span className="text-[10px] uppercase font-semibold tracking-wider">Solicitudes</span>
           </div>
-          <p className="text-2xl font-bold mt-1 tabular-nums">{solicitudesPend}</p>
+          <p className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1">{solicitudesPend}</p>
           <p className="text-[10px] text-ink-500 mt-0.5">pendientes</p>
         </Link>
       </div>
 
       <div className="space-y-2">
-        <p className="text-[10px] uppercase tracking-wider text-ink-500 font-bold px-1">Atajos</p>
+        <p className="text-[10px] uppercase tracking-wider text-ink-500 font-semibold px-1">Atajos</p>
         <Link to="/inventario/catalogo" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
-          <Package size={18} className="text-brand-600" />
+          <Package size={18} className="text-ink-500 dark:text-ink-400" strokeWidth={1.8} />
           <span className="text-sm font-medium flex-1">Catálogo</span>
           <ChevronRight size={16} className="text-ink-400" />
         </Link>
         <Link to="/inventario/movimientos/nuevo" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
-          <ArrowRightLeft size={18} className="text-brand-600" />
+          <ArrowRightLeft size={18} className="text-ink-500 dark:text-ink-400" strokeWidth={1.8} />
           <span className="text-sm font-medium flex-1">Registrar movimiento</span>
           <ChevronRight size={16} className="text-ink-400" />
         </Link>
         <Link to="/inventario/tomas" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
-          <ClipboardList size={18} className="text-brand-600" />
+          <ClipboardList size={18} className="text-ink-500 dark:text-ink-400" strokeWidth={1.8} />
           <span className="text-sm font-medium flex-1">Tomas físicas</span>
           <ChevronRight size={16} className="text-ink-400" />
         </Link>
@@ -394,38 +395,43 @@ export default function InventarioDashboard() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Welcome banner */}
-      <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-700 p-6 shadow-sm">
-        <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100">
-          {greeting()},{' '}
-          <span className="text-brand-600 dark:text-sky-300 capitalize">
-            {user?.full_name || user?.username}
-          </span>!
-        </h1>
-        <p className="text-sm text-ink-500 dark:text-ink-400 mt-1">
-          Panel principal de control de inventario y almacenes.
+    <div className="space-y-6">
+      {/* Welcome — header sin caja: solo título + subtítulo + fecha */}
+      <div className="flex items-end justify-between gap-3 flex-wrap pt-1">
+        <div>
+          <h1 className="text-2xl font-semibold text-ink-900 dark:text-ink-100 tracking-tight">
+            {greeting()},{' '}
+            <span className="text-brand-600 dark:text-sky-300 capitalize">
+              {user?.full_name || user?.username}
+            </span>!
+          </h1>
+          <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5">
+            Panel principal de control de inventario y almacenes.
+          </p>
+        </div>
+        <p className="text-sm text-ink-500 dark:text-ink-400 tabular-nums">
+          {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
         </p>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard tone="blue"   label="Productos activos"      value={productos.length}              Icon={Package}        to="/inventario/catalogo" />
-        <StatCard tone="orange" label="Solicitudes pendientes" value={solicitudesPendientes.length}  Icon={ClipboardList}  to="/inventario/solicitudes" />
-        <StatCard tone="red"    label="Bajo mínimo"            value={bajoMinimo.length}             Icon={AlertTriangle}  to="/inventario/movimientos" />
-        <StatCard tone="green"  label="Movimientos hoy"        value={movimientosHoy}                Icon={ArrowRightLeft} to="/inventario/movimientos" />
+        <StatCard label="Productos activos"      value={productos.length}              Icon={Package}        to="/inventario/catalogo" />
+        <StatCard label="Solicitudes pendientes" value={solicitudesPendientes.length}  Icon={ClipboardList}  to="/inventario/solicitudes" />
+        <StatCard label="Bajo mínimo"            value={bajoMinimo.length}             Icon={AlertTriangle}  to="/inventario/movimientos" />
+        <StatCard label="Movimientos hoy"        value={movimientosHoy}                Icon={ArrowRightLeft} to="/inventario/movimientos" />
         {herrStats && (
           <>
-            <StatCard tone="purple" label="Herramientas activas"
+            <StatCard label="Herramientas activas"
                       value={herrStats.total_herramientas}
                       Icon={Wrench} to="/inventario/herramientas" />
-            <StatCard tone="blue"   label="Unidades asignadas"
+            <StatCard label="Unidades asignadas"
                       value={herrStats.unidades_por_estado?.ASIGNADA || 0}
                       Icon={Hammer} to="/inventario/herramientas/asignaciones" />
-            <StatCard tone="orange" label="En mantenimiento"
+            <StatCard label="En mantenimiento"
                       value={herrStats.unidades_por_estado?.EN_MANTENIMIENTO || 0}
                       Icon={Settings2} to="/inventario/herramientas/mantenimientos" />
-            <StatCard tone="red"    label="Incidencias y bajas"
+            <StatCard label="Incidencias y bajas"
                       value={(herrStats.incidencias_abiertas || 0) + (herrStats.solicitudes_baja_pendientes || 0)}
                       Icon={AlertTriangle} to="/inventario/herramientas/incidencias" />
           </>
@@ -448,10 +454,10 @@ export default function InventarioDashboard() {
         <Panel
           title={
             <span className="inline-flex items-center gap-1.5">
-              <Clock size={14} className="text-amber-500" />
+              <Clock size={14} className="text-ink-400 dark:text-ink-500" />
               Solicitudes pendientes
               {solicitudesPendientes.length > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
                   {solicitudesPendientes.length}
                 </span>
               )}
@@ -499,10 +505,10 @@ export default function InventarioDashboard() {
         <Panel
           title={
             <span className="inline-flex items-center gap-1.5">
-              <AlertTriangle size={14} className="text-rose-500" />
+              <AlertTriangle size={14} className="text-ink-400 dark:text-ink-500" />
               Productos bajo mínimo
               {bajoMinimo.length > 0 && (
-                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-semibold tabular-nums bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                   {bajoMinimo.length}
                 </span>
               )}
@@ -550,7 +556,7 @@ export default function InventarioDashboard() {
         <Panel
           title={
             <span className="inline-flex items-center gap-1.5">
-              <History size={14} className="text-sky-500" />
+              <History size={14} className="text-ink-400 dark:text-ink-500" />
               Movimientos recientes
             </span>
           }
@@ -596,32 +602,26 @@ export default function InventarioDashboard() {
         </Panel>
       </div>
 
-      {/* Accesos rápidos */}
+      {/* Accesos rápidos — chips neutros, mismo lenguaje que el Dashboard. */}
       <Panel title="Accesos rápidos" Icon={Boxes}>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {[
-            { name: 'Catálogo',    icon: PackageSearch,  to: '/inventario/catalogo',     tone: 'blue' },
-            { name: 'Almacenes',   icon: Boxes,          to: '/inventario/almacenes',    tone: 'green' },
-            { name: 'Movimientos', icon: ArrowRightLeft, to: '/inventario/movimientos',  tone: 'purple' },
-            { name: 'Solicitudes', icon: ClipboardList,  to: '/inventario/solicitudes',  tone: 'orange' },
-            { name: 'Pedir',       icon: Send,           to: '/inventario/mis-pedidos',  tone: 'blue' },
-            { name: 'Escáner',     icon: ScanLine,       to: '/inventario/scanner',      tone: 'orange' },
+            { name: 'Catálogo',    icon: PackageSearch,  to: '/inventario/catalogo' },
+            { name: 'Almacenes',   icon: Boxes,          to: '/inventario/almacenes' },
+            { name: 'Movimientos', icon: ArrowRightLeft, to: '/inventario/movimientos' },
+            { name: 'Solicitudes', icon: ClipboardList,  to: '/inventario/solicitudes' },
+            { name: 'Pedir',       icon: Send,           to: '/inventario/mis-pedidos' },
+            { name: 'Escáner',     icon: ScanLine,       to: '/inventario/scanner' },
           ].map((mod) => {
-            const tones = {
-              blue:   'bg-sky-100 text-sky-600 dark:bg-sky-500/20 dark:text-sky-200 ring-1 ring-sky-300/40 dark:ring-sky-400/30',
-              green:  'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-200 ring-1 ring-emerald-300/40 dark:ring-emerald-400/30',
-              purple: 'bg-violet-100 text-violet-600 dark:bg-violet-500/20 dark:text-violet-200 ring-1 ring-violet-300/40 dark:ring-violet-400/30',
-              orange: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-200 ring-1 ring-amber-300/40 dark:ring-amber-400/30',
-            }
             const Icon = mod.icon
             return (
               <Link
                 key={mod.to}
                 to={mod.to}
-                className="group flex flex-col items-center gap-2 p-3 rounded-lg border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/50 hover:bg-ink-100 dark:hover:bg-ink-800 text-center transition-colors"
+                className="group flex flex-col items-center gap-2 p-3 rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm text-center transition-all"
               >
-                <div className={`h-10 w-10 rounded-lg inline-flex items-center justify-center ${tones[mod.tone]}`}>
-                  <Icon size={18} />
+                <div className="h-10 w-10 rounded-lg inline-flex items-center justify-center bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200 group-hover:bg-ink-200 dark:group-hover:bg-ink-700 transition-colors">
+                  <Icon size={18} strokeWidth={1.8} />
                 </div>
                 <span className="text-xs font-semibold text-ink-700 dark:text-ink-300 group-hover:text-ink-900 dark:group-hover:text-ink-100">
                   {mod.name}
@@ -632,7 +632,7 @@ export default function InventarioDashboard() {
         </div>
       </Panel>
 
-      <div className="text-center pt-4 text-xs text-ink-400 dark:text-ink-500 border-t border-ink-200 dark:border-ink-700">
+      <div className="text-center pt-4 text-xs text-ink-400 dark:text-ink-500 border-t border-ink-200 dark:border-ink-800">
         Skilled © {new Date().getFullYear()}
       </div>
     </div>

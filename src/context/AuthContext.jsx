@@ -66,9 +66,23 @@ export function AuthProvider({ children }) {
     } catch {
       // local cleanup happens regardless
     }
+    // Fade-out coordinado: marcamos el <html> para que el body se desvanezca,
+    // esperamos que la animación CSS corra, y recién entonces swapeamos el
+    // árbol. Esto evita el "pop" abrupto al saltar al Login.
+    const root = document.documentElement
+    root.classList.add('auth-transitioning')
+    await new Promise((r) => setTimeout(r, 220))
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     setUser(null)
+    // Después de que React monte el Login, dejamos un frame extra para que el
+    // browser pinte el opacity:0 inicial — así la transición de vuelta a 1
+    // arranca desde el estado correcto.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        root.classList.remove('auth-transitioning')
+      })
+    })
   }
 
   const updateUser = (userData) => {

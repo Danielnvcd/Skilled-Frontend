@@ -17,11 +17,11 @@ import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
 
 const TABS = [
-  { key: 'TODAS',     label: 'Todas',      icon: ListTodo,   color: 'text-ink-600' },
-  { key: 'PENDIENTE', label: 'Pendientes', icon: Clock,      color: 'text-amber-600' },
-  { key: 'APROBADA',  label: 'Aprobadas',  icon: ThumbsUp,   color: 'text-emerald-600' },
-  { key: 'RECHAZADA', label: 'Rechazadas', icon: ThumbsDown, color: 'text-red-600' },
-  { key: 'ENTREGADA', label: 'Entregadas', icon: PackageOpen, color: 'text-blue-600' },
+  { key: 'TODAS',     label: 'Todas',      icon: ListTodo },
+  { key: 'PENDIENTE', label: 'Pendientes', icon: Clock },
+  { key: 'APROBADA',  label: 'Aprobadas',  icon: ThumbsUp },
+  { key: 'RECHAZADA', label: 'Rechazadas', icon: ThumbsDown },
+  { key: 'ENTREGADA', label: 'Entregadas', icon: PackageOpen },
 ]
 
 const num = (v) => Number(v ?? 0)
@@ -122,11 +122,11 @@ export default function SolicitudesMaterial() {
   }
 
   const STAT_CARDS = [
-    { key: 'TOTAL',     label: 'Total',      value: stats.TOTAL,     icon: ListTodo,    color: 'text-ink-600',    bg: 'bg-ink-50 dark:bg-ink-800' },
-    { key: 'PENDIENTE', label: 'Pendientes', value: stats.PENDIENTE, icon: Clock,       color: 'text-amber-600',  bg: 'bg-amber-50 dark:bg-amber-900/20' },
-    { key: 'APROBADA',  label: 'Aprobadas',  value: stats.APROBADA,  icon: ThumbsUp,    color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-    { key: 'RECHAZADA', label: 'Rechazadas', value: stats.RECHAZADA, icon: ThumbsDown,  color: 'text-red-600',    bg: 'bg-red-50 dark:bg-red-900/20' },
-    { key: 'ENTREGADA', label: 'Entregadas', value: stats.ENTREGADA, icon: PackageOpen, color: 'text-blue-600',   bg: 'bg-blue-50 dark:bg-blue-900/20' },
+    { key: 'TOTAL',     label: 'Total',      value: stats.TOTAL,     icon: ListTodo },
+    { key: 'PENDIENTE', label: 'Pendientes', value: stats.PENDIENTE, icon: Clock },
+    { key: 'APROBADA',  label: 'Aprobadas',  value: stats.APROBADA,  icon: ThumbsUp },
+    { key: 'RECHAZADA', label: 'Rechazadas', value: stats.RECHAZADA, icon: ThumbsDown },
+    { key: 'ENTREGADA', label: 'Entregadas', value: stats.ENTREGADA, icon: PackageOpen },
   ]
 
   return (
@@ -141,7 +141,7 @@ export default function SolicitudesMaterial() {
         }
       />
 
-      {/* Stats */}
+      {/* Stats sobrios — compactos para 5 columnas: chip pequeño + número ajustado. */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-6">
         {STAT_CARDS.map((s) => {
           const Icon = s.icon
@@ -151,17 +151,19 @@ export default function SolicitudesMaterial() {
               key={s.key}
               type="button"
               onClick={() => setActiveTab(s.key === 'TOTAL' ? 'TODAS' : s.key)}
-              className={`p-4 rounded-xl border text-left transition-all ${
+              className={`px-4 py-3 rounded-xl border text-left transition-colors bg-white dark:bg-ink-900 flex items-center gap-3 ${
                 isActive
-                  ? 'border-brand-500 ring-2 ring-brand-500/20 bg-white dark:bg-ink-900'
-                  : 'border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-brand-300'
+                  ? 'border-brand-600 ring-1 ring-brand-500/30'
+                  : 'border-ink-200 dark:border-ink-800 hover:border-ink-300 dark:hover:border-ink-700'
               }`}
             >
-              <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg ${s.bg} ${s.color} mb-2`}>
-                <Icon size={18} />
+              <div className="inline-flex items-center justify-center h-9 w-9 rounded-lg bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200 flex-shrink-0">
+                <Icon size={17} strokeWidth={1.8} />
               </div>
-              <p className="text-2xl font-extrabold text-ink-900 dark:text-ink-100 leading-none">{s.value}</p>
-              <p className="text-xs text-ink-500 mt-1">{s.label}</p>
+              <div className="min-w-0">
+                <p className="text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">{s.value}</p>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400 mt-1 truncate">{s.label}</p>
+              </div>
             </button>
           )
         })}
@@ -179,13 +181,13 @@ export default function SolicitudesMaterial() {
                   key={t.key}
                   type="button"
                   onClick={() => setActiveTab(t.key)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-all ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${
                     isActive
-                      ? 'bg-brand-600 text-white border-brand-600'
-                      : `bg-white dark:bg-ink-900 ${t.color} border-ink-200 dark:border-ink-700 hover:border-brand-400`
+                      ? 'bg-brand-700 text-white border-brand-700'
+                      : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 border-ink-200 dark:border-ink-700 hover:border-ink-300 dark:hover:border-ink-600'
                   }`}
                 >
-                  <Icon size={13} />
+                  <Icon size={13} strokeWidth={1.8} />
                   {t.label}
                 </button>
               )
@@ -240,8 +242,8 @@ export default function SolicitudesMaterial() {
                     <TD>{s.proyecto || '—'}</TD>
                     <TD className="text-sm text-ink-500">{s.detalles?.length || 0}</TD>
                     <TD>
-                      <div className="flex flex-col gap-1">
-                        <Badge tone={getStatusTone(s.estatus)}>{s.estatus}</Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone={getStatusTone(s.estatus)} dot>{s.estatus}</Badge>
                         {s.estatus === 'APROBADA' && tienePendiente && (
                           <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold uppercase tracking-wide">
                             Entrega parcial
@@ -649,7 +651,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
 
         {lineasMaterial.length > 0 && (
           <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
-            <div className="bg-indigo-50/60 dark:bg-indigo-900/10 px-3 py-1.5 text-[11px] font-bold uppercase text-indigo-700 dark:text-indigo-300">
+            <div className="bg-ink-50 dark:bg-ink-800/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-300 border-b border-ink-200 dark:border-ink-800">
               Materiales
             </div>
             <table className="w-full text-sm">
@@ -707,7 +709,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
 
         {lineasHerramienta.length > 0 && (
           <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
-            <div className="bg-amber-50/60 dark:bg-amber-900/10 px-3 py-1.5 text-[11px] font-bold uppercase text-amber-700 dark:text-amber-300">
+            <div className="bg-ink-50 dark:bg-ink-800/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-300 border-b border-ink-200 dark:border-ink-800">
               Herramientas — se asignan al trabajador del solicitante
             </div>
             <table className="w-full text-sm">

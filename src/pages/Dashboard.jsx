@@ -2,9 +2,10 @@ import { useEffect, useState, useMemo, memo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  Users, Briefcase, FolderOpen, Zap, History, Cake, AlertTriangle,
-  ShieldAlert, FileText, IdCard, CheckCircle2, ChevronRight, Info,
-  UserPlus, FolderPlus, Calculator, Clock, Wallet,
+  Briefcase, History, Cake, AlertTriangle, FolderOpen,
+  ShieldAlert, FileText, IdCard, CheckCircle2, ChevronRight,
+  UserRoundPlus, UsersRound, FolderKanban, LayoutGrid, CalendarClock,
+  ReceiptText, HandCoins, ClipboardList, TrendingUp, Activity,
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -35,20 +36,13 @@ function greeting() {
   return 'Buenas noches'
 }
 
-// StatCard estilo SaaS: tarjeta blanca con icono monocromo en chip sutil. El
-// valor numérico es lo dominante; el color solo aparece como acento mínimo en
-// el chip del icono.
-function StatCard({ tone, label, value, Icon }) {
-  const iconTones = {
-    blue:   'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300',
-    green:  'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
-    purple: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
-    orange: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300',
-  }
-  const t = iconTones[tone] || iconTones.blue
+// StatCard estilo SaaS sobrio: tarjeta blanca con chip neutro monocromo. El
+// valor numérico es el protagonista; el icono distingue la métrica sin
+// recurrir a color.
+function StatCard({ label, value, Icon }) {
   return (
     <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4">
-      <div className={`h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 ${t}`}>
+      <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
         <Icon size={22} strokeWidth={1.8} />
       </div>
       <div className="min-w-0 flex-1">
@@ -167,27 +161,17 @@ function fmtFecha(iso) {
   }
 }
 
-// Acceso rápido: tarjeta neutra con un pequeño chip de color en el icono.
-// La superficie es siempre la misma (white/ink-900) para look unificado tipo
-// dashboard SaaS; el tono solo aparece como acento en el chip del icono.
-const QA_ICON_TONES = {
-  sky:     'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
-  emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
-  violet:  'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
-  amber:   'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
-  rose:    'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
-  slate:   'bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200',
-}
-
-function QuickAccessCard({ to, Icon, label, hint, tone = 'slate' }) {
-  const iconTone = QA_ICON_TONES[tone] || QA_ICON_TONES.slate
+// Acceso rápido: tarjeta neutra con chip de icono monocromo (slate). Sin
+// acentos de color para un look corporativo sobrio; el icono y el label son
+// los elementos diferenciadores.
+function QuickAccessCard({ to, Icon, label, hint }) {
   return (
     <Link
       to={to}
       className="group flex items-center gap-4 p-4 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all"
     >
-      <div className={`h-11 w-11 rounded-lg inline-flex items-center justify-center flex-shrink-0 ${iconTone}`}>
-        <Icon size={18} strokeWidth={2} />
+      <div className="h-11 w-11 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200 group-hover:bg-ink-200 dark:group-hover:bg-ink-700 transition-colors">
+        <Icon size={18} strokeWidth={1.8} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-tight">{label}</div>
@@ -287,21 +271,21 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-          <QuickAccessCard to="/empleados/nuevo" Icon={UserPlus} label="Nuevo empleado" hint="Alta de RRHH" tone="sky" />
-          <QuickAccessCard to="/proyectos" Icon={FolderPlus} label="Proyectos" hint="Crear / asignar" tone="violet" />
-          <QuickAccessCard to="/horas" Icon={Clock} label="Horas" hint="Reportes semanales" tone="emerald" />
-          <QuickAccessCard to="/prenomina" Icon={Calculator} label="Prenómina" hint="Generar / cerrar" tone="amber" />
-          <QuickAccessCard to="/prestamos" Icon={Wallet} label="Préstamos" hint="Otorgar / abonar" tone="rose" />
-          <QuickAccessCard to="/bitacora" Icon={History} label="Bitácora" hint="Auditoría" tone="slate" />
+          <QuickAccessCard to="/empleados/nuevo" Icon={UserRoundPlus} label="Nuevo empleado" hint="Alta de RRHH" />
+          <QuickAccessCard to="/proyectos" Icon={LayoutGrid} label="Proyectos" hint="Crear / asignar" />
+          <QuickAccessCard to="/horas" Icon={CalendarClock} label="Horas" hint="Reportes semanales" />
+          <QuickAccessCard to="/prenomina" Icon={ReceiptText} label="Prenómina" hint="Generar / cerrar" />
+          <QuickAccessCard to="/prestamos" Icon={HandCoins} label="Préstamos" hint="Otorgar / abonar" />
+          <QuickAccessCard to="/bitacora" Icon={ClipboardList} label="Bitácora" hint="Auditoría" />
         </div>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard tone="blue" label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={Users} />
-        <StatCard tone="green" label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={Briefcase} />
-        <StatCard tone="purple" label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderOpen} />
-        <StatCard tone="orange" label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={Zap} />
+        <StatCard label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={UsersRound} />
+        <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={TrendingUp} />
+        <StatCard label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderKanban} />
+        <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={Activity} />
       </div>
 
       {/* Charts */}

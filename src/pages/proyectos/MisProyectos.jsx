@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  FolderOpen, Search, ChevronDown, ChevronUp, Users, Clock, Hash, X,
+  FolderKanban, Search, ChevronDown, ChevronUp, Users, Clock, Hash, X,
 } from 'lucide-react'
 import {
   PageHeader, Input, EmptyState, Skeleton, Badge, Button,
@@ -19,7 +19,7 @@ function ProyectoCard({ proyecto, onOpenHoras }) {
       <div className="p-4">
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="min-w-0 flex-1">
-            <div className="inline-flex items-center gap-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-2 py-0.5 rounded">
+            <div className="inline-flex items-center gap-1.5 mb-1 text-[10px] font-bold uppercase tracking-wider text-ink-600 dark:text-ink-300 bg-ink-100 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 px-2 py-0.5 rounded">
               <Hash size={10} />
               {proyecto.numero_proyecto}
             </div>
@@ -124,7 +124,7 @@ export default function MisProyectos() {
   return (
     <>
       <PageHeader
-        icon={FolderOpen}
+        icon={FolderKanban}
         title="Mis Proyectos"
         description="Proyectos activos a tu cargo y el equipo asignado a cada uno."
       />
@@ -135,7 +135,7 @@ export default function MisProyectos() {
         </div>
       ) : proyectos.length === 0 ? (
         <EmptyState
-          icon={FolderOpen}
+          icon={FolderKanban}
           title="Sin proyectos asignados"
           description="No hay proyectos activos donde estés asignado como coordinador. Si esperabas ver alguno, contacta al administrador."
         />

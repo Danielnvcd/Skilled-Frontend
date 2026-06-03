@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  EmptyState, Input, Skeleton, Select,
+  Input, Skeleton, Select,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import {
@@ -232,7 +232,7 @@ export default function CatalogoProductos() {
   return (
     <div>
       <PageHeader
-        icon={Package}
+        icon={PackageSearch}
         title="Catálogo de Productos"
         description="Gestión del catálogo maestro de inventario."
         actions={
@@ -284,11 +284,11 @@ export default function CatalogoProductos() {
             return (
               <Card
                 key={cat}
-                className="overflow-hidden cursor-pointer hover:border-brand-500 transition-colors group"
+                className="overflow-hidden cursor-pointer hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all group"
                 onClick={() => setCategoriaFiltro(cat)}
               >
-                {/* Hero imagen o placeholder */}
-                <div className="relative h-32 bg-gradient-to-br from-brand-50 to-brand-100 dark:from-brand-900/30 dark:to-brand-800/20 overflow-hidden">
+                {/* Hero imagen o placeholder neutro */}
+                <div className="relative h-32 bg-ink-50 dark:bg-ink-800/50 overflow-hidden border-b border-ink-200 dark:border-ink-800">
                   {img ? (
                     <img
                       src={img}
@@ -297,8 +297,8 @@ export default function CatalogoProductos() {
                       onError={(e) => { e.currentTarget.style.display = 'none' }}
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-brand-300 dark:text-brand-700">
-                      <Package size={48} strokeWidth={1.5} />
+                    <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                      <Package size={44} strokeWidth={1.5} />
                     </div>
                   )}
                   <button
@@ -308,16 +308,17 @@ export default function CatalogoProductos() {
                       setCatModal({ mode: 'edit', nombre: cat, imagen_url: img || '', original: cat })
                     }}
                     title="Editar imagen"
-                    className="absolute top-2 right-2 w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-white dark:hover:bg-ink-900"
+                    className="absolute top-2 right-2 w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white dark:hover:bg-ink-900"
                   >
-                    <ImageIcon size={15} />
+                    <ImageIcon size={15} strokeWidth={1.8} />
                   </button>
                 </div>
                 <div className="p-4">
-                  <h3 className="font-bold text-ink-900 dark:text-ink-100">{cat}</h3>
-                  <p className="text-sm text-ink-500 mt-0.5">{prods.length} items</p>
+                  <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
+                  <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{prods.length} ítem{prods.length === 1 ? '' : 's'}</p>
                   {bajos > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-semibold rounded-md border border-red-200 dark:border-red-800">
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-[11px] font-semibold rounded-full ring-1 ring-inset ring-red-200 dark:ring-red-800/60">
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
                       {bajos} stock bajo
                     </div>
                   )}
@@ -342,11 +343,14 @@ export default function CatalogoProductos() {
       ) : (
         <div className="space-y-4">
           {categoriaFiltro && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button variant="secondary" size="sm" onClick={() => setCategoriaFiltro('')}>
                 ← Volver a categorías
               </Button>
-              <h2 className="text-lg font-bold text-ink-900 dark:text-ink-100 ml-2">{categoriaFiltro}</h2>
+              <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">{categoriaFiltro}</h2>
+              <span className="text-xs text-ink-500 dark:text-ink-400 tabular-nums">
+                {filtered.length} producto{filtered.length === 1 ? '' : 's'}
+              </span>
             </div>
           )}
           <Table>
@@ -370,13 +374,13 @@ export default function CatalogoProductos() {
                       </div>
                     )}
                   </TD>
-                  <TD className="font-mono text-sm">{p.codigo}</TD>
+                  <TD className="font-mono text-sm text-brand-700 dark:text-brand-300">{p.codigo}</TD>
                   <TD className="font-medium">{p.descripcion}</TD>
-                  <TD>{p.categoria}</TD>
+                  <TD className="text-sm text-ink-600 dark:text-ink-300">{p.categoria}</TD>
                   <TD>
                     <div className="flex flex-col">
                       <span
-                        className={p.stock_actual <= p.stock_minimo ? 'text-red-600 font-bold' : ''}
+                        className={`tabular-nums ${p.stock_actual <= p.stock_minimo ? 'text-red-600 dark:text-red-400 font-semibold' : ''}`}
                         title={
                           (p.stock_reservado || 0) > 0
                             ? `Stock total: ${p.stock_actual} · Apartado: ${p.stock_reservado} · Disponible: ${p.stock_disponible}`
@@ -385,38 +389,29 @@ export default function CatalogoProductos() {
                       >
                         {p.stock_disponible ?? p.stock_actual} {p.unidad}
                         {(p.stock_reservado || 0) > 0 && (
-                          <span className="ml-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
+                          <span className="ml-1 text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
                             ({p.stock_reservado} apart.)
                           </span>
                         )}
                       </span>
-                      <span className="text-[10px] text-ink-500">Mín: {p.stock_minimo}</span>
+                      <span className="text-[10px] text-ink-500 tabular-nums">Mín: {p.stock_minimo}</span>
                     </div>
                   </TD>
                   <TD align="right">
                     <div className="inline-flex items-center gap-1">
                       <Link to={`/inventario/productos/${p.id}/kardex`}>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Ver kardex (historial)"
-                        >
+                        <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)">
                           <History size={14} />
                         </Button>
                       </Link>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        title="Ver stock por bodega"
-                        onClick={() => setStocksModal(p)}
-                      >
+                      <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}>
                         <Warehouse size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => openEdit(p)}>
+                      <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}>
                         <Edit2 size={14} />
                       </Button>
-                      <Button variant="ghost" size="icon-sm" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}>
-                        <Trash2 size={14} className="text-red-600" />
+                      <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}>
+                        <Trash2 size={14} />
                       </Button>
                     </div>
                   </TD>

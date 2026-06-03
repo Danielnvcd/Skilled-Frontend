@@ -43,7 +43,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-6 dark overflow-hidden font-['Inter'] bg-black">
+    <div className="min-h-screen relative flex items-center justify-center p-6 dark overflow-hidden font-['Inter'] bg-ink-950 login-enter">
       {/* Video de fondo */}
       <video
         autoPlay
@@ -58,65 +58,66 @@ export default function Login() {
         <source src="/login-bg.mp4" type="video/mp4" />
       </video>
 
-      {/* Overlay para legibilidad del formulario sobre el video */}
-      <div className="absolute inset-0 z-0 bg-gradient-to-br from-black/70 via-black/55 to-brand-950/70" />
-      <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,0,0,0)_0%,_rgba(0,0,0,0.55)_100%)]" />
+      {/* Overlay sobrio: oscurece el video sin tintes vibrantes. */}
+      <div className="absolute inset-0 z-0 bg-ink-950/70" />
 
       <div className="relative z-10 w-full max-w-md">
-        <div className="rounded-2xl border border-white/15 bg-white/[0.06] backdrop-blur-2xl backdrop-saturate-150 p-8 sm:p-10 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-white/5">
-          <div className="flex flex-col items-center text-center mb-10">
+        {/* Card sobria: panel slate semi-opaco, mismo lenguaje que las cards del
+            dashboard (border-ink-800 + rounded-xl). Suficiente blur para
+            legibilidad sin look glassy excesivo. */}
+        <div className="rounded-xl border border-ink-800 bg-ink-900/90 backdrop-blur-md p-8 sm:p-10">
+          <div className="flex flex-col items-center text-center mb-8">
             <img
               src="/logo1.png"
               alt="Skilled"
-              className="h-16 max-w-[240px] object-contain mb-6 drop-shadow-[0_4px_16px_rgba(0,0,0,0.5)]"
+              className="h-14 max-w-[220px] object-contain mb-6"
               draggable={false}
             />
-            <h1 className="text-2xl font-bold text-white tracking-tight">Bienvenido de vuelta</h1>
-            <p className="mt-2 text-sm text-white/60">
+            <h1 className="text-2xl font-semibold text-ink-100 tracking-tight">Bienvenido de vuelta</h1>
+            <p className="mt-1.5 text-sm text-ink-400">
               Ingresa tus credenciales para acceder a la plataforma.
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
               <div
                 role="alert"
-                className="flex items-start gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-200 animate-fade-in"
+                className="flex items-start gap-2.5 rounded-lg border border-red-800/60 bg-red-900/20 px-3.5 py-2.5 text-sm text-red-300 animate-fade-in"
               >
-                <AlertCircle size={16} className="text-red-300 mt-0.5 flex-shrink-0" />
+                <AlertCircle size={16} className="text-red-400 mt-0.5 flex-shrink-0" />
                 <span className="leading-snug">{error}</span>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-white/70 uppercase tracking-wider ml-1">Usuario</label>
+              <label className="text-xs font-semibold text-ink-400 uppercase tracking-wider ml-0.5">Usuario</label>
               <Input
                 name="username"
                 type="text"
                 autoComplete="username"
                 value={username}
                 onChange={(e) => { setUsername(e.target.value); if (error) setError('') }}
-                leftIcon={<User size={16} className="text-white/40" />}
+                leftIcon={<User size={16} />}
                 required
                 placeholder="ejemplo.usuario"
-                className="bg-white/5 border-white/10 text-white placeholder:text-white/30 h-11"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-white/70 uppercase tracking-wider ml-1">Contraseña</label>
+              <label className="text-xs font-semibold text-ink-400 uppercase tracking-wider ml-0.5">Contraseña</label>
               <Input
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); if (error) setError('') }}
-                leftIcon={<Lock size={16} className="text-white/40" />}
+                leftIcon={<Lock size={16} />}
                 rightIcon={
                   <button
                     type="button"
                     onClick={() => setShowPassword((s) => !s)}
-                    className="pointer-events-auto text-white/40 hover:text-white transition-colors"
+                    className="pointer-events-auto text-ink-400 hover:text-ink-200 transition-colors"
                     tabIndex={-1}
                   >
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -124,37 +125,37 @@ export default function Login() {
                 }
                 required
                 placeholder="••••••••"
-                className="bg-white/5 border-white/10 text-white placeholder:text-white/30 h-11"
               />
             </div>
 
-            <label className="flex items-center gap-2 select-none cursor-pointer text-sm text-white/70 hover:text-white/90 transition-colors">
+            <label className="flex items-center gap-2 select-none cursor-pointer text-sm text-ink-300 hover:text-ink-100 transition-colors pt-1">
               <input
                 type="checkbox"
                 checked={remember}
                 onChange={(e) => setRemember(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-white/5 text-white accent-white focus:ring-1 focus:ring-white/40 cursor-pointer"
+                className="h-4 w-4 rounded border-ink-600 bg-ink-800 text-brand-500 focus:ring-2 focus:ring-brand-500/30 cursor-pointer"
               />
               Recordarme
             </label>
 
             <Button
               type="submit"
+              variant="primary"
               loading={loading}
               size="lg"
-              className="w-full h-11 mt-4 bg-white text-black hover:bg-white/90 font-bold tracking-wide transition-all active:scale-[0.98]"
+              className="w-full mt-2"
             >
               Iniciar sesión
             </Button>
           </form>
 
-          <div className="mt-8 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-white/40 font-bold border-t border-white/5 pt-8">
+          <div className="mt-8 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-ink-500 font-semibold border-t border-ink-800 pt-6">
             <ShieldCheck size={14} className="text-brand-400" />
             Conexión segura
           </div>
         </div>
 
-        <p className="mt-8 text-center text-xs text-white/30">
+        <p className="mt-6 text-center text-xs text-ink-500">
           ¿Problemas para acceder? Contacta a soporte técnico.
         </p>
       </div>

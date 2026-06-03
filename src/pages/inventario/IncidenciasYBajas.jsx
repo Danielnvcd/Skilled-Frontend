@@ -89,14 +89,17 @@ export default function IncidenciasYBajas() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader title="Incidencias y Solicitudes de Baja"
+      <PageHeader icon={AlertTriangle}
+                  title="Incidencias y Solicitudes de Baja"
                   description="Bandeja de entrada para inventario" />
 
       <div className="flex gap-1 border-b border-ink-200 dark:border-ink-800">
         {TABS.map((t) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm border-b-2 -mb-px transition-colors ${
-              tab === t ? 'border-brand-400 text-white font-medium' : 'border-transparent text-ink-500 dark:text-ink-400 hover:text-ink-900 dark:hover:text-white'
+            className={`px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors ${
+              tab === t
+                ? 'border-brand-700 text-brand-700 dark:border-brand-400 dark:text-brand-300'
+                : 'border-transparent text-ink-500 dark:text-ink-400 hover:text-ink-800 dark:hover:text-ink-200'
             }`}>
             {t === 'incidencias' ? 'Incidencias' : 'Solicitudes de baja'}
           </button>
@@ -135,7 +138,7 @@ export default function IncidenciasYBajas() {
                     <TR key={i.id}>
                       <TD>
                         <Link to={`/inventario/herramientas/unidades/${i.unidad_id}`}
-                              className="text-brand-300 hover:text-brand-200 font-mono text-xs">
+                              className="text-brand-700 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200 font-mono font-semibold text-xs">
                           #{i.unidad_id}
                         </Link>
                       </TD>
@@ -193,7 +196,7 @@ export default function IncidenciasYBajas() {
                     <TR key={b.id}>
                       <TD>
                         <Link to={`/inventario/herramientas/unidades/${b.unidad_id}`}
-                              className="text-brand-300 hover:text-brand-200 font-mono text-xs">
+                              className="text-brand-700 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200 font-mono font-semibold text-xs">
                           #{b.unidad_id}
                         </Link>
                       </TD>
@@ -269,7 +272,7 @@ function ModalAtender({ inc, onClose, onDone }) {
         <div>
           <label className="text-xs font-medium uppercase tracking-wider text-ink-600 dark:text-ink-300 mb-1 block">Resolución</label>
           <textarea value={resolucion} onChange={(e) => setResolucion(e.target.value)} rows={3} maxLength={2000}
-                    className="w-full rounded-md bg-ink-50 dark:bg-ink-800/50 border border-ink-200 dark:border-ink-800 px-3 py-2 text-sm" />
+                    className="w-full rounded-md bg-white dark:bg-ink-800/50 border border-ink-200 dark:border-ink-700 px-3 py-2 text-sm text-ink-900 dark:text-ink-100 placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none resize-none" />
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
-  Plus, Search, Pencil, FolderOpen, Folder, Users as UsersIcon,
+  Plus, Search, Pencil, FolderKanban, Folder, Users as UsersIcon,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, TBody, TR, TD,
@@ -11,20 +11,6 @@ import { useAuth } from '../../context/AuthContext'
 import { listarProyectos } from '../../api/proyectos'
 import { useResource } from '../../hooks/useResource'
 import ProyectoFormModal from './ProyectoFormModal'
-
-const ICON_PALETTE = [
-  'from-amber-400 to-amber-500',
-  'from-indigo-500 to-indigo-400',
-  'from-cyan-500 to-cyan-400',
-  'from-blue-600 to-blue-400',
-  'from-rose-500 to-rose-400',
-  'from-emerald-600 to-emerald-400',
-]
-
-function iconClass(p) {
-  if (!p.activo) return 'from-ink-400 to-ink-300'
-  return ICON_PALETTE[p.id % ICON_PALETTE.length]
-}
 
 function fmtFechaCorta(iso) {
   if (!iso) return '—'
@@ -86,7 +72,7 @@ export default function ProyectosList() {
   return (
     <>
       <PageHeader
-        icon={FolderOpen}
+        icon={FolderKanban}
         title="Gestión de Proyectos"
         description="Administra los proyectos de la empresa, coordinadores y personal asignado."
         actions={
@@ -136,7 +122,7 @@ export default function ProyectosList() {
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          icon={FolderOpen}
+          icon={FolderKanban}
           title={q || estado !== 'todos' ? 'Sin resultados' : 'Sin proyectos registrados'}
           description={q || estado !== 'todos' ? 'Ningún proyecto coincide con los filtros.' : 'Comienza dando de alta un proyecto.'}
           action={isAdmin && !q && estado === 'todos' ? (
@@ -156,18 +142,22 @@ export default function ProyectosList() {
           </THead>
           <TBody>
             {items.map((p) => {
-              const IconCmp = p.activo ? FolderOpen : Folder
+              const IconCmp = p.activo ? FolderKanban : Folder
               return (
                 <TR key={p.id}>
                   <TD>
-                    <span className="inline-block px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700/60">
+                    <span className="inline-block px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-ink-100 text-ink-700 border border-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700">
                       {p.numero_proyecto}
                     </span>
                   </TD>
                   <TD>
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className={`flex-shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg text-white bg-gradient-to-br ${iconClass(p)}`}>
-                        <IconCmp size={16} />
+                      <span className={`flex-shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-lg ${
+                        p.activo
+                          ? 'bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200'
+                          : 'bg-ink-50 text-ink-400 dark:bg-ink-800/50 dark:text-ink-500'
+                      }`}>
+                        <IconCmp size={15} strokeWidth={1.8} />
                       </span>
                       <div className="min-w-0">
                         <div className="font-semibold text-ink-900 dark:text-ink-100 truncate">{p.nombre || '—'}</div>

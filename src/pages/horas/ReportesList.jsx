@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  Plus, Search, Clock, FileText, ChevronRight, Calendar, Layers,
-  Pencil, Eye, CheckCircle2, FileCheck2, Lock, X,
+  Plus, Search, CalendarClock, FileText, ChevronRight, Calendar, Layers,
+  Pencil, Eye, FileCheck2, Lock, X,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, EmptyState, Pagination, Skeleton,
+  PageHeader, Button, Input, EmptyState, Pagination, Skeleton, Badge,
 } from '../../components/ui'
 import { listarReportes } from '../../api/horas'
 import { useResource } from '../../hooks/useResource'
@@ -14,65 +14,37 @@ import AbrirReporteModal from './AbrirReporteModal'
 
 const PER_PAGE = 20
 
-// ── Helpers de estado ────────────────────────────────────────────────────────
-
+// ── Estado del reporte ───────────────────────────────────────────────────────
+// Cada estado fija su tono de Badge + borde de la card. La paleta es sobria
+// (warning/success/info) y el botón de acción usa los variantes del Button
+// del design system — sin gradientes ni colores por estado.
 const ESTADOS = {
   BORRADOR: {
-    label: 'En captura',
-    short: 'Borrador',
-    accent: 'amber',
-    icon: Pencil,
+    label:      'En captura',
+    badgeTone:  'warning',
+    border:     'border-l-amber-500',
+    icon:       Pencil,
+    btnLabel:   'Capturar',
+    btnVariant: 'primary',
+    BtnIcon:    Pencil,
   },
   TERMINADO: {
-    label: 'Listo para nómina',
-    short: 'Terminado',
-    accent: 'emerald',
-    icon: CheckCircle2,
+    label:      'Listo para nómina',
+    badgeTone:  'success',
+    border:     'border-l-emerald-500',
+    icon:       FileCheck2,
+    btnLabel:   'Ver detalle',
+    btnVariant: 'secondary',
+    BtnIcon:    Eye,
   },
   PRENOMINA_CERRADA: {
-    label: 'Nómina cerrada',
-    short: 'Cerrada',
-    accent: 'sky',
-    icon: Lock,
-  },
-}
-
-const ACCENT_CLASSES = {
-  amber: {
-    barBg: 'bg-amber-500',
-    chipBg: 'bg-amber-50 dark:bg-amber-900/30',
-    chipText: 'text-amber-800 dark:text-amber-300',
-    chipRing: 'ring-amber-200 dark:ring-amber-700/60',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300',
-    cardSelected: 'border-amber-300 dark:border-amber-700/70 bg-amber-50/60 dark:bg-amber-900/10',
-    btn: 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 text-white',
-  },
-  emerald: {
-    barBg: 'bg-emerald-500',
-    chipBg: 'bg-emerald-50 dark:bg-emerald-900/30',
-    chipText: 'text-emerald-800 dark:text-emerald-300',
-    chipRing: 'ring-emerald-200 dark:ring-emerald-700/60',
-    iconBg: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300',
-    cardSelected: 'border-emerald-300 dark:border-emerald-700/70 bg-emerald-50/60 dark:bg-emerald-900/10',
-    btn: 'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white',
-  },
-  sky: {
-    barBg: 'bg-sky-500',
-    chipBg: 'bg-sky-50 dark:bg-sky-900/30',
-    chipText: 'text-sky-800 dark:text-sky-300',
-    chipRing: 'ring-sky-200 dark:ring-sky-700/60',
-    iconBg: 'bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300',
-    cardSelected: 'border-sky-300 dark:border-sky-700/70 bg-sky-50/60 dark:bg-sky-900/10',
-    btn: 'bg-sky-600 hover:bg-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 text-white',
-  },
-  brand: {
-    barBg: 'bg-brand-500',
-    chipBg: 'bg-brand-50 dark:bg-brand-900/40',
-    chipText: 'text-brand-800 dark:text-brand-200',
-    chipRing: 'ring-brand-200 dark:ring-brand-700/60',
-    iconBg: 'bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300',
-    cardSelected: 'border-brand-300 dark:border-brand-700/70 bg-brand-50/60 dark:bg-brand-900/10',
-    btn: 'bg-brand-600 hover:bg-brand-700 dark:bg-brand-600 dark:hover:bg-brand-500 text-white',
+    label:      'Nómina cerrada',
+    badgeTone:  'info',
+    border:     'border-l-sky-500',
+    icon:       Lock,
+    btnLabel:   'Ver detalle',
+    btnVariant: 'secondary',
+    BtnIcon:    Eye,
   },
 }
 
@@ -97,68 +69,58 @@ function fmtRango(inicio, fin) {
   return `${ini} — ${finStr} ${yf}`
 }
 
-// ── KPI cards ────────────────────────────────────────────────────────────────
-
-function FiltroKPI({ active, accent, icon: Icon, label, count, onClick }) {
-  const a = ACCENT_CLASSES[accent]
+// ── KPI cards (clickables como filtro) ───────────────────────────────────────
+// Mismo lenguaje que las stat cards del Dashboard: chip neutro slate + número
+// dominante. La selección se indica con ring brand, sin cambiar el fondo.
+function FiltroKPI({ active, icon: Icon, label, count, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex-1 min-w-[150px] rounded-xl border bg-white dark:bg-ink-900 p-4 text-left transition-all focus-ring hover:shadow-card hover:-translate-y-0.5 ${
+      className={`px-4 py-3 rounded-xl border text-left transition-colors bg-white dark:bg-ink-900 flex items-center gap-3 focus-ring ${
         active
-          ? `${a.cardSelected} shadow-card`
-          : 'border-ink-200 dark:border-ink-800'
+          ? 'border-brand-600 ring-1 ring-brand-500/30'
+          : 'border-ink-200 dark:border-ink-800 hover:border-ink-300 dark:hover:border-ink-700'
       }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className={`h-9 w-9 rounded-lg ${a.iconBg} flex items-center justify-center`}>
-          <Icon size={18} />
-        </div>
-        {active && (
-          <span className="text-[10px] uppercase tracking-wider font-bold text-ink-500 dark:text-ink-400">
-            Filtrando
-          </span>
-        )}
+      <div className="inline-flex items-center justify-center h-10 w-10 rounded-lg bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200 flex-shrink-0">
+        <Icon size={18} strokeWidth={1.8} />
       </div>
-      <div className="mt-3">
-        <div className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100">{count}</div>
-        <div className="text-xs text-ink-600 dark:text-ink-400 font-medium mt-0.5">{label}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">{count}</div>
+        <div className="text-[11px] font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400 mt-1 truncate">{label}</div>
       </div>
     </button>
   )
 }
 
 // ── Reporte card ─────────────────────────────────────────────────────────────
-
+// Card sobrio con borde-izq de color como único acento del estado. Badge y
+// botón usan componentes del design system para unificar look y a11y.
 function ReporteCard({ reporte, onOpen }) {
-  const meta = ESTADOS[reporte.estado] || { label: reporte.estado, accent: 'brand', icon: FileText }
-  const accent = ACCENT_CLASSES[meta.accent]
-  const Icon = meta.icon
-  const isEditable = reporte.estado === 'BORRADOR'
+  const meta = ESTADOS[reporte.estado] || {
+    label: reporte.estado, badgeTone: 'neutral', border: 'border-l-ink-400',
+    btnLabel: 'Ver detalle', btnVariant: 'secondary', BtnIcon: Eye,
+  }
+  const BtnIcon = meta.BtnIcon
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(reporte.id)}
-      className="group relative w-full flex items-stretch overflow-hidden rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-brand-300 dark:hover:border-brand-700/60 hover:shadow-card transition-all focus-ring text-left"
+    <div
+      className={`group relative w-full overflow-hidden rounded-xl border border-ink-200 dark:border-ink-800 border-l-[3px] ${meta.border} bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all`}
     >
-      {/* Barra lateral de color */}
-      <div className={`w-1.5 flex-shrink-0 ${accent.barBg}`} />
-
-      <div className="flex-1 min-w-0 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
-        {/* Info principal */}
+      <button
+        type="button"
+        onClick={() => onOpen(reporte.id)}
+        className="w-full text-left p-4 flex flex-col sm:flex-row sm:items-center gap-3 focus-ring"
+      >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-bold font-mono ${accent.chipBg} ${accent.chipText} ring-1 ring-inset ${accent.chipRing}`}>
+          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+            <span className="inline-block px-2 py-0.5 rounded-md text-xs font-mono font-semibold bg-ink-100 text-ink-700 border border-ink-200 dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700">
               {reporte.proyecto?.numero_proyecto || '—'}
             </span>
-            <span className={`inline-flex items-center gap-1 text-xs font-semibold ${accent.chipText}`}>
-              <Icon size={12} />
-              {meta.label}
-            </span>
+            <Badge tone={meta.badgeTone} dot>{meta.label}</Badge>
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-ink-900 dark:text-ink-100 truncate">
+          <h3 className="text-base font-semibold text-ink-900 dark:text-ink-100 truncate">
             {reporte.proyecto?.nombre || 'Sin nombre'}
           </h3>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-ink-500 dark:text-ink-400">
@@ -178,22 +140,19 @@ function ReporteCard({ reporte, onOpen }) {
           </div>
         </div>
 
-        {/* Acción */}
-        <div className="flex-shrink-0">
-          <span
-            className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-md text-sm font-semibold transition-colors ${
-              isEditable
-                ? accent.btn
-                : 'bg-ink-100 dark:bg-ink-800 text-ink-700 dark:text-ink-200 group-hover:bg-ink-200 dark:group-hover:bg-ink-700'
-            }`}
-          >
-            {isEditable ? <Pencil size={14} /> : <Eye size={14} />}
-            {isEditable ? 'Capturar' : 'Ver detalle'}
-            <ChevronRight size={14} className="ml-0.5" />
-          </span>
-        </div>
-      </div>
-    </button>
+        <span
+          className={`flex-shrink-0 self-start sm:self-center inline-flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-semibold transition-colors ${
+            meta.btnVariant === 'primary'
+              ? 'bg-brand-800 text-white group-hover:bg-brand-900 dark:bg-brand-600 dark:group-hover:bg-brand-500'
+              : 'bg-white text-ink-700 border border-ink-200 group-hover:bg-ink-50 group-hover:border-ink-300 dark:bg-ink-800 dark:text-ink-200 dark:border-ink-700 dark:group-hover:bg-ink-700'
+          }`}
+        >
+          <BtnIcon size={14} />
+          {meta.btnLabel}
+          <ChevronRight size={14} className="ml-0.5" />
+        </span>
+      </button>
+    </div>
   )
 }
 
@@ -281,7 +240,7 @@ export default function ReportesList() {
   return (
     <>
       <PageHeader
-        icon={Clock}
+        icon={CalendarClock}
         title="Reporte de Horas"
         description="Captura semanal por proyecto. Abre, registra y envía a prenómina cuando termines."
         actions={
@@ -295,7 +254,6 @@ export default function ReportesList() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
         <FiltroKPI
           active={estado === 'BORRADOR'}
-          accent="amber"
           icon={Pencil}
           label="En captura"
           count={stats.borrador}
@@ -303,7 +261,6 @@ export default function ReportesList() {
         />
         <FiltroKPI
           active={estado === 'TERMINADO'}
-          accent="emerald"
           icon={FileCheck2}
           label="Listos para nómina"
           count={stats.terminado}
@@ -311,7 +268,6 @@ export default function ReportesList() {
         />
         <FiltroKPI
           active={estado === 'PRENOMINA_CERRADA'}
-          accent="sky"
           icon={Lock}
           label="Nómina cerrada"
           count={stats.cerrada}

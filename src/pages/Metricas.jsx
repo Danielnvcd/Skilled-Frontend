@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState, memo } from 'react'
 import toast from 'react-hot-toast'
 import {
   BarChart3, Users, IdCard, Factory, FileBadge,
-  CheckCircle2, AlertTriangle, Clock, Search,
+  AlertTriangle, Clock, Search,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import {
-  Card, PageHeader, Skeleton, Badge,
+  PageHeader, Skeleton, Badge,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui'
 import { useTheme } from '../context/ThemeContext'
@@ -17,28 +17,29 @@ import { getMetricas } from '../api/metricas'
 import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
 
+// Paleta sobria 5 tonos (igual al Dashboard) en lugar de 12 saturados. El
+// neutro slate se reutiliza al rotar para evitar ruido visual cuando hay
+// muchas barras.
 const CHART_COLORS = [
-  '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444',
-  '#06b6d4', '#ec4899', '#14b8a6', '#f97316', '#6366f1',
-  '#84cc16', '#a855f7',
+  '#0ea5e9', // sky-500
+  '#10b981', // emerald-500
+  '#8b5cf6', // violet-500
+  '#f59e0b', // amber-500
+  '#64748b', // slate-500 — neutro
 ]
 
-function StatCard({ tone, label, value, Icon }) {
-  const tones = {
-    blue:   { border: 'border-l-sky-500',     iconWrap: 'bg-sky-50 text-sky-600 dark:bg-sky-900/30 dark:text-sky-300' },
-    green:  { border: 'border-l-emerald-500', iconWrap: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300' },
-    purple: { border: 'border-l-violet-500',  iconWrap: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300' },
-    amber:  { border: 'border-l-amber-500',   iconWrap: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300' },
-  }
-  const t = tones[tone] || tones.blue
+// StatCard sobrio: chip neutro slate, sin borde lateral colorido. Mismo
+// patrón que el Dashboard para que las dos páginas se sientan parte del
+// mismo producto.
+function StatCard({ label, value, Icon }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 border-l-4 ${t.border} p-5 flex items-center gap-4 shadow-card`}>
-      <div className={`h-12 w-12 rounded-full inline-flex items-center justify-center flex-shrink-0 ${t.iconWrap}`}>
-        <Icon size={20} />
+    <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4">
+      <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+        <Icon size={22} strokeWidth={1.8} />
       </div>
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">{label}</p>
-        <p className="text-2xl font-bold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
+        <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
       </div>
     </div>
   )
@@ -46,10 +47,10 @@ function StatCard({ tone, label, value, Icon }) {
 
 function Panel({ title, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 shadow-card ${className}`}>
-      <div className="flex items-center justify-between gap-2 border-b border-ink-100 dark:border-ink-800 pb-3 mb-4">
-        <div className="flex items-center gap-2 text-ink-700 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-500 dark:text-ink-400" />}
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
+        <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
+          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
           {title}
         </div>
         {action}
@@ -271,10 +272,10 @@ export default function Metricas() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard tone="blue"   label="Empleados activos"        value={totales.empleados_activos ?? 0} Icon={Users} />
-        <StatCard tone="green"  label="Con credencial de planta" value={totales.con_credencial ?? 0}    Icon={IdCard} />
-        <StatCard tone="purple" label="Plantas activas"          value={totales.total_plantas ?? 0}     Icon={Factory} />
-        <StatCard tone="amber"  label="Con permiso DC3"          value={totales.con_dc3 ?? 0}           Icon={FileBadge} />
+        <StatCard label="Empleados activos"        value={totales.empleados_activos ?? 0} Icon={Users} />
+        <StatCard label="Con credencial de planta" value={totales.con_credencial ?? 0}    Icon={IdCard} />
+        <StatCard label="Plantas activas"          value={totales.total_plantas ?? 0}     Icon={Factory} />
+        <StatCard label="Con permiso DC3"          value={totales.con_dc3 ?? 0}           Icon={FileBadge} />
       </div>
 
       {/* Gráficas */}
@@ -346,7 +347,7 @@ export default function Metricas() {
                   <TBody>
                     {trabPlantaActiva.map((t, idx) => (
                       <TR key={`${activePlanta}-${t.no_empleado}-${idx}`}>
-                        <TD className="font-bold text-sky-600 dark:text-sky-400">{t.no_empleado}</TD>
+                        <TD className="font-mono font-semibold text-brand-700 dark:text-brand-300">{t.no_empleado}</TD>
                         <TD className="font-medium">{t.nombre}</TD>
                         <TD>{t.puesto}</TD>
                         <TD>
@@ -411,7 +412,7 @@ export default function Metricas() {
                   <TBody>
                     {filteredDC3.map((t, idx) => (
                       <TR key={`${t.no_empleado}-${idx}`}>
-                        <TD className="font-bold text-sky-600 dark:text-sky-400">{t.no_empleado}</TD>
+                        <TD className="font-mono font-semibold text-brand-700 dark:text-brand-300">{t.no_empleado}</TD>
                         <TD className="font-medium">{t.nombre}</TD>
                         <TD>{t.puesto}</TD>
                         <TD>{fmtFecha(t.fecha_fin)}</TD>
