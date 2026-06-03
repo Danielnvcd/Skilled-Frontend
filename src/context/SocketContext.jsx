@@ -41,16 +41,12 @@ export function SocketProvider({ children }) {
       path: '/socket.io',
       // WebSocket-only — saltamos la fase de polling de Socket.IO.
       //
-      // Prod usa gunicorn con 4 workers (--worker-class gthread). Cada worker
-      // tiene su propia tabla de sesiones engineio en memoria; el polling
-      // requiere que TODAS las requests del mismo sid lleguen al MISMO worker
-      // (sticky sessions). Como gunicorn + un solo bind no soporta sticky
-      // sessions, los poll-requests rebotan con 400 cuando caen en otro
-      // worker. WebSocket no tiene este problema: una vez abierta la conexión
-      // es persistente y vive en un único worker.
-      //
-      // Si en algún proxy futuro el Upgrade fallara, la alternativa es bajar
-      // a --workers 1 (en Gunicorn .config) y devolver 'polling' a esta lista.
+      // Prod usa gunicorn con 4 workers + worker-class geventwebsocket. El
+      // polling de Socket.IO requiere sticky sessions (cada sid debe pegar
+      // siempre al mismo worker), y gunicorn con un solo bind no las soporta.
+      // WebSocket sí: una vez abierto, la conexión es persistente en un único
+      // worker. Con Redis como message_queue cualquier worker puede emitir a
+      // cualquier sala, independiente de dónde viva el socket.
       transports: ['websocket'],
       withCredentials: true,
       reconnection: true,
