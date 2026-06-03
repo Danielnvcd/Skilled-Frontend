@@ -12,6 +12,7 @@ import {
   getCategorias, getProductos, getProductosDeEstante, setProductosDeEstante,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useSocket } from '../../context/SocketContext'
 
 export default function AlmacenesEstantes() {
   const [almacenes, setAlmacenes] = useState([])
@@ -66,6 +67,22 @@ export default function AlmacenesEstantes() {
       setEstantes([])
     }
   }, [selectedAlmacen])
+
+  // Realtime: refresca cuando otro admin edita almacenes o estantes. Filtra
+  // estantes por almacen seleccionado para no recargar la lista actual si el
+  // cambio fue en otro almacén.
+  const { on } = useSocket()
+  useEffect(() => {
+    const offAlm = on('almacen:changed', () => loadAlmacenes())
+    const offEst = on('estante:changed', (payload) => {
+      if (!selectedAlmacen) return
+      const almId = payload?.almacen_id
+      if (almId == null || Number(almId) === selectedAlmacen.id) {
+        loadEstantes(selectedAlmacen.id)
+      }
+    })
+    return () => { offAlm(); offEst() }
+  }, [on, selectedAlmacen])
 
   // --- Handlers Almacen ---
   const handleSaveAlmacen = async (e) => {

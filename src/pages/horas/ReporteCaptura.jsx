@@ -7,6 +7,7 @@ import {
 } from '../../components/ui'
 import { detalleReporte, cerrarReporte } from '../../api/horas'
 import { useResource } from '../../hooks/useResource'
+import { useSocket } from '../../context/SocketContext'
 import RegistroModal from './RegistroModal'
 import PegarExcelModal from './PegarExcelModal'
 import CapturaMovil from './CapturaMovil'
@@ -45,9 +46,9 @@ export default function ReporteCaptura() {
   const [pegarOpen, setPegarOpen] = useState(false)
 
   // `reporte:lista_changed` cubre el caso "admin cerró el reporte / cambió
-  // estado" mientras el coord lo tenía abierto. Los cambios de registros
-  // internos (otro coord capturando) van por sala (reporte:registros_cambio)
-  // y se mantiene la actualización optimista local vía refetch tras mutar.
+  // estado" mientras el coord lo tenía abierto (broadcast a admins/coords).
+  // Los eventos por sala (`reporte:{id}`) los manejamos abajo con join +
+  // listeners para ver capturas en vivo de otro coordinador.
   const {
     data: reporte,
     loading,
@@ -58,6 +59,25 @@ export default function ReporteCaptura() {
     () => detalleReporte(id),
     { staleMs: 30_000, invalidateOn: ['reporte:lista_changed'] },
   )
+
+  // Colaboración en vivo: nos unimos a la sala `reporte:{id}` para recibir
+  // `reporte:registros_cambio` y `reporte:estado_cambio` cuando otro usuario
+  // edita el mismo reporte. El backend valida acceso en el handler join:reporte
+  // (admins ven todo; coordinador solo sus proyectos).
+  const { socket, connected } = useSocket()
+  useEffect(() => {
+    if (!socket || !connected || !id) return
+    socket.emit('join:reporte', { reporte_id: Number(id) })
+
+    const onRegistros = () => { refetch() }
+    const onEstado = () => { refetch() }
+    socket.on('reporte:registros_cambio', onRegistros)
+    socket.on('reporte:estado_cambio', onEstado)
+    return () => {
+      socket.off('reporte:registros_cambio', onRegistros)
+      socket.off('reporte:estado_cambio', onEstado)
+    }
+  }, [socket, connected, id, refetch])
 
   useEffect(() => {
     if (error) {
