@@ -25,7 +25,7 @@ api.interceptors.request.use((config) => {
 
 let refreshPromise = null
 
-function performRefresh() {
+export function performRefresh() {
   if (!refreshPromise) {
     refreshPromise = api
       .post('/auth/refresh')

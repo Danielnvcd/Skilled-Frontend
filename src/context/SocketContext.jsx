@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { io } from 'socket.io-client'
 import { useAuth } from './AuthContext'
+import { performRefresh } from '../api/axios'
 
 const SocketContext = createContext({ socket: null, connected: false, on: () => () => {} })
 
@@ -57,7 +58,36 @@ export function SocketProvider({ children }) {
 
     s.on('connect', () => setConnected(true))
     s.on('disconnect', () => setConnected(false))
-    s.on('connect_error', () => setConnected(false))
+
+    // Cuando un timer de refresh proactivo se throttlea en una pestaña
+    // background, el token en localStorage puede haber expirado para cuando
+    // el WS intenta reconectar. El backend rechaza el handshake (token
+    // inválido → ConnectionRefusedError 'token_expired') y socket.io-client
+    // reporta connect_error. Aquí refrescamos el token y dejamos que la
+    // reconexión automática (reconnection: true) tome el token fresco vía
+    // el callback de `auth` en el próximo intento.
+    //
+    // Si el refresh falla (ej. cookie de refresh también expiró), no hacemos
+    // nada extra: el siguiente request HTTP disparará bounceToLogin desde el
+    // interceptor de axios. No queremos forzar logout aquí porque un blip de
+    // red transitorio no debería patear al usuario.
+    let refreshingFromSocket = false
+    s.on('connect_error', async (err) => {
+      setConnected(false)
+      const msg = (err && (err.message || err.data)) || ''
+      const looksLikeAuth =
+        typeof msg === 'string' &&
+        /token|auth|unauth|forbidden|refused/i.test(msg)
+      if (!looksLikeAuth || refreshingFromSocket) return
+      refreshingFromSocket = true
+      try {
+        await performRefresh()
+      } catch {
+        // Refresh falló — no escalamos; el interceptor de axios lo manejará.
+      } finally {
+        refreshingFromSocket = false
+      }
+    })
 
     // Pulso de presencia. Mantiene `user.last_seen` fresco en el backend
     // mientras el SPA esté abierto (incluso si el usuario solo lee, sin
@@ -66,9 +96,31 @@ export function SocketProvider({ children }) {
       if (s.connected) s.emit('heartbeat')
     }, 90_000)
 
+    // Al volver el foco a la pestaña, si el socket quedó desconectado por
+    // expiración de token mientras estaba en background, refrescamos el token
+    // y forzamos el reconnect (socket.io no reintenta agresivamente si la
+    // pestaña estaba background — el callback de auth ya leerá el nuevo
+    // token de localStorage en el siguiente handshake).
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return
+      if (s.connected) return
+      try {
+        await performRefresh()
+      } catch {
+        // Igual que arriba — no escalamos por un fallo de refresh.
+      }
+      try {
+        s.connect()
+      } catch {
+        // socket.io tira si ya está conectando; lo ignoramos.
+      }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
     setSocket(s)
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisible)
       clearInterval(heartbeatId)
       s.removeAllListeners()
       s.disconnect()
