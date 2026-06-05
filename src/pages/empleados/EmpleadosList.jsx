@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   Plus, Search, Upload, Download, Pencil, UserMinus, UserCheck,
   FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard, X,
+  MoreHorizontal, FileDown,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Table, THead, TH, TBody, TR, TD,
@@ -13,8 +14,11 @@ import { useAuth } from '../../context/AuthContext'
 import {
   listarTrabajadores, darBajaTrabajador, reactivarTrabajador,
   exportarTodos, bulkAccionTrabajadores, exportarSeleccion,
+  exportarEmpleado,
 } from '../../api/trabajadores'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
+import CredencialPreviewModal from '../../components/empleados/CredencialPreviewModal'
+import { obtenerTrabajador } from '../../api/trabajadores'
 import { useResource } from '../../hooks/useResource'
 import { useSocket } from '../../context/SocketContext'
 
@@ -52,6 +56,30 @@ export default function EmpleadosList({ variante = 'activos' }) {
   const [confirmAction, setConfirmAction] = useState(null) // 'baja' | 'reactivar'
   const [busy, setBusy] = useState(false)
   const [exporting, setExporting] = useState(false)
+
+  // Modal de credencial — se llena cuando el usuario pide "Mostrar credencial"
+  // desde el menú de fila. La lista solo trae datos parciales (no incluye
+  // qr_code, foto_perfil, tipo_sangre, etc.), así que pedimos el detalle
+  // completo lazy antes de abrir el modal.
+  const [credencialTrabajador, setCredencialTrabajador] = useState(null)
+  const [loadingCredencial, setLoadingCredencial] = useState(null) // id
+  // Export individual desde fila (loading per-row).
+  const [exportingId, setExportingId] = useState(null)
+
+  const abrirCredencial = async (t) => {
+    setLoadingCredencial(t.id)
+    try {
+      const detalle = await obtenerTrabajador(t.id)
+      setCredencialTrabajador({
+        ...detalle,
+        nombre_completo: `${detalle.nombre || ''} ${detalle.nombre_apellidos || ''}`.trim(),
+      })
+    } catch {
+      toast.error('No se pudo cargar la credencial')
+    } finally {
+      setLoadingCredencial(null)
+    }
+  }
 
   // Selección múltiple. Per-página: cambiar de página/búsqueda limpia la
   // selección para evitar acciones sorpresa sobre filas que ya no se ven.
@@ -439,44 +467,34 @@ export default function EmpleadosList({ variante = 'activos' }) {
                   </TD>
                   {variante === 'bajas' && <TD><span className="text-sm">{fmtFechaCorta(t.fecha_baja)}</span></TD>}
                   <TD align="right">
-                    <div className="inline-flex gap-1">
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        title="Ver ficha"
-                        onClick={() => navigate(`/empleados/${t.id}`)}
-                      >
-                        <Eye size={14} />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        title="Editar"
-                        onClick={() => navigate(`/empleados/${t.id}/editar`)}
-                      >
-                        <Pencil size={14} />
-                      </Button>
-                      {isAdmin && variante === 'activos' && (
-                        <Button
-                          size="icon-sm"
-                          variant="danger-ghost"
-                          title="Dar de baja"
-                          onClick={() => { setConfirmId(t.id); setConfirmAction('baja') }}
-                        >
-                          <UserMinus size={14} />
-                        </Button>
-                      )}
-                      {isAdmin && variante === 'bajas' && (
-                        <Button
-                          size="icon-sm"
-                          variant="ghost"
-                          title="Reactivar"
-                          onClick={() => { setConfirmId(t.id); setConfirmAction('reactivar') }}
-                        >
-                          <UserCheck size={14} />
-                        </Button>
-                      )}
-                    </div>
+                    <RowActionsMenu
+                      onView={() => navigate(`/empleados/${t.id}`)}
+                      onEdit={() => navigate(`/empleados/${t.id}/editar`)}
+                      onShowQr={() => abrirCredencial(t)}
+                      loadingQr={loadingCredencial === t.id}
+                      onExport={async () => {
+                        setExportingId(t.id)
+                        try {
+                          await exportarEmpleado(t.id, `${t.no_empleado}_${t.nombre_apellidos || ''}.xlsx`)
+                        } catch {
+                          toast.error('No se pudo exportar')
+                        } finally {
+                          setExportingId(null)
+                        }
+                      }}
+                      exporting={exportingId === t.id}
+                      isAdmin={isAdmin}
+                      onBaja={
+                        variante === 'activos'
+                          ? () => { setConfirmId(t.id); setConfirmAction('baja') }
+                          : null
+                      }
+                      onReactivar={
+                        variante === 'bajas'
+                          ? () => { setConfirmId(t.id); setConfirmAction('reactivar') }
+                          : null
+                      }
+                    />
                   </TD>
                 </TR>
               ))}
@@ -524,6 +542,118 @@ export default function EmpleadosList({ variante = 'activos' }) {
         confirmLabel={variante === 'activos' ? 'Dar de baja' : 'Reactivar'}
         tone={variante === 'activos' ? 'danger' : 'warning'}
       />
+
+      <CredencialPreviewModal
+        open={credencialTrabajador !== null}
+        onClose={() => setCredencialTrabajador(null)}
+        trabajador={credencialTrabajador}
+      />
     </>
+  )
+}
+
+// ── Quick actions por fila ──────────────────────────────────────────────────
+// Menú con: Ver, Editar, QR, Exportar individual, y la acción de baja/reactivar
+// según corresponda. Para no romper la sensación rápida con teclado, el
+// botón "Ver" sigue siendo accesible como acción primaria por separado.
+
+function RowActionsMenu({
+  onView, onEdit, onShowQr, loadingQr, onExport, exporting, isAdmin, onBaja, onReactivar,
+}) {
+  const [open, setOpen] = useState(false)
+  const wrapperRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onClick = (e) => {
+      if (!wrapperRef.current?.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className="inline-flex items-center gap-1" ref={wrapperRef}>
+      <Button size="icon-sm" variant="ghost" title="Ver ficha" onClick={onView}>
+        <Eye size={14} />
+      </Button>
+      <div className="relative">
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          title="Más acciones"
+          onClick={() => setOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={open}
+        >
+          <MoreHorizontal size={14} />
+        </Button>
+        {open && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-1 z-30 w-56 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-lg py-1"
+          >
+            <MenuAction icon={Pencil} label="Editar" onClick={() => { setOpen(false); onEdit() }} />
+            <MenuAction
+              icon={IdCard}
+              label={loadingQr ? 'Cargando…' : 'Mostrar credencial'}
+              disabled={loadingQr}
+              onClick={() => { setOpen(false); onShowQr() }}
+            />
+            <MenuAction
+              icon={FileDown}
+              label={exporting ? 'Exportando…' : 'Exportar a Excel'}
+              disabled={exporting}
+              onClick={() => { setOpen(false); onExport() }}
+            />
+            {isAdmin && onBaja && (
+              <>
+                <div className="my-1 border-t border-ink-100 dark:border-ink-800" />
+                <MenuAction
+                  icon={UserMinus}
+                  label="Dar de baja"
+                  danger
+                  onClick={() => { setOpen(false); onBaja() }}
+                />
+              </>
+            )}
+            {isAdmin && onReactivar && (
+              <>
+                <div className="my-1 border-t border-ink-100 dark:border-ink-800" />
+                <MenuAction
+                  icon={UserCheck}
+                  label="Reactivar"
+                  onClick={() => { setOpen(false); onReactivar() }}
+                />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function MenuAction({ icon: Icon, label, onClick, disabled = false, danger = false }) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors focus-ring disabled:opacity-50 disabled:cursor-not-allowed ${
+        danger
+          ? 'text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+          : 'text-ink-700 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-800/60'
+      }`}
+    >
+      <Icon size={14} className="flex-shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
   )
 }

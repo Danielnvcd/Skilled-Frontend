@@ -3,7 +3,10 @@ import { useState, useEffect, useRef } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import BottomNav from './BottomNav'
+import Breadcrumbs from './Breadcrumbs'
 import useIsMobileDevice from '../hooks/useIsMobileDevice'
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts'
+import useIdleLogout from '../hooks/useIdleLogout'
 
 const STORAGE_KEY = 'sidebar:collapsed'
 
@@ -21,6 +24,15 @@ export default function Layout() {
   const location = useLocation()
   const mainRef = useRef(null)
   const isMobileDevice = useIsMobileDevice()
+
+  // Atajos `g + letra` tipo Linear/GitHub. El hook se autodesactiva en
+  // inputs y filtra destinos por rol — no rompe el tecleo en formularios.
+  useGlobalShortcuts()
+
+  // Auto-logout por inactividad. 30 min sin interacción → logout; 2 min
+  // antes muestra toast de aviso. Sincronizado entre pestañas vía
+  // localStorage, así trabajar en otra pestaña extiende el contador acá.
+  useIdleLogout()
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0') } catch {}
@@ -71,6 +83,7 @@ export default function Layout() {
             ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6rem)' }
             : undefined}
         >
+          <Breadcrumbs />
           <Outlet />
         </main>
       </div>

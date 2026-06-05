@@ -29,7 +29,7 @@ export const MENUS = {
         { path: '/proyectos', label: 'Proyectos', icon: FolderOpen },
         { path: '/horas', label: 'Horas', icon: Clock, end: true },
         { path: '/horas/movil', label: 'Escanear QR', icon: ScanLine, mobileOnly: true },
-        { path: '/horas/qr', label: 'QR Trabajadores', icon: QrCode },
+        { path: '/horas/qr', label: 'Tarjetas', icon: QrCode },
         { path: '/prenomina', label: 'Prenómina', icon: DollarSign },
         { path: '/proyecto-total', label: 'Proyecto Total', icon: PieChart },
         { path: '/historico', label: 'Histórico nóminas', icon: FileClock },

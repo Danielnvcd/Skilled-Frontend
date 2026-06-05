@@ -13,6 +13,7 @@ import { listarCredencialesPlanta, guardarCredencialesPlanta } from '../../api/c
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
+import CredencialCard from '../../components/empleados/CredencialCard'
 
 const PER_PAGE = 20
 
@@ -133,33 +134,18 @@ function FichaModal({ open, onClose, trabajador, today }) {
         </section>
 
         <section>
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 border-b border-ink-200 dark:border-ink-800 pb-1.5 mb-2">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 border-b border-ink-200 dark:border-ink-800 pb-1.5 mb-3">
             Credenciales de planta
           </h4>
           {trabajador.credenciales?.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {trabajador.credenciales.map((c) => {
-                const state = credentialState(c.fecha_caducidad, today)
-                const Icon = state === 'caducada' ? XCircle : CheckCircle2
-                const colorClass =
-                  state === 'caducada'
-                    ? 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-700/60 dark:text-red-300'
-                    : state === 'proxima'
-                      ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-700/60 dark:text-amber-300'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-900/30 dark:border-emerald-700/60 dark:text-emerald-300'
-                return (
-                  <div key={`${c.planta}-${c.credencial_id}`} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm ${colorClass}`}>
-                    <Icon size={14} />
-                    <strong>{c.planta}</strong>
-                    <span className="font-mono text-xs opacity-80">{c.credencial_id}</span>
-                    {c.fecha_caducidad && (
-                      <span className="text-xs opacity-70 ml-1">
-                        ({state === 'caducada' ? 'Caducada' : 'Vence'}: {c.fecha_caducidad})
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {trabajador.credenciales.map((c) => (
+                <CredencialCard
+                  key={`${c.planta}-${c.credencial_id}`}
+                  credencial={c}
+                  noEmpleado={trabajador.no_empleado}
+                />
+              ))}
             </div>
           ) : (
             <p className="text-sm text-ink-400 dark:text-ink-500">Sin credenciales registradas</p>

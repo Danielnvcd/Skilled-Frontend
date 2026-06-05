@@ -85,3 +85,13 @@ export function subscribe(key, cb) {
     if (subs.size === 0) subscribers.delete(key)
   }
 }
+
+// Limpia TODO el caché. Para llamar en login/logout — sin esto, datos
+// (incluidas listas privadas) de la cuenta anterior se ven antes del refetch
+// y, si la cuenta nueva recibe 403/404, se quedan visibles indefinidamente.
+// Notifica `invalidate` a cada suscriptor activo para que vuelvan a fetchear.
+export function clearAll() {
+  const keys = Array.from(cache.keys())
+  cache.clear()
+  keys.forEach((k) => notify(k, 'invalidate'))
+}

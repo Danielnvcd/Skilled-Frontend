@@ -21,7 +21,7 @@ function getServerOrigin() {
 }
 
 export function SocketProvider({ children }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
   const [socket, setSocket] = useState(null)
   const [connected, setConnected] = useState(false)
 
@@ -53,11 +53,37 @@ export function SocketProvider({ children }) {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10_000,
+      // Tope de reintentos. Default de socket.io-client es Infinity → si el
+      // JWT/RT están permanentemente vencidos, el cliente reintentaba cada
+      // 10s para siempre y disparaba un performRefresh por cada intento.
+      // 10 reintentos = ~90s con backoff, suficiente para sobrevivir blips
+      // de red comunes; pasado eso, nos rendimos y dejamos que el
+      // visibilitychange/online listener decida cuándo retomar.
+      reconnectionAttempts: 10,
       timeout: 20_000,
     })
 
     s.on('connect', () => setConnected(true))
     s.on('disconnect', () => setConnected(false))
+
+    // Push de seguridad emitido por el backend cuando invalida todas las
+    // sesiones (panic-revoke). La pestaña debe cerrar sesión al instante en
+    // lugar de esperar a que el siguiente HTTP retorne 401 por pv mismatch.
+    s.on('auth:force_logout', () => {
+      // El logout limpia caches, RT cookie y manda al Login. El POST /auth/logout
+      // que dispara probablemente falle con 401 (el AT ya está revocado), pero
+      // la limpieza local se ejecuta de todos modos.
+      logout().catch(() => {})
+    })
+
+    // Si agotamos los `reconnectionAttempts`, socket.io-client deja de
+    // reintentar. No es estado terminal definitivo: el listener de visibility
+    // u online de abajo puede llamar `s.connect()` para retomar manualmente.
+    s.on('reconnect_failed', () => {
+      // No mostramos error visible al usuario — la app sigue funcionando con
+      // polling REST. Cuando vuelva el foco o internet, intentamos otra vez.
+      setConnected(false)
+    })
 
     // Cuando un timer de refresh proactivo se throttlea en una pestaña
     // background, el token en localStorage puede haber expirado para cuando
@@ -101,8 +127,7 @@ export function SocketProvider({ children }) {
     // y forzamos el reconnect (socket.io no reintenta agresivamente si la
     // pestaña estaba background — el callback de auth ya leerá el nuevo
     // token de localStorage en el siguiente handshake).
-    const onVisible = async () => {
-      if (document.visibilityState !== 'visible') return
+    const reconnectIfDown = async () => {
       if (s.connected) return
       try {
         await performRefresh()
@@ -115,12 +140,21 @@ export function SocketProvider({ children }) {
         // socket.io tira si ya está conectando; lo ignoramos.
       }
     }
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      reconnectIfDown()
+    }
     document.addEventListener('visibilitychange', onVisible)
+    // Volver del modo offline: si el socket agotó sus reintentos durante el
+    // outage, este listener lo destrabaa cuando vuelve internet. Sin esto
+    // el socket podía quedar muerto hasta el próximo cambio de visibilidad.
+    window.addEventListener('online', reconnectIfDown)
 
     setSocket(s)
 
     return () => {
       document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('online', reconnectIfDown)
       clearInterval(heartbeatId)
       s.removeAllListeners()
       s.disconnect()

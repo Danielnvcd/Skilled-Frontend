@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Search, CornerDownLeft, Package, FileText, Tags, User, Wrench, Briefcase, Loader2,
+  Zap,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 import useIsMobile from '../hooks/useIsMobile'
 import { flattenMenu } from '../config/menus'
+import { getCommands } from '../config/commands'
 import { buscarGlobal } from '../api/buscar'
 
 // Iconos por tipo de resultado del backend.
@@ -36,7 +39,8 @@ function norm(s) {
 }
 
 export default function MenuSearch() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
   const isMobile = useIsMobile()
   const navigate = useNavigate()
   const inputRef = useRef(null)
@@ -54,6 +58,22 @@ export default function MenuSearch() {
       norm(it.label).includes(term) || norm(it.group).includes(term)
     )
   }, [items, q])
+
+  // ── Acciones (command palette) ───────────────────────────────────────────
+  // A diferencia de los items del menú (destinos), las acciones tienen verbo:
+  // "Crear empleado", "Cambiar tema", "Cerrar sesión". Se filtran por rol y
+  // por el query. No se muestran cuando el input está vacío para no
+  // contaminar la vista por defecto (que es solo el menú).
+  const commands = useMemo(() => getCommands(user?.role), [user?.role])
+  const commandMatches = useMemo(() => {
+    const term = norm(q.trim())
+    if (!term) return []
+    return commands.filter((c) =>
+      norm(c.label).includes(term)
+      || norm(c.group || '').includes(term)
+      || norm(c.hint || '').includes(term)
+    )
+  }, [commands, q])
 
   // ── Búsqueda global del backend (productos, solicitudes, etc.) ───────────
   // Se activa con ≥2 caracteres, con debounce de 200ms y cancelación de
@@ -86,10 +106,11 @@ export default function MenuSearch() {
     return () => { clearTimeout(timer); controller.abort() }
   }, [q])
 
-  // Lista plana de todos los items navegables (menú + datos) para soportar
-  // navegación con flechas y Enter sin importar la sección.
+  // Lista plana de todos los items navegables (menú + acciones + datos) para
+  // soportar navegación con flechas y Enter sin importar la sección.
   const allNavigable = useMemo(() => {
     const out = matches.map((m) => ({ kind: 'menu', item: m }))
+    for (const c of commandMatches) out.push({ kind: 'action', item: c })
     if (dataResults) {
       for (const tipo of ['producto', 'solicitud', 'categoria', 'herramienta', 'trabajador', 'proyecto']) {
         const key = tipo === 'categoria' ? 'categorias' : tipo + 's'
@@ -98,7 +119,7 @@ export default function MenuSearch() {
       }
     }
     return out
-  }, [matches, dataResults])
+  }, [matches, commandMatches, dataResults])
 
   // Atajo de teclado: Ctrl+K / Cmd+K para focusear el buscador.
   useEffect(() => {
@@ -135,6 +156,16 @@ export default function MenuSearch() {
     if (!nav) return
     setOpen(false)
     setQ('')
+    if (nav.kind === 'action') {
+      // Ejecuta el comando con contexto inyectado. El comando decide si
+      // navega, cambia tema, cierra sesión, etc.
+      try {
+        nav.item.run({ navigate, toggleTheme, logout, theme })
+      } catch {
+        // Silencioso: no queremos que un comando roto rompa el buscador.
+      }
+      return
+    }
     const path = nav.kind === 'menu' ? nav.item.path : nav.item.url
     navigate(path)
   }
@@ -214,7 +245,46 @@ export default function MenuSearch() {
                 </div>
               ))}
 
-              {/* Sección 2: resultados del backend */}
+              {/* Sección 2: acciones (command palette) */}
+              {commandMatches.length > 0 && (
+                <div className="border-t border-ink-100 dark:border-ink-800">
+                  <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-ink-400 dark:text-ink-500 flex items-center gap-1.5">
+                    <Zap size={10} /> Acciones
+                  </div>
+                  {commandMatches.map((cmd) => {
+                    // Para el comando de tema, alterna el icono según el modo
+                    // actual (Sun en modo oscuro, Moon en modo claro). Para los
+                    // demás, usa el icono fijo.
+                    const Icon = cmd.iconAlt && theme === 'light' ? cmd.iconAlt : cmd.icon
+                    const globalIdx = allNavigable.findIndex(n => n.kind === 'action' && n.item === cmd)
+                    const isActive = globalIdx === activeIdx
+                    return (
+                      <button
+                        key={cmd.id}
+                        type="button"
+                        onMouseEnter={() => setActiveIdx(globalIdx)}
+                        onClick={() => goNavigable({ kind: 'action', item: cmd })}
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors focus-ring ${
+                          isActive
+                            ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-900 dark:text-brand-100'
+                            : 'text-ink-700 dark:text-ink-200 hover:bg-ink-50 dark:hover:bg-ink-800/60'
+                        }`}
+                      >
+                        {Icon && <Icon size={15} className={isActive ? 'text-brand-600 dark:text-brand-300' : 'text-ink-500 dark:text-ink-400'} />}
+                        <span className="flex-1 min-w-0">
+                          <span className="block truncate">{cmd.label}</span>
+                          {cmd.hint && (
+                            <span className="block text-[11px] text-ink-500 dark:text-ink-400 truncate">{cmd.hint}</span>
+                          )}
+                        </span>
+                        {isActive && <CornerDownLeft size={12} className="text-ink-400" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Sección 3: resultados del backend */}
               {loadingData && (
                 <div className="px-3 py-2 text-[11px] text-ink-400 dark:text-ink-500 flex items-center gap-2">
                   <Loader2 size={12} className="animate-spin" /> Buscando…

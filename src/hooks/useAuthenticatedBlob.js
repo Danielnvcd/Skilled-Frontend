@@ -29,6 +29,18 @@ const MAX_CACHE_SIZE = 80
 const blobCache = new Map() // path → objectUrl  (insertion order = LRU order)
 const inflight = new Map()  // path → Promise<objectUrl>
 
+// Limpia todo el blob cache y revoca cada object URL. Llamar en login/logout:
+// sin esto, fotos privadas de la cuenta anterior se mostraban un instante en
+// la cuenta nueva (mismo path puede resolver a distinto contenido por JWT) y
+// además leak de memoria por blobs no revocados.
+export function clearBlobCache() {
+  for (const url of blobCache.values()) {
+    try { URL.revokeObjectURL(url) } catch { /* noop */ }
+  }
+  blobCache.clear()
+  inflight.clear()
+}
+
 function touch(path) {
   // Mover al final del Map = marcar como "más reciente" en LRU
   if (blobCache.has(path)) {

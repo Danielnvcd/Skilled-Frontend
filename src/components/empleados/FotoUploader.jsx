@@ -3,10 +3,11 @@ import toast from 'react-hot-toast'
 import { Camera, Upload } from 'lucide-react'
 import { Button } from '../ui'
 import AvatarFoto from './AvatarFoto'
+import CamaraCaptureModal from './CamaraCaptureModal'
 import { subirFoto } from '../../api/trabajadores'
 
 /**
- * Wrapper que muestra la foto actual + permite subir una nueva.
+ * Wrapper que muestra la foto actual + permite subir una nueva (archivo o cámara).
  * - En "nuevo" (sin id): solo permite seleccionar el File para enviarlo con el create.
  * - En "editar": sube directamente al endpoint y refresca.
  */
@@ -21,9 +22,10 @@ export default function FotoUploader({
   const [preview, setPreview] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [cacheBuster, setCacheBuster] = useState(0)
+  const [camOpen, setCamOpen] = useState(false)
 
-  const onPick = async (e) => {
-    const file = e.target.files?.[0]
+  // Validación + flujo de upload compartido por archivo y cámara.
+  const processFile = async (file) => {
     if (!file) return
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
       toast.error('Solo JPG o PNG')
@@ -54,6 +56,13 @@ export default function FotoUploader({
     }
   }
 
+  const onPick = (e) => {
+    const file = e.target.files?.[0]
+    if (file) processFile(file)
+    // permite volver a seleccionar el mismo archivo
+    e.target.value = ''
+  }
+
   return (
     <div className="flex flex-col items-center gap-3">
       {preview ? (
@@ -69,19 +78,38 @@ export default function FotoUploader({
         </div>
       )}
       <input ref={inputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={onPick} />
-      <Button
-        type="button"
-        size="sm"
-        variant="secondary"
-        leftIcon={uploading ? null : <Camera size={14} />}
-        onClick={() => inputRef.current?.click()}
-        loading={uploading}
-      >
-        {hasFoto || preview ? 'Cambiar foto' : 'Subir foto'}
-      </Button>
-      <p className="text-[11px] text-ink-500 text-center max-w-[180px]">
+      <div className="flex gap-2 flex-wrap justify-center">
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          leftIcon={uploading ? null : <Upload size={14} />}
+          onClick={() => inputRef.current?.click()}
+          loading={uploading}
+          disabled={uploading}
+        >
+          {hasFoto || preview ? 'Cambiar archivo' : 'Subir archivo'}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          leftIcon={<Camera size={14} />}
+          onClick={() => setCamOpen(true)}
+          disabled={uploading}
+        >
+          Tomar foto
+        </Button>
+      </div>
+      <p className="text-[11px] text-ink-500 text-center max-w-[200px]">
         JPG o PNG, máx 5 MB. Se generará un thumbnail automáticamente.
       </p>
+
+      <CamaraCaptureModal
+        open={camOpen}
+        onClose={() => setCamOpen(false)}
+        onCapture={processFile}
+      />
     </div>
   )
 }
