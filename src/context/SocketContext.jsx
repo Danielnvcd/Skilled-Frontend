@@ -122,6 +122,38 @@ export function SocketProvider({ children }) {
       if (s.connected) s.emit('heartbeat')
     }, 90_000)
 
+    // Ping/pong a nivel de aplicación con ack + timeout. Engine.IO ya hace
+    // su propio ping_interval=25s/ping_timeout=60s a nivel de transporte,
+    // pero a través de Cloudflare Tunnel a veces el TCP se cierra por idle
+    // y el browser no se entera hasta el próximo write — la conexión queda
+    // "zombie" (s.connected=true pero los emits no llegan al server).
+    //
+    // Solución: cada APP_PING_INTERVAL_MS emitimos `app:ping` con un ack
+    // callback. Si el server no devuelve el ack en APP_PING_TIMEOUT_MS,
+    // asumimos zombie y forzamos disconnect→connect. Así el SPA detecta
+    // el corte en ~28s en vez de los 60s del ping_timeout nativo.
+    const APP_PING_INTERVAL_MS = 20_000
+    const APP_PING_TIMEOUT_MS = 8_000
+    const appPingId = setInterval(() => {
+      if (!s.connected) return
+      let acked = false
+      const timeoutId = setTimeout(() => {
+        if (acked) return
+        // Sin pong → socket zombie. Forzamos reconexión.
+        try {
+          s.disconnect()
+          s.connect()
+        } catch {
+          // socket.io tira si ya está conectando; ignorar.
+        }
+      }, APP_PING_TIMEOUT_MS)
+      // socket.io-client: el último argumento como función es el ack.
+      s.emit('app:ping', () => {
+        acked = true
+        clearTimeout(timeoutId)
+      })
+    }, APP_PING_INTERVAL_MS)
+
     // Al volver el foco a la pestaña, si el socket quedó desconectado por
     // expiración de token mientras estaba en background, refrescamos el token
     // y forzamos el reconnect (socket.io no reintenta agresivamente si la
@@ -156,6 +188,7 @@ export function SocketProvider({ children }) {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('online', reconnectIfDown)
       clearInterval(heartbeatId)
+      clearInterval(appPingId)
       s.removeAllListeners()
       s.disconnect()
       setSocket(null)
