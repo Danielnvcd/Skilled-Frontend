@@ -113,6 +113,14 @@ export function SocketProvider({ children }) {
         // spammeamos handshakes — return temprano sin crear socket.
         reconnectionAttempts: 10,
         timeout: 20_000,
+        // forceNew evita que socket.io-client reuse el Manager cacheado por
+        // URL. Sin esto, después de un s.disconnect() el Manager queda con
+        // skipReconnect=true permanentemente (bug socket.io-client #733 —
+        // 'nothing resets this flag to false'), y el próximo io() devuelve
+        // un socket sobre el mismo Manager muerto. Con forceNew nace un
+        // Manager fresco cada vez que el effect re-corre (al login/logout,
+        // cambio de rol, o setReconnectTrigger).
+        forceNew: true,
       })
 
       s.on('connect', () => setConnected(true))
