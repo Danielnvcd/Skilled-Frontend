@@ -113,7 +113,7 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
   const toggle = (i) => setPinnedIdx((prev) => (prev === i ? null : i))
 
   return (
-    <div className="flex flex-col sm:flex-row items-center gap-3">
+    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
       {/* Donut — más compacto, sin gap doble por strokeWidth+paddingAngle */}
       <div className="relative flex-shrink-0 w-[170px] h-[170px]">
         <ResponsiveContainer width="100%" height="100%" debounce={200}>
@@ -175,8 +175,8 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
         </div>
       </div>
 
-      {/* Leyenda — al lado del donut en sm+, debajo en móvil. Sin scroll: scrollea solo si excede el alto natural del donut. */}
-      <ul className="w-full flex-1 space-y-0.5 max-h-[170px] overflow-y-auto scrollbar-thin pr-1 min-w-0">
+      {/* Leyenda — al lado del donut en sm+, debajo en móvil. Ancho contenido (no flex-1) para que el grupo donut+leyenda quede centrado horizontalmente. */}
+      <ul className="w-full sm:w-auto sm:max-w-[280px] sm:min-w-[200px] space-y-0.5 max-h-[170px] overflow-y-auto scrollbar-thin pr-1 min-w-0">
         {sorted.map((item, i) => {
           const pct = total > 0 ? (item.value / total) * 100 : 0
           const isActive = activeIdx === i
@@ -257,9 +257,15 @@ const PuestosBar = memo(function PuestosBar({ data, isDark }) {
     const fill = isDark ? '#cbd5e1' : '#334155'
     return (
       <g transform={`translate(${x},${y})`}>
-        <text textAnchor="end" fill={fill} fontSize={11} dy={line2 ? -1 : 4}>
-          <tspan x={-4} dy={0}>{line1}</tspan>
-          {line2 && <tspan x={-4} dy={12}>{line2}</tspan>}
+        <text textAnchor="end" fill={fill} fontSize={11}>
+          {line2 ? (
+            <>
+              <tspan x={-6} dy="-0.25em">{line1}</tspan>
+              <tspan x={-6} dy="1.15em">{line2}</tspan>
+            </>
+          ) : (
+            <tspan x={-6} dy="0.355em">{line1}</tspan>
+          )}
         </text>
       </g>
     )
@@ -376,10 +382,10 @@ function QuickAccessCard({ to, Icon, label, hint }) {
   )
 }
 
-function Panel({ title, subtitle, Icon, action, children, className = '' }) {
+function Panel({ title, subtitle, Icon, action, children, className = '', bodyClassName = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-4 ${className}`}>
-      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-ink-100 dark:border-ink-800/80">
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-4 flex flex-col ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-ink-100 dark:border-ink-800/80 flex-shrink-0">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
             {Icon && <Icon size={15} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
@@ -391,7 +397,9 @@ function Panel({ title, subtitle, Icon, action, children, className = '' }) {
         </div>
         {action}
       </div>
-      {children}
+      <div className={`flex-1 min-h-0 ${bodyClassName}`}>
+        {children}
+      </div>
     </div>
   )
 }
@@ -493,6 +501,7 @@ export default function Dashboard() {
           title="Empleados por proyecto / área"
           subtitle={`${proyectosData.length} ${proyectosData.length === 1 ? 'asignación' : 'asignaciones'}`}
           Icon={FolderOpen}
+          bodyClassName="flex items-center justify-center"
         >
           <ProyectosDonut data={proyectosData} isDark={isDark} />
         </Panel>
