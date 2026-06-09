@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend, CartesianGrid,
+  ResponsiveContainer, CartesianGrid, LabelList,
 } from 'recharts'
 import { Card, PageHeader, Skeleton } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -19,15 +19,20 @@ import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
 import AvatarFoto from '../components/empleados/AvatarFoto'
 
-// Paleta sobria tipo dashboard SaaS: 5 tonos discretos en lugar de 10
-// saturados. Reduce el ruido visual cuando hay muchos slices/bars.
+// Paleta monocromática corporativa: degradado de azul navy (brand) de oscuro
+// a claro. Estilo enterprise SaaS — el orden importa: la primera categoría
+// (la de mayor peso) recibe el tono más saturado.
 const CHART_COLORS = [
-  '#0ea5e9', // sky-500
-  '#10b981', // emerald-500
-  '#8b5cf6', // violet-500
-  '#f59e0b', // amber-500
-  '#64748b', // slate-500 — neutro para el resto
+  '#1f3554', // brand-800
+  '#2b4870', // brand-700
+  '#345a89', // brand-600
+  '#4471a3', // brand-500
+  '#688fbc', // brand-400
+  '#9ab6d6', // brand-300
+  '#c5d6e9', // brand-200
 ]
+const BRAND_PRIMARY = '#345a89'   // brand-600
+const BRAND_PRIMARY_DARK = '#688fbc' // brand-400 para modo oscuro
 
 function greeting() {
   const h = new Date().getHours()
@@ -53,88 +58,242 @@ function StatCard({ label, value, Icon }) {
   )
 }
 
-const ChartTooltip = memo(function ChartTooltip({ active, payload, isDark }) {
+const ChartTooltip = memo(function ChartTooltip({ active, payload, isDark, total }) {
   if (!active || !payload?.length) return null
+  const value = payload[0].value
+  const pct = total > 0 ? ((value / total) * 100).toFixed(1) : null
   return (
     <div
-      className="rounded-md px-3 py-2 text-xs shadow-elevated border"
+      className="rounded-md px-3 py-2 text-xs shadow-elevated border min-w-[160px]"
       style={{
         background: isDark ? '#1e293b' : '#ffffff',
         borderColor: isDark ? '#334155' : '#e2e8f0',
         color: isDark ? '#f1f5f9' : '#0f172a',
       }}
     >
-      <p className="font-semibold mb-0.5">{payload[0].name || payload[0].payload.label}</p>
-      <p className="tabular-nums">
-        <span className="text-ink-500">Empleados: </span>
-        <strong>{payload[0].value}</strong>
-      </p>
+      <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b" style={{ borderColor: isDark ? '#334155' : '#e2e8f0' }}>
+        <span
+          className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0"
+          style={{ background: payload[0].payload?.fill || payload[0].color || BRAND_PRIMARY }}
+        />
+        <p className="font-semibold truncate">{payload[0].name || payload[0].payload.label}</p>
+      </div>
+      <div className="flex items-baseline justify-between gap-3 tabular-nums">
+        <span className="text-ink-500 dark:text-ink-400">Empleados</span>
+        <strong className="text-sm">{value}</strong>
+      </div>
+      {pct !== null && (
+        <div className="flex items-baseline justify-between gap-3 tabular-nums mt-0.5">
+          <span className="text-ink-500 dark:text-ink-400">Participación</span>
+          <strong className="text-sm">{pct}%</strong>
+        </div>
+      )}
     </div>
   )
 })
 
 const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
-  if (!data?.length) {
+  // Ordenar de mayor a menor para que el degradado navy refleje la jerarquía.
+  const sorted = useMemo(
+    () => [...(data || [])].sort((a, b) => (b.value || 0) - (a.value || 0)),
+    [data],
+  )
+  const total = useMemo(() => sorted.reduce((s, d) => s + (d.value || 0), 0), [sorted])
+
+  // Interactividad: hover y click. `pinnedIdx` queda fijo al click; `hoverIdx`
+  // domina mientras el ratón está encima. El centro del donut muestra la
+  // categoría activa o el total si no hay ninguna seleccionada.
+  const [hoverIdx, setHoverIdx] = useState(null)
+  const [pinnedIdx, setPinnedIdx] = useState(null)
+  const activeIdx = hoverIdx ?? pinnedIdx
+  const activeItem = activeIdx != null ? sorted[activeIdx] : null
+  const activePct = activeItem && total > 0 ? (activeItem.value / total) * 100 : null
+
+  if (!sorted.length) {
     return <p className="text-sm text-ink-500 italic text-center py-12">Sin asignaciones registradas</p>
   }
+
+  const toggle = (i) => setPinnedIdx((prev) => (prev === i ? null : i))
+
   return (
-    <ResponsiveContainer width="100%" height={280} debounce={200}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="value"
-          nameKey="label"
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={95}
-          paddingAngle={1}
-          stroke={isDark ? '#0f172a' : '#ffffff'}
-          strokeWidth={2}
-          isAnimationActive={false}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip content={<ChartTooltip isDark={isDark} />} isAnimationActive={false} />
-        <Legend
-          layout="vertical"
-          align="right"
-          verticalAlign="middle"
-          iconType="circle"
-          wrapperStyle={{ fontSize: 11, paddingLeft: 12 }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col items-center">
+      {/* Donut centrado */}
+      <div className="relative w-full max-w-[280px]">
+        <ResponsiveContainer width="100%" height={240} debounce={200}>
+          <PieChart>
+            <Pie
+              data={sorted}
+              dataKey="value"
+              nameKey="label"
+              cx="50%"
+              cy="50%"
+              innerRadius={72}
+              outerRadius={100}
+              paddingAngle={1.5}
+              stroke={isDark ? '#0f172a' : '#ffffff'}
+              strokeWidth={2}
+              isAnimationActive={false}
+              onMouseEnter={(_, i) => setHoverIdx(i)}
+              onMouseLeave={() => setHoverIdx(null)}
+              onClick={(_, i) => toggle(i)}
+            >
+              {sorted.map((_, i) => {
+                const isActive = activeIdx === i
+                const isDimmed = activeIdx != null && !isActive
+                return (
+                  <Cell
+                    key={i}
+                    fill={CHART_COLORS[i % CHART_COLORS.length]}
+                    fillOpacity={isDimmed ? 0.28 : 1}
+                    style={{ cursor: 'pointer', transition: 'fill-opacity 150ms ease, transform 150ms ease', transformOrigin: 'center', transform: isActive ? 'scale(1.04)' : 'scale(1)' }}
+                  />
+                )
+              })}
+            </Pie>
+            <Tooltip content={<ChartTooltip isDark={isDark} total={total} />} isAnimationActive={false} />
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Centro del donut: total o categoría activa */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
+          {activeItem ? (
+            <>
+              <span className="text-[10px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 truncate max-w-full" title={activeItem.label}>
+                {activeItem.label}
+              </span>
+              <span className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none mt-1">
+                {activeItem.value}
+              </span>
+              <span className="text-[11px] tabular-nums font-medium text-brand-600 dark:text-sky-300 mt-1">
+                {activePct.toFixed(1)}%
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">{total}</span>
+              <span className="text-[10px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 mt-1.5">Empleados</span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Leyenda interactiva — debajo del donut, sincronizada con el slice. */}
+      <ul className="w-full mt-4 space-y-1 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+        {sorted.map((item, i) => {
+          const pct = total > 0 ? (item.value / total) * 100 : 0
+          const isActive = activeIdx === i
+          const isDimmed = activeIdx != null && !isActive
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                onMouseEnter={() => setHoverIdx(i)}
+                onMouseLeave={() => setHoverIdx(null)}
+                onClick={() => toggle(i)}
+                className={`w-full flex items-center gap-2.5 text-xs px-2 py-1.5 rounded-md transition-all ${
+                  isActive
+                    ? 'bg-ink-100 dark:bg-ink-800 ring-1 ring-ink-200 dark:ring-ink-700'
+                    : 'hover:bg-ink-50 dark:hover:bg-ink-800/60'
+                } ${isDimmed ? 'opacity-50' : ''}`}
+              >
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0"
+                  style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
+                />
+                <span className="flex-1 truncate text-ink-700 dark:text-ink-300 text-left" title={item.label}>{item.label}</span>
+                <span className="tabular-nums font-semibold text-ink-900 dark:text-ink-100">{item.value}</span>
+                <span className="tabular-nums text-ink-500 dark:text-ink-400 w-10 text-right">{pct.toFixed(1)}%</span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 })
 
 const PuestosBar = memo(function PuestosBar({ data, isDark }) {
-  if (!data?.length) {
+  // Ordenado descendente para que las barras más largas estén arriba —
+  // patrón estándar en dashboards corporativos.
+  const sorted = useMemo(
+    () => [...(data || [])].sort((a, b) => (b.value || 0) - (a.value || 0)),
+    [data],
+  )
+  const total = useMemo(() => sorted.reduce((s, d) => s + (d.value || 0), 0), [sorted])
+  const primary = isDark ? BRAND_PRIMARY_DARK : BRAND_PRIMARY
+
+  const [hoverIdx, setHoverIdx] = useState(null)
+
+  if (!sorted.length) {
     return <p className="text-sm text-ink-500 italic text-center py-12">Sin puestos asignados</p>
   }
+
+  // Altura dinámica según número de barras (28px por barra + padding).
+  const height = Math.max(240, sorted.length * 28 + 20)
+
   return (
-    <ResponsiveContainer width="100%" height={280} debounce={200}>
-      <BarChart data={data} margin={{ top: 5, right: 8, bottom: 5, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
+    <ResponsiveContainer width="100%" height={height} debounce={200}>
+      <BarChart
+        data={sorted}
+        layout="vertical"
+        margin={{ top: 4, right: 36, bottom: 4, left: 4 }}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        <defs>
+          <linearGradient id="puestos-bar-gradient" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={primary} stopOpacity={0.85} />
+            <stop offset="100%" stopColor={primary} stopOpacity={1} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} horizontal={false} />
         <XAxis
-          dataKey="label"
-          tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }}
-          interval={0}
-          angle={-20}
-          textAnchor="end"
-          height={50}
-        />
-        <YAxis
+          type="number"
           allowDecimals={false}
           tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }}
+          axisLine={false}
+          tickLine={false}
         />
-        <Tooltip content={<ChartTooltip isDark={isDark} />} cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} isAnimationActive={false} />
-        <Bar dataKey="value" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-          ))}
+        <YAxis
+          type="category"
+          dataKey="label"
+          tick={{ fontSize: 11, fill: isDark ? '#cbd5e1' : '#334155' }}
+          width={130}
+          axisLine={false}
+          tickLine={false}
+          interval={0}
+        />
+        <Tooltip
+          content={<ChartTooltip isDark={isDark} total={total} />}
+          cursor={{ fill: isDark ? 'rgba(30,41,59,0.5)' : 'rgba(248,250,252,0.8)' }}
+          isAnimationActive={false}
+        />
+        <Bar
+          dataKey="value"
+          fill="url(#puestos-bar-gradient)"
+          radius={[0, 4, 4, 0]}
+          isAnimationActive={false}
+          barSize={16}
+          onMouseEnter={(_, i) => setHoverIdx(i)}
+        >
+          {sorted.map((_, i) => {
+            const isDimmed = hoverIdx != null && hoverIdx !== i
+            return (
+              <Cell
+                key={i}
+                fillOpacity={isDimmed ? 0.3 : 1}
+                style={{ cursor: 'pointer', transition: 'fill-opacity 150ms ease' }}
+              />
+            )
+          })}
+          <LabelList
+            dataKey="value"
+            position="right"
+            style={{
+              fill: isDark ? '#cbd5e1' : '#334155',
+              fontSize: 11,
+              fontWeight: 600,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -182,13 +341,18 @@ function QuickAccessCard({ to, Icon, label, hint }) {
   )
 }
 
-function Panel({ title, Icon, action, children, className = '' }) {
+function Panel({ title, subtitle, Icon, action, children, className = '' }) {
   return (
     <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
       <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
-        <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
-          {title}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
+            {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
+            {title}
+          </div>
+          {subtitle && (
+            <div className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 ml-6">{subtitle}</div>
+          )}
         </div>
         {action}
       </div>
@@ -290,10 +454,18 @@ export default function Dashboard() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel title="Empleados por proyecto / área" Icon={FolderOpen}>
+        <Panel
+          title="Empleados por proyecto / área"
+          subtitle={`${proyectosData.length} ${proyectosData.length === 1 ? 'asignación' : 'asignaciones'}`}
+          Icon={FolderOpen}
+        >
           <ProyectosDonut data={proyectosData} isDark={isDark} />
         </Panel>
-        <Panel title="Empleados por puesto principal" Icon={Briefcase}>
+        <Panel
+          title="Empleados por puesto principal"
+          subtitle={`Top ${puestosData.length} de la plantilla`}
+          Icon={Briefcase}
+        >
           <PuestosBar data={puestosData} isDark={isDark} />
         </Panel>
       </div>
