@@ -100,9 +100,6 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
   )
   const total = useMemo(() => sorted.reduce((s, d) => s + (d.value || 0), 0), [sorted])
 
-  // Interactividad: hover y click. `pinnedIdx` queda fijo al click; `hoverIdx`
-  // domina mientras el ratón está encima. El centro del donut muestra la
-  // categoría activa o el total si no hay ninguna seleccionada.
   const [hoverIdx, setHoverIdx] = useState(null)
   const [pinnedIdx, setPinnedIdx] = useState(null)
   const activeIdx = hoverIdx ?? pinnedIdx
@@ -110,28 +107,28 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
   const activePct = activeItem && total > 0 ? (activeItem.value / total) * 100 : null
 
   if (!sorted.length) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin asignaciones registradas</p>
+    return <p className="text-sm text-ink-500 italic text-center py-10">Sin asignaciones registradas</p>
   }
 
   const toggle = (i) => setPinnedIdx((prev) => (prev === i ? null : i))
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Donut centrado */}
-      <div className="relative w-full max-w-[280px]">
-        <ResponsiveContainer width="100%" height={240} debounce={200}>
-          <PieChart>
+    <div className="flex flex-col sm:flex-row items-center gap-3">
+      {/* Donut — más compacto, sin gap doble por strokeWidth+paddingAngle */}
+      <div className="relative flex-shrink-0 w-[170px] h-[170px]">
+        <ResponsiveContainer width="100%" height="100%" debounce={200}>
+          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
             <Pie
               data={sorted}
               dataKey="value"
               nameKey="label"
               cx="50%"
               cy="50%"
-              innerRadius={72}
-              outerRadius={100}
-              paddingAngle={1.5}
+              innerRadius={54}
+              outerRadius={78}
+              paddingAngle={sorted.length > 1 ? 0.5 : 0}
               stroke={isDark ? '#0f172a' : '#ffffff'}
-              strokeWidth={2}
+              strokeWidth={1}
               isAnimationActive={false}
               onMouseEnter={(_, i) => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(null)}
@@ -145,7 +142,7 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
                     key={i}
                     fill={CHART_COLORS[i % CHART_COLORS.length]}
                     fillOpacity={isDimmed ? 0.28 : 1}
-                    style={{ cursor: 'pointer', transition: 'fill-opacity 150ms ease, transform 150ms ease', transformOrigin: 'center', transform: isActive ? 'scale(1.04)' : 'scale(1)' }}
+                    style={{ cursor: 'pointer', transition: 'fill-opacity 150ms ease' }}
                   />
                 )
               })}
@@ -153,31 +150,33 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
             <Tooltip content={<ChartTooltip isDark={isDark} total={total} />} isAnimationActive={false} />
           </PieChart>
         </ResponsiveContainer>
-        {/* Centro del donut: total o categoría activa */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
-          {activeItem ? (
-            <>
-              <span className="text-[10px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 truncate max-w-full" title={activeItem.label}>
-                {activeItem.label}
-              </span>
-              <span className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none mt-1">
-                {activeItem.value}
-              </span>
-              <span className="text-[11px] tabular-nums font-medium text-brand-600 dark:text-sky-300 mt-1">
-                {activePct.toFixed(1)}%
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">{total}</span>
-              <span className="text-[10px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 mt-1.5">Empleados</span>
-            </>
-          )}
+        {/* Centro: usa el diámetro interno (108px) para evitar desborde sobre el aro */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center justify-center text-center w-[108px]">
+            {activeItem ? (
+              <>
+                <span className="text-[9px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 leading-tight line-clamp-2 px-1" title={activeItem.label}>
+                  {activeItem.label}
+                </span>
+                <span className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none mt-1">
+                  {activeItem.value}
+                </span>
+                <span className="text-[10px] tabular-nums font-medium text-brand-600 dark:text-sky-300 mt-0.5">
+                  {activePct.toFixed(1)}%
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">{total}</span>
+                <span className="text-[9px] uppercase tracking-wider font-medium text-ink-500 dark:text-ink-400 mt-1">Empleados</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Leyenda interactiva — debajo del donut, sincronizada con el slice. */}
-      <ul className="w-full mt-4 space-y-1 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
+      {/* Leyenda — al lado del donut en sm+, debajo en móvil. Sin scroll: scrollea solo si excede el alto natural del donut. */}
+      <ul className="w-full flex-1 space-y-0.5 max-h-[170px] overflow-y-auto scrollbar-thin pr-1 min-w-0">
         {sorted.map((item, i) => {
           const pct = total > 0 ? (item.value / total) * 100 : 0
           const isActive = activeIdx === i
@@ -189,19 +188,19 @@ const ProyectosDonut = memo(function ProyectosDonut({ data, isDark }) {
                 onMouseEnter={() => setHoverIdx(i)}
                 onMouseLeave={() => setHoverIdx(null)}
                 onClick={() => toggle(i)}
-                className={`w-full flex items-center gap-2.5 text-xs px-2 py-1.5 rounded-md transition-all ${
+                className={`w-full flex items-center gap-2 text-[11px] px-1.5 py-1 rounded transition-colors ${
                   isActive
-                    ? 'bg-ink-100 dark:bg-ink-800 ring-1 ring-ink-200 dark:ring-ink-700'
+                    ? 'bg-ink-100 dark:bg-ink-800'
                     : 'hover:bg-ink-50 dark:hover:bg-ink-800/60'
                 } ${isDimmed ? 'opacity-50' : ''}`}
               >
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-sm flex-shrink-0"
+                  className="inline-block h-2 w-2 rounded-sm flex-shrink-0"
                   style={{ background: CHART_COLORS[i % CHART_COLORS.length] }}
                 />
                 <span className="flex-1 truncate text-ink-700 dark:text-ink-300 text-left" title={item.label}>{item.label}</span>
                 <span className="tabular-nums font-semibold text-ink-900 dark:text-ink-100">{item.value}</span>
-                <span className="tabular-nums text-ink-500 dark:text-ink-400 w-10 text-right">{pct.toFixed(1)}%</span>
+                <span className="tabular-nums text-ink-500 dark:text-ink-400 w-9 text-right">{pct.toFixed(1)}%</span>
               </button>
             </li>
           )
@@ -224,18 +223,54 @@ const PuestosBar = memo(function PuestosBar({ data, isDark }) {
   const [hoverIdx, setHoverIdx] = useState(null)
 
   if (!sorted.length) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin puestos asignados</p>
+    return <p className="text-sm text-ink-500 italic text-center py-10">Sin puestos asignados</p>
   }
 
-  // Altura dinámica según número de barras (28px por barra + padding).
-  const height = Math.max(240, sorted.length * 28 + 20)
+  // Altura por barra suficiente para que el texto Y (fontSize 11) no se encime.
+  // 26px da ~13px de aire entre labels consecutivas.
+  const height = Math.min(340, Math.max(220, sorted.length * 26 + 20))
+  // Tick personalizado: envuelve a 2 líneas por palabras cuando el label
+  // excede ~22 chars; corta con elipsis solo cuando la segunda línea no cabe.
+  const renderYTick = ({ x, y, payload }) => {
+    const raw = String(payload?.value ?? '')
+    const MAX = 22
+    let line1 = raw
+    let line2 = ''
+    if (raw.length > MAX) {
+      const words = raw.split(' ')
+      line1 = ''
+      let rest = []
+      for (const w of words) {
+        const next = (line1 ? `${line1} ${w}` : w)
+        if (next.length <= MAX) line1 = next
+        else rest.push(w)
+      }
+      // Si la primera palabra ya excede MAX, recorta crudo
+      if (!line1) {
+        line1 = raw.slice(0, MAX - 1) + '…'
+        line2 = ''
+      } else {
+        line2 = rest.join(' ')
+        if (line2.length > MAX) line2 = line2.slice(0, MAX - 1) + '…'
+      }
+    }
+    const fill = isDark ? '#cbd5e1' : '#334155'
+    return (
+      <g transform={`translate(${x},${y})`}>
+        <text textAnchor="end" fill={fill} fontSize={11} dy={line2 ? -1 : 4}>
+          <tspan x={-4} dy={0}>{line1}</tspan>
+          {line2 && <tspan x={-4} dy={12}>{line2}</tspan>}
+        </text>
+      </g>
+    )
+  }
 
   return (
     <ResponsiveContainer width="100%" height={height} debounce={200}>
       <BarChart
         data={sorted}
         layout="vertical"
-        margin={{ top: 4, right: 36, bottom: 4, left: 4 }}
+        margin={{ top: 4, right: 30, bottom: 4, left: 2 }}
         onMouseLeave={() => setHoverIdx(null)}
       >
         <defs>
@@ -255,8 +290,8 @@ const PuestosBar = memo(function PuestosBar({ data, isDark }) {
         <YAxis
           type="category"
           dataKey="label"
-          tick={{ fontSize: 11, fill: isDark ? '#cbd5e1' : '#334155' }}
-          width={130}
+          tick={renderYTick}
+          width={150}
           axisLine={false}
           tickLine={false}
           interval={0}
@@ -269,9 +304,9 @@ const PuestosBar = memo(function PuestosBar({ data, isDark }) {
         <Bar
           dataKey="value"
           fill="url(#puestos-bar-gradient)"
-          radius={[0, 4, 4, 0]}
+          radius={[0, 3, 3, 0]}
           isAnimationActive={false}
-          barSize={16}
+          barSize={14}
           onMouseEnter={(_, i) => setHoverIdx(i)}
         >
           {sorted.map((_, i) => {
@@ -343,15 +378,15 @@ function QuickAccessCard({ to, Icon, label, hint }) {
 
 function Panel({ title, subtitle, Icon, action, children, className = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
-      <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-4 ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-ink-100 dark:border-ink-800/80">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
-            {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
+            {Icon && <Icon size={15} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
             {title}
           </div>
           {subtitle && (
-            <div className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 ml-6">{subtitle}</div>
+            <div className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 ml-[22px]">{subtitle}</div>
           )}
         </div>
         {action}
@@ -387,7 +422,7 @@ export default function Dashboard() {
 
   const stats = data?.stats
   const proyectosData = useMemo(() => data?.empleados_por_proyecto || [], [data])
-  const puestosData = useMemo(() => data?.empleados_por_puesto?.slice(0, 12) || [], [data])
+  const puestosData = useMemo(() => data?.empleados_por_puesto?.slice(0, 10) || [], [data])
 
   if (loading) {
     return (
