@@ -46,7 +46,10 @@ export default function Layout() {
   }, [location.pathname])
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden">
+    // overflow-x-CLIP (no hidden): hidden convierte este div en el contenedor
+    // de referencia de position:sticky y el Topbar dejaba de pegarse al hacer
+    // scroll; clip recorta el desborde horizontal sin crear scroll container.
+    <div className="min-h-screen relative overflow-x-clip">
       {/* Fondo base global. Va en -z-20 para que cada página pueda meter su propio
           fondo (p. ej. video HLS) en -z-10 sin que el bg lo tape. */}
       <div className="fixed inset-0 -z-20 bg-ink-50 dark:bg-ink-950 pointer-events-none" />
