@@ -246,7 +246,14 @@ export default function Dashboard() {
           Icon={FolderOpen}
           bodyClassName="flex items-center justify-center"
         >
-          <DonutCorporativo data={proyectosData} isDark={isDark} emptyText="Sin asignaciones registradas" />
+          {/* El total del centro son ASIGNACIONES, no empleados únicos: un
+              trabajador en dos proyectos cuenta en ambas rebanadas (M:N). */}
+          <DonutCorporativo
+            data={proyectosData}
+            isDark={isDark}
+            centerLabel="Asignaciones"
+            emptyText="Sin asignaciones registradas"
+          />
         </Panel>
         <Panel
           title="Empleados por puesto principal"
