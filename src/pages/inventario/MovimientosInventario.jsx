@@ -7,12 +7,13 @@ import {
 } from 'lucide-react'
 import {
   Button, Card, PageHeader,
-  Skeleton, Table, THead, TH, TBody, TR, TD, Select,
+  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Select, SavedViews,
 } from '../../components/ui'
 import {
   getMovimientos, getProductos, getProductosBajoMinimo,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useSocket } from '../../context/SocketContext'
 
 export default function MovimientosInventario() {
   const [movimientos, setMovimientos] = useState([])
@@ -25,6 +26,10 @@ export default function MovimientosInventario() {
   const [tab, setTab] = useState('historial')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroProducto, setFiltroProducto] = useState('')
+  // Orden client-side: el dataset completo (≤300 filas) ya está en memoria,
+  // re-ordenar no necesita round-trip. sort vacío = orden del backend (fecha desc).
+  const [sort, setSort] = useState('')
+  const [dir, setDir] = useState('asc')
 
   const reload = () => {
     setLoading(true)
@@ -52,6 +57,18 @@ export default function MovimientosInventario() {
 
   useEffect(() => { reload() }, [])
 
+  // Tiempo real: cuando otro usuario registra un movimiento, el backend emite
+  // 'movimiento:changed' a los roles de inventario. Refrescamos historial y
+  // bajo-mínimo en silencio (sin skeleton) para no parpadear la vista.
+  const { on: onSocket } = useSocket()
+  useEffect(() => {
+    const off = onSocket('movimiento:changed', () => {
+      getMovimientos({ limit: 300 }).then(setMovimientos).catch(() => {})
+      getProductosBajoMinimo().then(setBajoMin).catch(() => {})
+    })
+    return off
+  }, [onSocket])
+
   const kpis = useMemo(() => {
     const hoy = new Date().toISOString().slice(0, 10)
     let entradas = 0, salidas = 0, ajustes = 0
@@ -77,6 +94,45 @@ export default function MovimientosInventario() {
       return true
     })
   }, [movimientos, filtroTipo, filtroProducto])
+
+  const sortedMovs = useMemo(() => {
+    if (!sort) return filteredMovs
+    const descProducto = new Map(productos.map((p) => [p.id, (p.descripcion || '').toLowerCase()]))
+    const mul = dir === 'desc' ? -1 : 1
+    const val = (m) => {
+      switch (sort) {
+        case 'fecha': return m.fecha || ''
+        case 'tipo': return m.tipo || ''
+        case 'producto': return descProducto.get(m.producto_id) || ''
+        case 'cantidad': return Number(m.cantidad) || 0
+        default: return 0
+      }
+    }
+    return [...filteredMovs].sort((a, b) => {
+      const va = val(a)
+      const vb = val(b)
+      if (va < vb) return -mul
+      if (va > vb) return mul
+      return 0
+    })
+  }, [filteredMovs, productos, sort, dir])
+
+  const onSort = (field, nextDir) => {
+    if (!nextDir) {
+      setSort('')
+      setDir('asc')
+    } else {
+      setSort(field)
+      setDir(nextDir)
+    }
+  }
+
+  const aplicarVista = (params) => {
+    setFiltroTipo(params.tipo || '')
+    setFiltroProducto(params.producto || '')
+    setSort(params.sort || '')
+    setDir(params.dir || 'asc')
+  }
 
   const getTypeStyle = (tipo) => {
     switch (tipo) {
@@ -156,23 +212,32 @@ export default function MovimientosInventario() {
             </div>
           </Card>
 
+          <div className="mt-4">
+            <SavedViews
+              listKey="inventario-movimientos"
+              current={{ tipo: filtroTipo, producto: filtroProducto, sort, dir: sort ? dir : '' }}
+              defaults={{ tipo: '', producto: '', sort: '', dir: '' }}
+              onApply={aplicarVista}
+            />
+          </div>
+
           <Card className="mt-4">
             {loading ? (
               <div className="p-6"><Skeleton className="h-40 w-full" /></div>
-            ) : filteredMovs.length === 0 ? (
+            ) : sortedMovs.length === 0 ? (
               <div className="p-10 text-center text-ink-500">Sin movimientos para los filtros seleccionados.</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <THead>
-                    <TH>Fecha</TH>
-                    <TH>Tipo</TH>
-                    <TH>Producto</TH>
-                    <TH align="right">Cantidad</TH>
+                    <THSort field="fecha" sort={sort} dir={dir} onSort={onSort}>Fecha</THSort>
+                    <THSort field="tipo" sort={sort} dir={dir} onSort={onSort}>Tipo</THSort>
+                    <THSort field="producto" sort={sort} dir={dir} onSort={onSort}>Producto</THSort>
+                    <THSort field="cantidad" sort={sort} dir={dir} onSort={onSort} align="right">Cantidad</THSort>
                     <TH>Motivo</TH>
                   </THead>
                   <TBody>
-                    {filteredMovs.map((m) => {
+                    {sortedMovs.map((m) => {
                       const prod = productos.find((p) => p.id === m.producto_id)
                       const cant = Number(m.cantidad)
                       const signo = m.tipo === 'SALIDA' ? '-' : m.tipo === 'ENTRADA' ? '+' : (cant > 0 ? '+' : '')

@@ -2,8 +2,13 @@ import api from './axios'
 
 const BASE = '/prestamos'
 
-export async function listarPrestamos({ page = 1, q = '', estado = '', perPage = 20 } = {}) {
-  const { data } = await api.get(BASE, { params: { page, q, estado, per_page: perPage } })
+export async function listarPrestamos({ page = 1, q = '', estado = '', perPage = 20, sort = '', dir = '' } = {}) {
+  const params = { page, q, estado, per_page: perPage }
+  if (sort) {
+    params.sort = sort
+    params.dir = dir || 'asc'
+  }
+  const { data } = await api.get(BASE, { params })
   return data
 }
 

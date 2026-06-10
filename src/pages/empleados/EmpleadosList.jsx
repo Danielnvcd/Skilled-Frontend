@@ -7,8 +7,8 @@ import {
   MoreHorizontal, FileDown,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, Table, THead, TH, TBody, TR, TD,
-  Badge, Pagination, EmptyState, ConfirmDialog, Skeleton,
+  PageHeader, Button, Input, Table, THead, TH, THSort, TBody, TR, TD,
+  Badge, Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -52,6 +52,10 @@ export default function EmpleadosList({ variante = 'activos' }) {
   const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10))
   const [q, setQ] = useState(searchParams.get('q') || '')
   const [qInput, setQInput] = useState(q)
+  // Orden por columna, sincronizado a la URL para que un link compartido
+  // reproduzca la misma vista. sort vacío = default del backend (nombre asc).
+  const [sort, setSort] = useState(searchParams.get('sort') || '')
+  const [dir, setDir] = useState(searchParams.get('dir') || 'asc')
   const [confirmId, setConfirmId] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null) // 'baja' | 'reactivar'
   const [busy, setBusy] = useState(false)
@@ -97,13 +101,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
     error,
     refetch,
   } = useResource(
-    ['empleados', { page, q, variante }],
-    () => listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE }),
+    ['empleados', { page, q, variante, sort, dir }],
+    () => listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE, sort, dir }),
     {
       staleMs: 30_000,
-      // 'empleado:changed' lo emitirá el backend cuando agreguemos
-      // emit_to_role() en api_trabajadores. Mientras tanto la caché se
-      // mantiene fresca con staleMs + revalidateOnFocus.
+      // El backend emite 'empleado:changed' en cada mutación (crear, editar,
+      // baja, reactivar, bulk, import); al invalidarse se refetchea esta
+      // misma key, así el orden y los filtros activos sobreviven al refresh.
       invalidateOn: ['empleado:changed'],
     },
   )
@@ -117,8 +121,34 @@ export default function EmpleadosList({ variante = 'activos' }) {
     const next = new URLSearchParams()
     if (q) next.set('q', q)
     if (page !== 1) next.set('page', String(page))
+    if (sort) {
+      next.set('sort', sort)
+      next.set('dir', dir)
+    }
     setSearchParams(next, { replace: true })
-  }, [q, page])
+  }, [q, page, sort, dir])
+
+  // Click en encabezado: asc → desc → quitar orden. Resetea a página 1 porque
+  // la página N de un orden no corresponde a la página N de otro.
+  const onSort = (field, nextDir) => {
+    setPage(1)
+    if (!nextDir) {
+      setSort('')
+      setDir('asc')
+    } else {
+      setSort(field)
+      setDir(nextDir)
+    }
+  }
+
+  // Aplicar una vista guardada (o volver al default al deseleccionarla).
+  const aplicarVista = (params) => {
+    setPage(1)
+    setQ(params.q || '')
+    setQInput(params.q || '')
+    setSort(params.sort || '')
+    setDir(params.dir || 'asc')
+  }
 
   // ── Selección múltiple ─────────────────────────────────────────────────────
   // Selección acumulativa entre páginas y búsquedas: el usuario puede armar
@@ -325,6 +355,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
         </div>
       </form>
 
+      <SavedViews
+        listKey={variante === 'bajas' ? 'empleados-bajas' : 'empleados'}
+        current={{ q, sort, dir: sort ? dir : '' }}
+        defaults={{ q: '', sort: '', dir: '' }}
+        onApply={aplicarVista}
+      />
+
       {isAdmin && selectedIds.size > 0 && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 flex flex-wrap items-center gap-2">
           <span className="text-sm font-semibold text-brand-900 dark:text-brand-100">
@@ -407,12 +444,12 @@ export default function EmpleadosList({ variante = 'activos' }) {
                   />
                 </TH>
               )}
-              <TH>Empleado</TH>
-              <TH>Área / Puesto</TH>
-              <TH>Tipo nómina</TH>
-              <TH align="right">Salario/sem</TH>
-              <TH>Ingreso</TH>
-              {variante === 'bajas' && <TH>Fecha baja</TH>}
+              <THSort field="nombre" sort={sort} dir={dir} onSort={onSort}>Empleado</THSort>
+              <THSort field="area" sort={sort} dir={dir} onSort={onSort}>Área / Puesto</THSort>
+              <THSort field="tipo_nomina" sort={sort} dir={dir} onSort={onSort}>Tipo nómina</THSort>
+              <THSort field="salario" sort={sort} dir={dir} onSort={onSort} align="right">Salario/sem</THSort>
+              <THSort field="ingreso" sort={sort} dir={dir} onSort={onSort}>Ingreso</THSort>
+              {variante === 'bajas' && <THSort field="baja" sort={sort} dir={dir} onSort={onSort}>Fecha baja</THSort>}
               <TH align="right">Acciones</TH>
             </THead>
             <TBody>
@@ -468,7 +505,9 @@ export default function EmpleadosList({ variante = 'activos' }) {
                   {variante === 'bajas' && <TD><span className="text-sm">{fmtFechaCorta(t.fecha_baja)}</span></TD>}
                   <TD align="right">
                     <RowActionsMenu
-                      onView={() => navigate(`/empleados/${t.id}`)}
+                      // El pager de la ficha (‹ x/y ›) recibe los ids visibles
+                      // de esta página para hojear sin volver a la lista.
+                      onView={() => navigate(`/empleados/${t.id}`, { state: { pager: { ids: visibleIds } } })}
                       onEdit={() => navigate(`/empleados/${t.id}/editar`)}
                       onShowQr={() => abrirCredencial(t)}
                       loadingQr={loadingCredencial === t.id}

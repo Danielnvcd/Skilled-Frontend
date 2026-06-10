@@ -28,7 +28,9 @@ export const MENUS = {
         { path: '/credenciales', label: 'Credenciales', icon: IdCard },
         { path: '/proyectos', label: 'Proyectos', icon: FolderOpen },
         { path: '/horas', label: 'Horas', icon: Clock, end: true },
-        { path: '/horas/movil', label: 'Escanear QR', icon: ScanLine, mobileOnly: true },
+        // Visible también en desktop (2026-06-09): las laptops tienen webcam y
+        // ocultarla hacía que nadie supiera que existe la toma de asistencia.
+        { path: '/horas/movil', label: 'Asistencia QR', icon: ScanLine },
         { path: '/horas/qr', label: 'Tarjetas', icon: QrCode },
         { path: '/prenomina', label: 'Prenómina', icon: DollarSign },
         { path: '/proyecto-total', label: 'Proyecto Total', icon: PieChart },
@@ -63,7 +65,7 @@ export const MENUS = {
         { path: '/mis-proyectos', label: 'Mis Proyectos', icon: FolderOpen },
         { path: '/credenciales', label: 'Credenciales', icon: IdCard },
         { path: '/horas', label: 'Reporte de Horas', icon: Clock, end: true },
-        { path: '/horas/movil', label: 'Escanear QR', icon: ScanLine, mobileOnly: true },
+        { path: '/horas/movil', label: 'Asistencia QR', icon: ScanLine },
         { path: '/ficha', label: 'Ficha Técnica', icon: HardHat },
       ],
     },

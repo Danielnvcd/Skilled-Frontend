@@ -44,9 +44,12 @@ function greeting() {
 // StatCard estilo SaaS sobrio: tarjeta blanca con chip neutro monocromo. El
 // valor numérico es el protagonista; el icono distingue la métrica sin
 // recurrir a color.
-function StatCard({ label, value, Icon }) {
-  return (
-    <div className="bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4">
+// `to` opcional convierte la tarjeta en drill-down: clic navega a la lista
+// que explica el número (regla ERP: ningún KPI sin clic). El valor en sí se
+// mantiene fresco por websocket vía el invalidateOn del useResource de arriba.
+function StatCard({ label, value, Icon, to }) {
+  const inner = (
+    <>
       <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
         <Icon size={22} strokeWidth={1.8} />
       </div>
@@ -54,7 +57,19 @@ function StatCard({ label, value, Icon }) {
         <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
         <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
       </div>
-    </div>
+    </>
+  )
+  const base = 'bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4'
+  if (!to) return <div className={base}>{inner}</div>
+  return (
+    <Link
+      to={to}
+      title={`Ver ${label.toLowerCase()}`}
+      className={`${base} group hover:border-brand-300 dark:hover:border-brand-700 hover:shadow-sm transition-all`}
+    >
+      {inner}
+      <ChevronRight size={16} className="text-ink-300 dark:text-ink-600 group-hover:text-brand-500 flex-shrink-0 transition-colors" />
+    </Link>
   )
 }
 
@@ -489,10 +504,11 @@ export default function Dashboard() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={UsersRound} />
-        <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={TrendingUp} />
-        <StatCard label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderKanban} />
-        <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={Activity} />
+        <StatCard label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={UsersRound} to="/empleados" />
+        {/* Nuevos este mes → la lista ordenada por ingreso desc deja arriba justo a esos. */}
+        <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={TrendingUp} to="/empleados?sort=ingreso&dir=desc" />
+        <StatCard label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderKanban} to="/proyectos" />
+        <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={Activity} to="/proyectos" />
       </div>
 
       {/* Charts */}

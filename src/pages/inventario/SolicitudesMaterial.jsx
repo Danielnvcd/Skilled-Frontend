@@ -3,10 +3,11 @@ import toast from 'react-hot-toast'
 import {
   ClipboardList, CheckCircle2, XCircle, PackageCheck, Search, Clock,
   ListTodo, ThumbsUp, ThumbsDown, PackageOpen, Printer, Pencil, AlertTriangle,
+  List, LayoutGrid,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, ConfirmDialog,
-  Skeleton, Table, THead, TH, TBody, TR, TD, Badge, Modal, Select,
+  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Badge, Modal, Select, SavedViews,
 } from '../../components/ui'
 import {
   getSolicitudes, updateSolicitudEstado, imprimirSolicitud,
@@ -15,6 +16,7 @@ import {
 import { extractApiError } from '../../utils/apiError'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
+import SolicitudesKanban from './SolicitudesKanban'
 
 const TABS = [
   { key: 'TODAS',     label: 'Todas',      icon: ListTodo },
@@ -32,6 +34,18 @@ export default function SolicitudesMaterial() {
 
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState('TODAS')
+  // Orden client-side: el dataset (≤200) ya está en memoria.
+  const [sort, setSort] = useState('')
+  const [dir, setDir] = useState('asc')
+  // Vista tabla | kanban, persistida. El kanban segmenta por estado en
+  // columnas, así que en ese modo las pestañas de estado se ocultan.
+  const [vista, setVistaState] = useState(() => {
+    try { return localStorage.getItem('ui:solicitudes:vista') || 'tabla' } catch { return 'tabla' }
+  })
+  const setVista = (v) => {
+    setVistaState(v)
+    try { localStorage.setItem('ui:solicitudes:vista', v) } catch {}
+  }
 
   const [confirmStatus, setConfirmStatus] = useState(null)
   const [savingStatus, setSavingStatus] = useState(false)
@@ -76,25 +90,66 @@ export default function SolicitudesMaterial() {
     return acc
   }, [solicitudes])
 
-  const filtered = useMemo(() => {
-    let res = solicitudes
-    if (activeTab !== 'TODAS') {
-      res = res.filter((s) => s.estatus === activeTab)
-    }
+  // Búsqueda y pestaña por separado: el kanban usa solo la búsqueda (sus
+  // columnas YA segmentan por estado), la tabla aplica ambas.
+  const filteredBySearch = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (q) {
-      res = res.filter((s) =>
-        String(s.id).includes(q) ||
-        s.solicitante_nombre?.toLowerCase().includes(q) ||
-        s.proyecto?.toLowerCase().includes(q) ||
-        s.detalles?.some((d) =>
-          d.producto_descripcion?.toLowerCase().includes(q) ||
-          d.producto_codigo?.toLowerCase().includes(q)
-        )
+    if (!q) return solicitudes
+    return solicitudes.filter((s) =>
+      String(s.id).includes(q) ||
+      s.solicitante_nombre?.toLowerCase().includes(q) ||
+      s.proyecto?.toLowerCase().includes(q) ||
+      s.detalles?.some((d) =>
+        d.producto_descripcion?.toLowerCase().includes(q) ||
+        d.producto_codigo?.toLowerCase().includes(q)
       )
+    )
+  }, [solicitudes, search])
+
+  const filtered = useMemo(() => {
+    if (activeTab === 'TODAS') return filteredBySearch
+    return filteredBySearch.filter((s) => s.estatus === activeTab)
+  }, [filteredBySearch, activeTab])
+
+  const sorted = useMemo(() => {
+    if (!sort) return filtered
+    const mul = dir === 'desc' ? -1 : 1
+    const val = (s) => {
+      switch (sort) {
+        case 'id': return Number(s.id) || 0
+        case 'fecha': return s.fecha_creacion || ''
+        case 'solicitante': return (s.solicitante_nombre || '').toLowerCase()
+        case 'proyecto': return (s.proyecto || '').toLowerCase()
+        case 'items': return s.detalles?.length || 0
+        case 'estado': return s.estatus || ''
+        default: return 0
+      }
     }
-    return res
-  }, [solicitudes, activeTab, search])
+    return [...filtered].sort((a, b) => {
+      const va = val(a)
+      const vb = val(b)
+      if (va < vb) return -mul
+      if (va > vb) return mul
+      return 0
+    })
+  }, [filtered, sort, dir])
+
+  const onSort = (field, nextDir) => {
+    if (!nextDir) {
+      setSort('')
+      setDir('asc')
+    } else {
+      setSort(field)
+      setDir(nextDir)
+    }
+  }
+
+  const aplicarVista = (params) => {
+    setSearch(params.q || '')
+    setActiveTab(params.tab || 'TODAS')
+    setSort(params.sort || '')
+    setDir(params.dir || 'asc')
+  }
 
   const handleChangeStatus = async () => {
     if (!confirmStatus) return
@@ -108,6 +163,26 @@ export default function SolicitudesMaterial() {
       toast.error(extractApiError(err, 'No se pudo cambiar el estado'))
     } finally {
       setSavingStatus(false)
+    }
+  }
+
+  // Drop en el kanban. Arrastrar ya es la confirmación (no se abre el
+  // ConfirmDialog de la tabla); entregar sí pasa por su modal porque captura
+  // cantidades y almacén. Los 409 del backend (stock insuficiente, transición
+  // inválida) llegan como toast y la tarjeta no se mueve — el refetch del
+  // websocket deja el tablero como el server lo ve.
+  const handleDropEstado = async (s, nuevoEstado) => {
+    if (nuevoEstado === s.estatus) return
+    if (s.estatus === 'APROBADA' && nuevoEstado === 'ENTREGADA') {
+      setEntregaTarget(s)
+      return
+    }
+    try {
+      await updateSolicitudEstado(s.id, nuevoEstado)
+      toast.success(`Solicitud #${s.id} → ${nuevoEstado.toLowerCase()}`)
+      load()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo cambiar el estado'))
     }
   }
 
@@ -172,6 +247,35 @@ export default function SolicitudesMaterial() {
       {/* Tabs + buscador */}
       <Card className="mt-6 !p-3">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          {/* Toggle tabla/kanban */}
+          <div className="inline-flex rounded-md border border-ink-200 dark:border-ink-700 overflow-hidden flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setVista('tabla')}
+              title="Vista de tabla"
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                vista === 'tabla'
+                  ? 'bg-brand-700 text-white'
+                  : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'
+              }`}
+            >
+              <List size={13} /> Tabla
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista('kanban')}
+              title="Vista de tablero"
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold transition-colors border-l border-ink-200 dark:border-ink-700 ${
+                vista === 'kanban'
+                  ? 'bg-brand-700 text-white'
+                  : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'
+              }`}
+            >
+              <LayoutGrid size={13} /> Tablero
+            </button>
+          </div>
+
+          {vista === 'tabla' && (
           <div className="flex flex-wrap gap-1.5">
             {TABS.map((t) => {
               const Icon = t.icon
@@ -193,6 +297,7 @@ export default function SolicitudesMaterial() {
               )
             })}
           </div>
+          )}
 
           <div className="relative flex-1 sm:ml-auto sm:max-w-xs">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
@@ -207,11 +312,41 @@ export default function SolicitudesMaterial() {
         </div>
       </Card>
 
+      {/* Vistas guardadas (filtros + orden con nombre) */}
+      <div className="mt-4">
+        <SavedViews
+          listKey="inventario-solicitudes"
+          current={{ q: search, tab: activeTab === 'TODAS' ? '' : activeTab, sort, dir: sort ? dir : '' }}
+          defaults={{ q: '', tab: '', sort: '', dir: '' }}
+          onApply={aplicarVista}
+        />
+      </div>
+
+      {/* Tablero kanban: arrastrar tarjeta = cambio de estado. Solo admin/
+          inventario puede arrastrar; los demás ven el tablero de lectura. */}
+      {vista === 'kanban' && (
+        loading ? (
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+          </div>
+        ) : (
+          <SolicitudesKanban
+            solicitudes={filteredBySearch}
+            isAdmin={isAdmin}
+            onCardClick={(s) => setViewDetails(s)}
+            onDropEstado={handleDropEstado}
+            getStatusTone={getStatusTone}
+            isAprobadaConPendiente={isAprobadaConPendiente}
+          />
+        )
+      )}
+
       {/* Tabla */}
+      {vista === 'tabla' && (
       <Card className="mt-4">
         {loading ? (
           <div className="p-6"><Skeleton className="h-40 w-full" /></div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="p-10 text-center text-ink-500">
             {solicitudes.length === 0
               ? 'No hay solicitudes registradas.'
@@ -221,16 +356,16 @@ export default function SolicitudesMaterial() {
           <div className="overflow-x-auto">
             <Table>
               <THead>
-                <TH>ID</TH>
-                <TH>Fecha</TH>
-                <TH>Solicitante</TH>
-                <TH>Proyecto</TH>
-                <TH>Ítems</TH>
-                <TH>Estado</TH>
+                <THSort field="id" sort={sort} dir={dir} onSort={onSort}>ID</THSort>
+                <THSort field="fecha" sort={sort} dir={dir} onSort={onSort}>Fecha</THSort>
+                <THSort field="solicitante" sort={sort} dir={dir} onSort={onSort}>Solicitante</THSort>
+                <THSort field="proyecto" sort={sort} dir={dir} onSort={onSort}>Proyecto</THSort>
+                <THSort field="items" sort={sort} dir={dir} onSort={onSort}>Ítems</THSort>
+                <THSort field="estado" sort={sort} dir={dir} onSort={onSort}>Estado</THSort>
                 <TH align="right">Acciones</TH>
               </THead>
               <TBody>
-                {filtered.map((s) => {
+                {sorted.map((s) => {
                   const tienePendiente = isAprobadaConPendiente(s)
                   return (
                   <TR key={s.id}>
@@ -304,6 +439,7 @@ export default function SolicitudesMaterial() {
           </div>
         )}
       </Card>
+      )}
 
       <ConfirmDialog
         open={!!confirmStatus}

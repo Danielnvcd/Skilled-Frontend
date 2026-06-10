@@ -58,6 +58,15 @@ const COMMANDS = [
     run: ({ navigate }) => navigate('/horas/qr'),
   },
   {
+    id: 'horas-asistencia',
+    label: 'Tomar asistencia (escanear QR)',
+    hint: 'Entrada/salida con credencial',
+    group: 'Horas',
+    icon: ScanLine,
+    roles: ['admin', 'super_admin', 'coordinador'],
+    run: ({ navigate }) => navigate('/horas/movil'),
+  },
+  {
     id: 'prestamos',
     label: 'Otorgar préstamo',
     group: 'Préstamos',

@@ -4,6 +4,7 @@ import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import BottomNav from './BottomNav'
 import Breadcrumbs from './Breadcrumbs'
+import ShortcutsHelp from './ShortcutsHelp'
 import useIsMobileDevice from '../hooks/useIsMobileDevice'
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts'
 
@@ -82,6 +83,8 @@ export default function Layout() {
         </main>
       </div>
       {isMobileDevice && <BottomNav />}
+      {/* Overlay de atajos — abre con `?`, autocontenido (listener propio). */}
+      <ShortcutsHelp />
     </div>
   )
 }

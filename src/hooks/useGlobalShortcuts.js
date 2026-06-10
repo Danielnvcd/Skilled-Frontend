@@ -12,8 +12,10 @@ import { useAuth } from '../context/AuthContext'
 // La tabla de atajos depende del rol: cada rol tiene sus propios destinos
 // para que `g e` signifique lo correcto en cada contexto.
 
-const SHORTCUTS = {
+// Exportado para que ShortcutsHelp (overlay con `?`) liste los atajos del rol.
+export const SHORTCUTS = {
   admin: {
+    a: '/horas/movil',
     e: '/empleados',
     p: '/prenomina',
     h: '/horas',
@@ -27,6 +29,7 @@ const SHORTCUTS = {
     m: '/metricas',
   },
   coordinador: {
+    a: '/horas/movil',
     h: '/horas',
     d: '/directorio',
     p: '/mis-proyectos',

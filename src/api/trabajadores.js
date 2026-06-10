@@ -2,8 +2,13 @@ import api from './axios'
 
 const BASE = '/trabajadores'
 
-export async function listarTrabajadores({ page = 1, q = '', estado = 'activos', perPage = 20 } = {}) {
-  const { data } = await api.get(BASE, { params: { page, q, estado, per_page: perPage } })
+export async function listarTrabajadores({ page = 1, q = '', estado = 'activos', perPage = 20, sort = '', dir = '' } = {}) {
+  const params = { page, q, estado, per_page: perPage }
+  if (sort) {
+    params.sort = sort
+    params.dir = dir || 'asc'
+  }
+  const { data } = await api.get(BASE, { params })
   return data
 }
 
@@ -14,6 +19,23 @@ export async function obtenerFichaTecnica() {
 
 export async function obtenerTrabajador(id) {
   const { data } = await api.get(`${BASE}/${id}`)
+  return data
+}
+
+// ── Notas internas (chatter de la ficha) ────────────────────────────────────
+
+export async function listarNotas(id) {
+  const { data } = await api.get(`${BASE}/${id}/notas`)
+  return data
+}
+
+export async function crearNota(id, texto) {
+  const { data } = await api.post(`${BASE}/${id}/notas`, { texto })
+  return data
+}
+
+export async function eliminarNota(id, notaId) {
+  const { data } = await api.delete(`${BASE}/${id}/notas/${notaId}`)
   return data
 }
 

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Pencil, Download, Briefcase, Hash, Mail, Phone,
   IdCard, FileText, AlertCircle, MapPin, User, UserMinus, UserCheck, Eye,
   Check, CheckCircle2, Cake, Trophy, Calendar, Sparkles, QrCode, ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import {
   PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog, ImageViewer,
 } from '../../components/ui'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 import EmpleadoTimeline from '../../components/empleados/EmpleadoTimeline'
+import NotasPanel from '../../components/empleados/NotasPanel'
 import CredencialPreviewModal from '../../components/empleados/CredencialPreviewModal'
 import CredencialCard from '../../components/empleados/CredencialCard'
 import {
@@ -247,7 +249,20 @@ function SectionTitle({ children }) {
 export default function EmpleadoView() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const { isAdmin } = useAuth()
+
+  // Pager ‹ x/y ›: la lista pasa los ids visibles vía location.state al abrir
+  // la ficha; con eso se puede hojear empleado por empleado sin volver atrás.
+  // Si se entró por URL directa (sin state), el pager simplemente no se pinta.
+  const pagerIds = location.state?.pager?.ids
+  const pagerIdx = Array.isArray(pagerIds) ? pagerIds.indexOf(Number(id)) : -1
+  const irA = (offset) => {
+    const destino = pagerIds?.[pagerIdx + offset]
+    if (destino != null) {
+      navigate(`/empleados/${destino}`, { state: { pager: { ids: pagerIds } } })
+    }
+  }
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
@@ -322,7 +337,32 @@ export default function EmpleadoView() {
           </Link>
         }
         actions={
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            {pagerIdx >= 0 && pagerIds.length > 1 && (
+              <div className="inline-flex items-center gap-1 mr-1 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-1 py-0.5">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  title="Empleado anterior"
+                  disabled={pagerIdx <= 0}
+                  onClick={() => irA(-1)}
+                >
+                  <ChevronLeft size={14} />
+                </Button>
+                <span className="text-xs font-medium tabular-nums text-ink-500 dark:text-ink-400 px-1 select-none">
+                  {pagerIdx + 1} / {pagerIds.length}
+                </span>
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  title="Empleado siguiente"
+                  disabled={pagerIdx >= pagerIds.length - 1}
+                  onClick={() => irA(1)}
+                >
+                  <ChevronRight size={14} />
+                </Button>
+              </div>
+            )}
             <Button variant="secondary" leftIcon={<Download size={14} />} loading={exporting} onClick={onExport}>
               Exportar
             </Button>
@@ -400,6 +440,10 @@ export default function EmpleadoView() {
           sin importar cuántos campos tenga cada card.
       */}
       <div className="lg:columns-2 lg:gap-6 [&>*]:mb-6 lg:[&>*]:break-inside-avoid">
+        {/* Notas internas (chatter) — visible solo para quien puede ver la
+            ficha; se refresca en vivo vía nota:changed. */}
+        <NotasPanel trabajadorId={Number(id)} />
+
         <Card>
           <SectionTitle>Datos personales</SectionTitle>
           <dl>

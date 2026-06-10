@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Search, HandCoins, Eye, Pencil, FileSpreadsheet } from 'lucide-react'
 import {
-  PageHeader, Button, Input, Select, Table, THead, TH, TBody, TR, TD,
-  Badge, EmptyState, Pagination, Skeleton,
+  PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
+  Badge, EmptyState, Pagination, Skeleton, SavedViews,
 } from '../../components/ui'
 import { listarPrestamos, exportarExcelPrestamos } from '../../api/prestamos'
 import { useResource } from '../../hooks/useResource'
@@ -30,6 +30,8 @@ export default function PrestamosList() {
   const [q, setQ] = useState('')
   const [qInput, setQInput] = useState('')
   const [estado, setEstado] = useState('')
+  const [sort, setSort] = useState('')
+  const [dir, setDir] = useState('asc')
   const [formOpen, setFormOpen] = useState(false)
   const [editPrestamo, setEditPrestamo] = useState(null)
   const [detalleId, setDetalleId] = useState(null)
@@ -40,8 +42,8 @@ export default function PrestamosList() {
     error,
     refetch,
   } = useResource(
-    ['prestamos', { page, q, estado }],
-    () => listarPrestamos({ page, q, estado, perPage: PER_PAGE }),
+    ['prestamos', { page, q, estado, sort, dir }],
+    () => listarPrestamos({ page, q, estado, perPage: PER_PAGE, sort, dir }),
     { staleMs: 30_000, invalidateOn: ['prestamo:changed'] },
   )
   const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
@@ -54,6 +56,26 @@ export default function PrestamosList() {
     e.preventDefault()
     setPage(1)
     setQ(qInput.trim())
+  }
+
+  const onSort = (field, nextDir) => {
+    setPage(1)
+    if (!nextDir) {
+      setSort('')
+      setDir('asc')
+    } else {
+      setSort(field)
+      setDir(nextDir)
+    }
+  }
+
+  const aplicarVista = (params) => {
+    setPage(1)
+    setQ(params.q || '')
+    setQInput(params.q || '')
+    setEstado(params.estado || '')
+    setSort(params.sort || '')
+    setDir(params.dir || 'asc')
   }
 
   const openNuevo = () => { setEditPrestamo(null); setFormOpen(true) }
@@ -114,6 +136,13 @@ export default function PrestamosList() {
         </div>
       </form>
 
+      <SavedViews
+        listKey="prestamos"
+        current={{ q, estado, sort, dir: sort ? dir : '' }}
+        defaults={{ q: '', estado: '', sort: '', dir: '' }}
+        onApply={aplicarVista}
+      />
+
       {loading ? (
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
@@ -131,13 +160,13 @@ export default function PrestamosList() {
         <>
           <Table>
             <THead>
-              <TH>Trabajador</TH>
-              <TH align="right">Monto total</TH>
-              <TH align="right">Restante</TH>
+              <THSort field="trabajador" sort={sort} dir={dir} onSort={onSort}>Trabajador</THSort>
+              <THSort field="monto" sort={sort} dir={dir} onSort={onSort} align="right">Monto total</THSort>
+              <THSort field="restante" sort={sort} dir={dir} onSort={onSort} align="right">Restante</THSort>
               <TH>Progreso</TH>
-              <TH align="right">Desc/sem</TH>
-              <TH>Inicio</TH>
-              <TH>Estado</TH>
+              <THSort field="descuento" sort={sort} dir={dir} onSort={onSort} align="right">Desc/sem</THSort>
+              <THSort field="inicio" sort={sort} dir={dir} onSort={onSort}>Inicio</THSort>
+              <THSort field="estado" sort={sort} dir={dir} onSort={onSort}>Estado</THSort>
               <TH align="right">Acciones</TH>
             </THead>
             <TBody>
