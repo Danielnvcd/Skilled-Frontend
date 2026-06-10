@@ -63,7 +63,7 @@ const COMMANDS = [
     hint: 'Entrada/salida con credencial',
     group: 'Horas',
     icon: ScanLine,
-    roles: ['admin', 'super_admin', 'coordinador'],
+    roles: ['coordinador'],
     run: ({ navigate }) => navigate('/horas/movil'),
   },
   {

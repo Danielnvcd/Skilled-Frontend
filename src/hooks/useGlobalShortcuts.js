@@ -15,7 +15,6 @@ import { useAuth } from '../context/AuthContext'
 // Exportado para que ShortcutsHelp (overlay con `?`) liste los atajos del rol.
 export const SHORTCUTS = {
   admin: {
-    a: '/horas/movil',
     e: '/empleados',
     p: '/prenomina',
     h: '/horas',

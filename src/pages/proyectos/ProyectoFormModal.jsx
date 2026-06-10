@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Search, Users as UsersIcon, AlertCircle } from 'lucide-react'
 import { Modal, Button, Input, Select } from '../../components/ui'
 import { obtenerMeta, obtenerProyecto, crearProyecto, actualizarProyecto } from '../../api/proyectos'
+import { useResource } from '../../hooks/useResource'
 
 const EMPTY_FORM = {
   numero_proyecto: '',
@@ -12,43 +13,56 @@ const EMPTY_FORM = {
   participantes_ids: [],
 }
 
+const snapshot = (form) => JSON.stringify({
+  ...form,
+  participantes_ids: [...form.participantes_ids].sort((a, b) => a - b),
+})
+
 export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }) {
   const isEdit = Boolean(proyectoId)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [meta, setMeta] = useState({ coordinadores: [], trabajadores: [] })
-  const [loadingMeta, setLoadingMeta] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filterParticipantes, setFilterParticipantes] = useState('')
   const [errors, setErrors] = useState({})
+  // Estado inicial del form para detectar cambios sin guardar al cerrar.
+  const initialRef = useRef(snapshot(EMPTY_FORM))
+
+  // Catálogo del modal (coordinadores + trabajadores) cacheado: antes se
+  // re-pedía completo en cada apertura. Se invalida por socket cuando cambia
+  // la plantilla de empleados.
+  const { data: metaData, loading: loadingMeta, error: metaError } = useResource(
+    ['proyectos-meta'],
+    obtenerMeta,
+    { enabled: open, staleMs: 60_000, invalidateOn: ['empleado:changed', 'usuario:changed'] },
+  )
+  const meta = metaData ?? { coordinadores: [], trabajadores: [] }
+
+  useEffect(() => {
+    if (open && metaError) toast.error(metaError.response?.data?.error || 'Error al cargar datos')
+  }, [open, metaError])
 
   useEffect(() => {
     if (!open) return
     setErrors({})
     setFilterParticipantes('')
-    setLoadingMeta(true)
-    obtenerMeta()
-      .then(setMeta)
-      .catch((err) => toast.error(err.response?.data?.error || 'Error al cargar datos'))
-      .finally(() => setLoadingMeta(false))
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
     if (!isEdit) {
       setForm(EMPTY_FORM)
+      initialRef.current = snapshot(EMPTY_FORM)
       return
     }
     setLoadingDetail(true)
     obtenerProyecto(proyectoId)
       .then((p) => {
-        setForm({
+        const loaded = {
           numero_proyecto: p.numero_proyecto || '',
           nombre: p.nombre || '',
           activo: Boolean(p.activo),
           coordinador_id: p.coordinador_id ? String(p.coordinador_id) : '',
           participantes_ids: (p.participantes_ids || []).map(Number),
-        })
+        }
+        setForm(loaded)
+        initialRef.current = snapshot(loaded)
       })
       .catch((err) => {
         toast.error(err.response?.data?.error || 'Error al cargar el proyecto')
@@ -56,6 +70,14 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
       })
       .finally(() => setLoadingDetail(false))
   }, [open, isEdit, proyectoId])
+
+  const isDirty = () => snapshot(form) !== initialRef.current
+
+  const requestClose = () => {
+    if (saving) return
+    if (isDirty() && !window.confirm('Hay cambios sin guardar. ¿Cerrar de todas formas?')) return
+    onClose?.()
+  }
 
   const seleccionados = useMemo(() => new Set(form.participantes_ids.map(Number)), [form.participantes_ids])
 
@@ -98,13 +120,11 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
       participantes_ids: form.participantes_ids,
     }
     try {
-      if (isEdit) {
-        await actualizarProyecto(proyectoId, payload)
-        toast.success('Proyecto actualizado')
-      } else {
-        await crearProyecto(payload)
-        toast.success('Proyecto creado')
-      }
+      const res = isEdit
+        ? await actualizarProyecto(proyectoId, payload)
+        : await crearProyecto(payload)
+      toast.success(isEdit ? 'Proyecto actualizado' : 'Proyecto creado')
+      res?.warnings?.forEach((w) => toast(w, { icon: '⚠️' }))
       onSaved?.()
       onClose?.()
     } catch (err) {
@@ -124,14 +144,14 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
   return (
     <Modal
       open={open}
-      onClose={saving ? undefined : onClose}
+      onClose={saving ? undefined : requestClose}
       title={isEdit ? 'Editar Proyecto' : 'Registrar Proyecto'}
       description={isEdit ? 'Modifica los datos y participantes asignados.' : 'Da de alta un nuevo proyecto y asigna participantes.'}
       size="xl"
       bodyClassName="!p-0"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button variant="secondary" onClick={requestClose} disabled={saving}>Cancelar</Button>
           <Button variant="primary" onClick={handleSubmit} loading={saving} disabled={loading}>
             {isEdit ? 'Guardar cambios' : 'Guardar Proyecto'}
           </Button>
@@ -189,7 +209,7 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
             <span>
               <span className="block text-sm font-medium text-ink-800 dark:text-ink-100">Proyecto activo</span>
               <span className="block text-xs text-ink-500 dark:text-ink-400">
-                Los inactivos no aceptan registro de horas.
+                Los inactivos no aceptan registro de horas y dejan de figurar en el expediente de sus trabajadores.
               </span>
             </span>
           </label>

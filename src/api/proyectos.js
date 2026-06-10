@@ -2,8 +2,8 @@ import api from './axios'
 
 const BASE = '/proyectos'
 
-export async function listarProyectos({ q = '', estado = 'todos' } = {}) {
-  const { data } = await api.get(BASE, { params: { q, estado } })
+export async function listarProyectos({ q = '', estado = 'todos', page = 1, perPage = 20, sort = '', dir = 'asc' } = {}) {
+  const { data } = await api.get(BASE, { params: { q, estado, page, per_page: perPage, sort, dir } })
   return data
 }
 

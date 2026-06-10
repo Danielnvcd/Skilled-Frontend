@@ -28,9 +28,8 @@ export const MENUS = {
         { path: '/credenciales', label: 'Credenciales', icon: IdCard },
         { path: '/proyectos', label: 'Proyectos', icon: FolderOpen },
         { path: '/horas', label: 'Horas', icon: Clock, end: true },
-        // Visible también en desktop (2026-06-09): las laptops tienen webcam y
-        // ocultarla hacía que nadie supiera que existe la toma de asistencia.
-        { path: '/horas/movil', label: 'Asistencia QR', icon: ScanLine },
+        // Asistencia QR (/horas/movil) es exclusiva del coordinador (2026-06-10):
+        // la toma de asistencia en obra es su flujo, no del admin.
         { path: '/horas/qr', label: 'Tarjetas', icon: QrCode },
         { path: '/prenomina', label: 'Prenómina', icon: DollarSign },
         { path: '/proyecto-total', label: 'Proyecto Total', icon: PieChart },

@@ -139,7 +139,7 @@ export default function App() {
 
         {/* Admin + Coordinador: horas, credenciales, ficha técnica */}
         <Route path="horas"                  element={<RoleRoute allow={canOperar}><ReportesList /></RoleRoute>} />
-        <Route path="horas/movil"            element={<RoleRoute allow={canOperar}><HorasMovil /></RoleRoute>} />
+        <Route path="horas/movil"            element={<RoleRoute allow={isCoordinador}><HorasMovil /></RoleRoute>} />
         <Route path="horas/qr"               element={<RoleRoute allow={isAdmin}><HorasAdminQR /></RoleRoute>} />
         <Route path="horas/:id"              element={<RoleRoute allow={canOperar}><ReporteCaptura /></RoleRoute>} />
         <Route path="credenciales"           element={<RoleRoute allow={canOperar}><CredencialesList /></RoleRoute>} />

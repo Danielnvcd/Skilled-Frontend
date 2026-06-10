@@ -1,32 +1,20 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   BarChart3, Users, IdCard, Factory, FileBadge,
   AlertTriangle, Clock, Search,
 } from 'lucide-react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, PieChart, Pie, Cell, Legend,
-} from 'recharts'
-import {
   PageHeader, Skeleton, Badge,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui'
+import {
+  DonutCorporativo, BarrasCorporativas, BRAND_PRIMARY, BRAND_PRIMARY_DARK,
+} from '../components/charts/CorporateCharts'
 import { useTheme } from '../context/ThemeContext'
 import { getMetricas } from '../api/metricas'
 import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
-
-// Paleta sobria 5 tonos (igual al Dashboard) en lugar de 12 saturados. El
-// neutro slate se reutiliza al rotar para evitar ruido visual cuando hay
-// muchas barras.
-const CHART_COLORS = [
-  '#0ea5e9', // sky-500
-  '#10b981', // emerald-500
-  '#8b5cf6', // violet-500
-  '#f59e0b', // amber-500
-  '#64748b', // slate-500 — neutro
-]
 
 // StatCard sobrio: chip neutro slate, sin borde lateral colorido. Mismo
 // patrón que el Dashboard para que las dos páginas se sientan parte del
@@ -59,117 +47,6 @@ function Panel({ title, Icon, action, children, className = '' }) {
     </div>
   )
 }
-
-const ChartTooltip = memo(function ChartTooltip({ active, payload, isDark, labelKey, suffix }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div
-      className="rounded-md px-3 py-2 text-xs shadow-elevated border"
-      style={{
-        background: isDark ? '#1e293b' : '#ffffff',
-        borderColor: isDark ? '#334155' : '#e2e8f0',
-        color: isDark ? '#f1f5f9' : '#0f172a',
-      }}
-    >
-      <p className="font-semibold mb-0.5">
-        {payload[0].payload[labelKey] || payload[0].name}
-      </p>
-      <p className="tabular-nums">
-        <span className="text-ink-500">{payload[0].name}: </span>
-        <strong>{payload[0].value}</strong> {suffix}
-      </p>
-    </div>
-  )
-})
-
-const PlantasBar = memo(function PlantasBar({ data, isDark }) {
-  if (!data?.length) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin credenciales de planta registradas.</p>
-  }
-  return (
-    <ResponsiveContainer width="100%" height={320} debounce={200}>
-      <BarChart data={data} margin={{ top: 5, right: 8, bottom: 5, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
-        <XAxis
-          dataKey="planta"
-          tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }}
-          interval={0}
-          angle={-15}
-          textAnchor="end"
-          height={50}
-        />
-        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }} />
-        <Tooltip content={<ChartTooltip isDark={isDark} labelKey="planta" suffix="empleados" />} cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} isAnimationActive={false} />
-        <Bar dataKey="total" name="Empleados" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  )
-})
-
-const DC3Donut = memo(function DC3Donut({ con, sin, isDark }) {
-  const total = con + sin
-  if (total === 0) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin trabajadores activos.</p>
-  }
-  const data = [
-    { label: 'Con DC3', value: con,  color: '#10b981' },
-    { label: 'Sin DC3', value: sin, color: '#94a3b8' },
-  ]
-  return (
-    <ResponsiveContainer width="100%" height={320} debounce={200}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="value"
-          nameKey="label"
-          cx="50%"
-          cy="50%"
-          innerRadius={70}
-          outerRadius={110}
-          paddingAngle={2}
-          stroke={isDark ? '#0f172a' : '#ffffff'}
-          strokeWidth={3}
-          isAnimationActive={false}
-        >
-          {data.map((d, i) => <Cell key={i} fill={d.color} />)}
-        </Pie>
-        <Tooltip
-          content={({ active, payload }) => {
-            if (!active || !payload?.length) return null
-            const p = payload[0]
-            const pct = total > 0 ? Math.round((p.value / total) * 100) : 0
-            return (
-              <div
-                className="rounded-md px-3 py-2 text-xs shadow-elevated border"
-                style={{
-                  background: isDark ? '#1e293b' : '#ffffff',
-                  borderColor: isDark ? '#334155' : '#e2e8f0',
-                  color: isDark ? '#f1f5f9' : '#0f172a',
-                }}
-              >
-                <p className="font-semibold mb-0.5">{p.payload.label}</p>
-                <p className="tabular-nums">
-                  <strong>{p.value}</strong>{' '}
-                  <span className="text-ink-500">({pct}%)</span>
-                </p>
-              </div>
-            )
-          }}
-          isAnimationActive={false}
-        />
-        <Legend
-          iconType="circle"
-          verticalAlign="bottom"
-          wrapperStyle={{ fontSize: 12, paddingTop: 12 }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
-  )
-})
 
 function EstadoBadge({ estado }) {
   if (estado === 'Vigente') return <Badge tone="success">{estado}</Badge>
@@ -218,6 +95,16 @@ export default function Metricas() {
   const plantas = data?.plantas || []
   const detallePlantas = data?.detalle_plantas || {}
   const detalleDC3 = data?.detalle_dc3 || []
+
+  // Datos en el contrato {label, value} de las gráficas corporativas.
+  const plantasChart = useMemo(
+    () => plantas.map((p) => ({ label: p.planta, value: p.total })),
+    [plantas],
+  )
+  const dc3Chart = useMemo(() => [
+    { label: 'Con DC3', value: totales.con_dc3 ?? 0, color: isDark ? BRAND_PRIMARY_DARK : BRAND_PRIMARY },
+    { label: 'Sin DC3', value: totales.sin_dc3 ?? 0, color: '#c5d6e9' },
+  ], [totales.con_dc3, totales.sin_dc3, isDark])
 
   const trabPlantaActiva = useMemo(() => {
     const lista = detallePlantas[activePlanta] || []
@@ -278,13 +165,22 @@ export default function Metricas() {
         <StatCard label="Con permiso DC3"          value={totales.con_dc3 ?? 0}           Icon={FileBadge} />
       </div>
 
-      {/* Gráficas */}
+      {/* Gráficas — mismas componentes corporativas que el Inicio de admin */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel title="Empleados por planta" Icon={Factory}>
-          <PlantasBar data={plantas} isDark={isDark} />
+          <BarrasCorporativas
+            data={plantasChart}
+            isDark={isDark}
+            emptyText="Sin credenciales de planta registradas."
+          />
         </Panel>
-        <Panel title="Cobertura de permisos DC3" Icon={FileBadge}>
-          <DC3Donut con={totales.con_dc3 ?? 0} sin={totales.sin_dc3 ?? 0} isDark={isDark} />
+        <Panel title="Cobertura de permisos DC3" Icon={FileBadge} className="flex flex-col justify-center">
+          <DonutCorporativo
+            data={dc3Chart}
+            isDark={isDark}
+            centerLabel="Activos"
+            emptyText="Sin trabajadores activos."
+          />
         </Panel>
       </div>
 
