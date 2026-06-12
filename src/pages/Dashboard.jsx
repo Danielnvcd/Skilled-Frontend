@@ -135,12 +135,14 @@ export default function Dashboard() {
     'dashboard',
     () => obtenerDashboard(),
     // Endpoint agregado pesado. staleMs alto + invalidación selectiva: solo
-    // refrescamos cuando hay cambios fuertes (alta/baja de empleado o nuevo
-    // proyecto). La "actividad reciente" NO invalida aquí: cada `bitacora:new`
-    // refetcheaba todo el dashboard — ahora el panel inserta el evento push
-    // directamente (ver liveActividad abajo). Cumpleaños y docs por vencer se
-    // actualizan al revalidateOnFocus o al expirar el staleMs.
-    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'proyecto:changed'] },
+    // refrescamos cuando hay cambios fuertes (alta/baja de empleado, nuevo
+    // proyecto, o prenómina guardada/cerrada — esta última mueve el deep-link
+    // del acceso rápido "Prenómina"). La "actividad reciente" NO invalida
+    // aquí: cada `bitacora:new` refetcheaba todo el dashboard — ahora el
+    // panel inserta el evento push directamente (ver liveActividad abajo).
+    // Cumpleaños y docs por vencer se actualizan al revalidateOnFocus o al
+    // expirar el staleMs.
+    { staleMs: 120_000, invalidateOn: ['empleado:changed', 'proyecto:changed', 'prenomina:changed'] },
   )
 
   // Feed en vivo de auditoría: se siembra con el snapshot del endpoint y cada
@@ -164,6 +166,17 @@ export default function Dashboard() {
   }, [error])
 
   const stats = data?.stats
+
+  // Deep-link de Prenómina: el backend reporta la semana accionable (la más
+  // antigua con reportes cerrados sin aprobar). Con pendiente vamos directo a
+  // /prenomina/:fecha — la lista solo cuando no hay nada que hacer.
+  const prenoPend = data?.prenomina_pendiente
+  const prenomina = prenoPend
+    ? {
+        to: `/prenomina/${prenoPend.fecha_str}`,
+        hint: `${prenoPend.estado === 'ABIERTA' ? 'Continuar' : 'Calcular'} semana del ${fmtFecha(prenoPend.fecha_str)}`,
+      }
+    : { to: '/prenomina', hint: 'Generar / cerrar' }
   const proyectosData = useMemo(() => data?.empleados_por_proyecto || [], [data])
   const puestosData = useMemo(() => data?.empleados_por_puesto?.slice(0, 10) || [], [data])
 
@@ -223,7 +236,7 @@ export default function Dashboard() {
           <QuickAccessCard to="/empleados/nuevo" Icon={UserRoundPlus} label="Nuevo empleado" hint="Alta de RRHH" />
           <QuickAccessCard to="/proyectos" Icon={LayoutGrid} label="Proyectos" hint="Crear / asignar" />
           <QuickAccessCard to="/horas" Icon={CalendarClock} label="Horas" hint="Reportes semanales" />
-          <QuickAccessCard to="/prenomina" Icon={ReceiptText} label="Prenómina" hint="Generar / cerrar" />
+          <QuickAccessCard to={prenomina.to} Icon={ReceiptText} label="Prenómina" hint={prenomina.hint} />
           <QuickAccessCard to="/prestamos" Icon={HandCoins} label="Préstamos" hint="Otorgar / abonar" />
           <QuickAccessCard to="/bitacora" Icon={ClipboardList} label="Bitácora" hint="Auditoría" />
         </div>

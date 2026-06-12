@@ -11,6 +11,7 @@ import { useResource } from '../hooks/useResource'
 const ROLE_TONES = {
   super_admin: 'brand',
   admin: 'info',
+  finanzas: 'violet',
   coordinador: 'success',
   inventario: 'warning',
   solicitante_material: 'neutral',
@@ -19,12 +20,13 @@ const ROLE_TONES = {
 const ROLE_LABELS = {
   super_admin: 'Super admin',
   admin: 'Administrador',
+  finanzas: 'Finanzas',
   coordinador: 'Coordinador',
   inventario: 'Inventario',
   solicitante_material: 'Solicitante',
 }
 
-const ROLE_ORDER = { super_admin: 0, admin: 1, coordinador: 2, inventario: 3, solicitante_material: 4 }
+const ROLE_ORDER = { super_admin: 0, admin: 1, finanzas: 2, coordinador: 3, inventario: 4, solicitante_material: 5 }
 
 function isOnline(lastSeen) {
   if (!lastSeen) return false

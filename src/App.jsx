@@ -1,63 +1,73 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Layout from './components/Layout'
+// Login se carga eager: es la primera pantalla que ve el usuario sin sesión
+// y evitamos un spinner extra en el arranque. El resto de páginas se carga
+// lazy para partir el bundle en chunks por ruta — el SW del PWA precachea
+// todos los chunks (globPatterns **/*.js), así que el offline y el
+// autoUpdate siguen funcionando igual que con el bundle único. Dashboard
+// va lazy a propósito: arrastra recharts (~370 kB) que no debe pagar el
+// resto de roles en el arranque.
 import Login from './pages/Login'
-import Verify2FA from './pages/Verify2FA'
-import Dashboard from './pages/Dashboard'
-import Profile from './pages/Profile'
-import Directorio from './pages/Directorio'
-import Usuarios from './pages/Usuarios'
-import EmpleadosList from './pages/empleados/EmpleadosList'
-import EmpleadoForm from './pages/empleados/EmpleadoForm'
-import EmpleadoView from './pages/empleados/EmpleadoView'
-import EmpleadosImport from './pages/empleados/EmpleadosImport'
-import ProyectosList from './pages/proyectos/ProyectosList'
-import MisProyectos from './pages/proyectos/MisProyectos'
-import ReportesList from './pages/horas/ReportesList'
-import ReporteCaptura from './pages/horas/ReporteCaptura'
-import PrenominaList from './pages/prenomina/PrenominaList'
-import PrenominaGenerar from './pages/prenomina/PrenominaGenerar'
-import PrenominaEditar from './pages/prenomina/PrenominaEditar'
-import PrenominaResumenPago from './pages/prenomina/PrenominaResumenPago'
-import PrestamosList from './pages/prestamos/PrestamosList'
-import AjustesList from './pages/ajustes/AjustesList'
-import AjustePeriodoDetalle from './pages/ajustes/AjustePeriodoDetalle'
-import CredencialesList from './pages/credenciales/CredencialesList'
-import ProyectoTotal from './pages/proyecto-total/ProyectoTotal'
-import HistoricoList from './pages/historico/HistoricoList'
-import HistoricoDetalle from './pages/historico/HistoricoDetalle'
-import Bitacora from './pages/Bitacora'
-import Metricas from './pages/Metricas'
-import InventarioDashboard from './pages/inventario/InventarioDashboard'
-import CatalogoProductos from './pages/inventario/CatalogoProductos'
-import ProductoKardex from './pages/inventario/ProductoKardex'
-import BajoMinimo from './pages/inventario/BajoMinimo'
-import Reportes from './pages/inventario/Reportes'
-import Etiquetas from './pages/inventario/Etiquetas'
-import AlmacenesEstantes from './pages/inventario/AlmacenesEstantes'
-import Tomas from './pages/inventario/Tomas'
-import TomaDetalle from './pages/inventario/TomaDetalle'
-import MovimientosInventario from './pages/inventario/MovimientosInventario'
-import RegistrarMovimiento from './pages/inventario/RegistrarMovimiento'
-import SolicitudesMaterial from './pages/inventario/SolicitudesMaterial'
-import MisPedidos from './pages/inventario/MisPedidos'
-import ScannerMovil from './pages/inventario/ScannerMovil'
-import ImportarMateriales from './pages/inventario/ImportarMateriales'
-import QREstante from './pages/inventario/QREstante'
-import HerramientasCatalogo from './pages/inventario/HerramientasCatalogo'
-import HerramientasUnidades from './pages/inventario/HerramientasUnidades'
-import HerramientaUnidadFicha from './pages/inventario/HerramientaUnidadFicha'
-import AsignacionesHerramienta from './pages/inventario/AsignacionesHerramienta'
-import MantenimientosHerramienta from './pages/inventario/MantenimientosHerramienta'
-import IncidenciasYBajas from './pages/inventario/IncidenciasYBajas'
-import MisHerramientas from './pages/inventario/MisHerramientas'
-import MisIncidencias from './pages/inventario/MisIncidencias'
-import FichaTecnica from './pages/ficha/FichaTecnica'
-import HorasMovil from './pages/horas/HorasMovil'
-import HorasAdminQR from './pages/horas/HorasAdminQR'
-import ManualAdmin from './pages/manual/ManualAdmin'
-import ManualCoordinador from './pages/manual/ManualCoordinador'
-import ManualInventario from './pages/manual/ManualInventario'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Verify2FA = lazy(() => import('./pages/Verify2FA'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Directorio = lazy(() => import('./pages/Directorio'))
+const Usuarios = lazy(() => import('./pages/Usuarios'))
+const EmpleadosList = lazy(() => import('./pages/empleados/EmpleadosList'))
+const EmpleadoForm = lazy(() => import('./pages/empleados/EmpleadoForm'))
+const EmpleadoView = lazy(() => import('./pages/empleados/EmpleadoView'))
+const EmpleadosImport = lazy(() => import('./pages/empleados/EmpleadosImport'))
+const ProyectosList = lazy(() => import('./pages/proyectos/ProyectosList'))
+const MisProyectos = lazy(() => import('./pages/proyectos/MisProyectos'))
+const ReportesList = lazy(() => import('./pages/horas/ReportesList'))
+const ReporteCaptura = lazy(() => import('./pages/horas/ReporteCaptura'))
+const PrenominaList = lazy(() => import('./pages/prenomina/PrenominaList'))
+const PrenominaGenerar = lazy(() => import('./pages/prenomina/PrenominaGenerar'))
+const PrenominaEditar = lazy(() => import('./pages/prenomina/PrenominaEditar'))
+const PrenominaResumenPago = lazy(() => import('./pages/prenomina/PrenominaResumenPago'))
+const PrestamosList = lazy(() => import('./pages/prestamos/PrestamosList'))
+const AjustesList = lazy(() => import('./pages/ajustes/AjustesList'))
+const AjustePeriodoDetalle = lazy(() => import('./pages/ajustes/AjustePeriodoDetalle'))
+const CredencialesList = lazy(() => import('./pages/credenciales/CredencialesList'))
+const ProyectoTotal = lazy(() => import('./pages/proyecto-total/ProyectoTotal'))
+const HistoricoList = lazy(() => import('./pages/historico/HistoricoList'))
+const HistoricoDetalle = lazy(() => import('./pages/historico/HistoricoDetalle'))
+const Bitacora = lazy(() => import('./pages/Bitacora'))
+const Metricas = lazy(() => import('./pages/Metricas'))
+const InventarioDashboard = lazy(() => import('./pages/inventario/InventarioDashboard'))
+const CatalogoProductos = lazy(() => import('./pages/inventario/CatalogoProductos'))
+const ProductoKardex = lazy(() => import('./pages/inventario/ProductoKardex'))
+const BajoMinimo = lazy(() => import('./pages/inventario/BajoMinimo'))
+const Reportes = lazy(() => import('./pages/inventario/Reportes'))
+const Etiquetas = lazy(() => import('./pages/inventario/Etiquetas'))
+const AlmacenesEstantes = lazy(() => import('./pages/inventario/AlmacenesEstantes'))
+const Tomas = lazy(() => import('./pages/inventario/Tomas'))
+const TomaDetalle = lazy(() => import('./pages/inventario/TomaDetalle'))
+const MovimientosInventario = lazy(() => import('./pages/inventario/MovimientosInventario'))
+const RegistrarMovimiento = lazy(() => import('./pages/inventario/RegistrarMovimiento'))
+const SolicitudesMaterial = lazy(() => import('./pages/inventario/SolicitudesMaterial'))
+const MisPedidos = lazy(() => import('./pages/inventario/MisPedidos'))
+const ScannerMovil = lazy(() => import('./pages/inventario/ScannerMovil'))
+const ImportarMateriales = lazy(() => import('./pages/inventario/ImportarMateriales'))
+const QREstante = lazy(() => import('./pages/inventario/QREstante'))
+const HerramientasCatalogo = lazy(() => import('./pages/inventario/HerramientasCatalogo'))
+const HerramientasUnidades = lazy(() => import('./pages/inventario/HerramientasUnidades'))
+const HerramientaUnidadFicha = lazy(() => import('./pages/inventario/HerramientaUnidadFicha'))
+const AsignacionesHerramienta = lazy(() => import('./pages/inventario/AsignacionesHerramienta'))
+const MantenimientosHerramienta = lazy(() => import('./pages/inventario/MantenimientosHerramienta'))
+const IncidenciasYBajas = lazy(() => import('./pages/inventario/IncidenciasYBajas'))
+const MisHerramientas = lazy(() => import('./pages/inventario/MisHerramientas'))
+const MisIncidencias = lazy(() => import('./pages/inventario/MisIncidencias'))
+const FichaTecnica = lazy(() => import('./pages/ficha/FichaTecnica'))
+const HorasMovil = lazy(() => import('./pages/horas/HorasMovil'))
+const HorasAdminQR = lazy(() => import('./pages/horas/HorasAdminQR'))
+const ManualAdmin = lazy(() => import('./pages/manual/ManualAdmin'))
+const ManualCoordinador = lazy(() => import('./pages/manual/ManualCoordinador'))
+const ManualInventario = lazy(() => import('./pages/manual/ManualInventario'))
+const FinanzasPanel = lazy(() => import('./pages/finanzas/FinanzasPanel'))
 
 function FullPageSpinner() {
   return (
@@ -87,6 +97,7 @@ function RoleRoute({ allow, children }) {
 function RoleBasedHome() {
   const { user } = useAuth()
   if (user?.role === 'inventario') return <InventarioDashboard />
+  if (user?.role === 'finanzas') return <FinanzasPanel />
   if (user?.role === 'solicitante_material') return <Navigate to="/inventario/mis-pedidos" replace />
   if (user?.role === 'coordinador') return <Navigate to="/horas" replace />
   return <Dashboard />
@@ -102,6 +113,7 @@ export default function App() {
   const canOperar    = isAdmin || isCoordinador
 
   return (
+    <Suspense fallback={<FullPageSpinner />}>
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/verify-2fa" element={<Verify2FA />} />
@@ -110,6 +122,9 @@ export default function App() {
         <Route path="perfil"      element={<Profile />} />
         <Route path="perfil/:id"  element={<Profile />} />
         <Route path="directorio"  element={<Directorio />} />
+
+        {/* Panel financiero: home del rol finanzas; el admin también puede verlo */}
+        <Route path="finanzas"    element={<RoleRoute allow={role === 'finanzas' || isAdmin}><FinanzasPanel /></RoleRoute>} />
 
         {/* Solo admin */}
         <Route path="usuarios"                element={<RoleRoute allow={isAdmin}><Usuarios /></RoleRoute>} />
@@ -180,5 +195,6 @@ export default function App() {
         <Route path="inventario/mis-incidencias"   element={<RoleRoute allow={canSolicit}><MisIncidencias /></RoleRoute>} />
       </Route>
     </Routes>
+    </Suspense>
   )
 }

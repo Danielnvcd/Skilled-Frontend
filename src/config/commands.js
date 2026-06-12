@@ -108,6 +108,16 @@ const COMMANDS = [
     run: ({ navigate }) => navigate('/credenciales'),
   },
 
+  {
+    id: 'finanzas-panel',
+    label: 'Abrir panel financiero',
+    hint: 'Dispersión, préstamos, ajustes',
+    group: 'Finanzas',
+    icon: DollarSign,
+    roles: ['admin', 'super_admin', 'finanzas'],
+    run: ({ navigate }) => navigate('/finanzas'),
+  },
+
   // ── Inventario / solicitantes ──────────────────────────────────────────────
   {
     id: 'inv-pedir',

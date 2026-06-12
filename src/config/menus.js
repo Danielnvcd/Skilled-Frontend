@@ -126,6 +126,24 @@ export const MENUS = {
     },
   ],
 
+  // Finanzas: panel financiero de solo lectura (dispersión, préstamos, ajustes)
+  finanzas: [
+    {
+      label: 'Cuenta',
+      items: [
+        { path: '/', label: 'Inicio', icon: Home, end: true },
+        { path: '/perfil', label: 'Mi perfil', icon: User },
+        { path: '/directorio', label: 'Directorio', icon: Users },
+      ],
+    },
+    {
+      label: 'Finanzas',
+      items: [
+        { path: '/finanzas', label: 'Panel financiero', icon: DollarSign },
+      ],
+    },
+  ],
+
   // Solicitante de material: pide material + herramientas, ve sus incidencias
   solicitante_material: [
     {
@@ -182,6 +200,12 @@ export const BOTTOM_NAV = {
     { path: '/inventario/mis-pedidos', label: 'Pedir', icon: Send },
     { path: '/inventario/solicitudes', label: 'Mis sols.', icon: ClipboardList },
     { path: '/inventario/mis-herramientas', label: 'Mis herr.', icon: Hammer },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+  finanzas: [
+    { path: '/', label: 'Inicio', icon: Home, end: true },
+    { path: '/finanzas', label: 'Finanzas', icon: DollarSign },
+    { path: '/directorio', label: 'Directorio', icon: Users },
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],
 }

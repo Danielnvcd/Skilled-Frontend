@@ -5,6 +5,7 @@ const tones = {
   warning: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-700/60',
   danger:  'bg-red-50 text-red-700 ring-red-200 dark:bg-red-900/30 dark:text-red-300 dark:ring-red-700/60',
   info:    'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:ring-sky-700/60',
+  violet:  'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-700/60',
 }
 
 const dots = {
@@ -14,6 +15,7 @@ const dots = {
   warning: 'bg-amber-500',
   danger:  'bg-red-500',
   info:    'bg-sky-500',
+  violet:  'bg-violet-500',
 }
 
 export default function Badge({ tone = 'neutral', children, leftIcon, className = '', dot = false }) {

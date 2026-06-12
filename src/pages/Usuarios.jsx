@@ -20,6 +20,7 @@ import { useResource } from '../hooks/useResource'
 const ROLE_LABELS = {
   super_admin: 'Super administrador',
   admin: 'Administrador',
+  finanzas: 'Finanzas',
   coordinador: 'Coordinador',
   inventario: 'Inventario',
   solicitante_material: 'Solicitante material',
@@ -28,12 +29,13 @@ const ROLE_LABELS = {
 const ROLE_TONES = {
   super_admin: 'brand',
   admin: 'info',
+  finanzas: 'violet',
   coordinador: 'success',
   inventario: 'warning',
   solicitante_material: 'neutral',
 }
 
-const NEW_ROLES = ['admin', 'coordinador', 'inventario', 'solicitante_material']
+const NEW_ROLES = ['admin', 'finanzas', 'coordinador', 'inventario', 'solicitante_material']
 
 function OnlineIndicator({ lastSeen }) {
   if (!lastSeen) {
