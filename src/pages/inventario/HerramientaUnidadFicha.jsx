@@ -12,7 +12,7 @@ import {
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
-  getUnidad, getEventosUnidad, unidadQrImageUrl, fotoUrl, authFotoPath, authQrPath,
+  getUnidad, getEventosUnidad, authFotoPath, authQrPath,
   subirFotoUnidad, devolverAsignacion, crearMantenimiento,
   crearIncidencia, crearSolicitudBaja, darBajaDirecta,
   getMantenimientos, getIncidencias, getSolicitudesBaja,

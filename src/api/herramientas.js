@@ -74,11 +74,9 @@ export async function validarUnidadQR(qrCode) {
   return data
 }
 
-export function unidadQrImageUrl(id) {
-  // Endpoint sirve PNG; usar dentro de <img>
-  return `${api.defaults.baseURL}${BASE}/herramientas-unidades/${id}/qr-image`
-}
-
+// El QR se pinta con <AuthImage src={authQrPath(id)} />: el endpoint exige
+// Bearer, así que NO sirve una URL directa en <img src> (daría 401). Por eso no
+// existe un helper que devuelva la URL absoluta — sería una trampa.
 export function authQrPath(id) {
   return `${BASE}/herramientas-unidades/${id}/qr-image`
 }
@@ -174,10 +172,8 @@ export async function subirFotoUnidad(unidadId, file, { tipo = 'FOTO_HERRAMIENTA
   return data
 }
 
-export function fotoUrl(unidadId, mediaId) {
-  return `${api.defaults.baseURL}${BASE}/herramientas-unidades/${unidadId}/media/${mediaId}`
-}
-
+// Igual que el QR: la foto se sirve con auth (Bearer). Usar siempre
+// <AuthImage src={authFotoPath(...)} />, no una URL directa en <img src>.
 export function authFotoPath(unidadId, mediaId) {
   return `${BASE}/herramientas-unidades/${unidadId}/media/${mediaId}`
 }

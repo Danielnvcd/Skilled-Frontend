@@ -11,7 +11,7 @@ import {
 } from '../../components/ui'
 import {
   getToma, patchTomaDetalle, patchTomaDetallePorCodigo,
-  cerrarToma, cancelarToma, getTomaPdfUrl,
+  cerrarToma, cancelarToma, imprimirToma,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 
@@ -259,9 +259,13 @@ export default function TomaDetalle() {
             </Button>
           </>
         )}
-        <a href={getTomaPdfUrl(toma.id)} target="_blank" rel="noopener noreferrer">
-          <Button variant="ghost" leftIcon={<Printer size={15} />}>Imprimir acta PDF</Button>
-        </a>
+        <Button
+          variant="ghost"
+          leftIcon={<Printer size={15} />}
+          onClick={() => imprimirToma(toma.id).catch((e) => toast.error(extractApiError(e, 'No se pudo abrir el PDF')))}
+        >
+          Imprimir acta PDF
+        </Button>
       </div>
 
       {!isOpen && (

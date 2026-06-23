@@ -196,8 +196,14 @@ export async function cancelarToma(tomaId) {
   return data
 }
 
-export function getTomaPdfUrl(tomaId) {
-  return `${BASE}/tomas/${tomaId}/pdf`
+// Abre el PDF del acta de toma en una pestaña. NO se puede usar un <a href>
+// directo: el endpoint exige `Authorization: Bearer` (no hay auth por cookie),
+// así que hay que bajarlo por axios (con el token) y abrir el blob — igual que
+// imprimirSolicitud. Antes era getTomaPdfUrl() devolviendo una ruta relativa
+// que además le faltaba el prefijo /api → 404/401.
+export async function imprimirToma(tomaId) {
+  const res = await api.get(`${BASE}/tomas/${tomaId}/pdf`, { responseType: 'blob' })
+  _openBlobInTab(res)
 }
 
 // --- Solicitudes ---
