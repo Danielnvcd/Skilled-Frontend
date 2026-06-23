@@ -9,7 +9,7 @@ import {
 import {
   Button, Card, PageHeader, Modal, Input, Select,
 } from '../../components/ui'
-import { getProductos, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
+import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
 import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
@@ -213,11 +213,27 @@ export default function MisPedidos() {
   const [qtyModal, setQtyModal] = useState(null)   // material { producto, cantidad }
   const [herrModal, setHerrModal] = useState(null) // herramienta { herr, cantidad, fechas, justif, complem }
 
-  // El solicitante necesita ver el catálogo actualizado. Reusamos los
-  // mismos namespaces que el rol inventario para compartir caché.
+  // Búsqueda de materiales con debounce: no le pegamos al server por cada tecla.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Categorías (chips) desde el resumen server-side — no dependen de cuántos
+  // productos se hayan cargado (con miles, derivarlas del listado las ocultaba).
+  const { data: rawResumen } = useResource(
+    ['categorias-resumen'],
+    () => getCategoriasResumen(),
+    { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  )
+
+  // Productos filtrados server-side por categoría y/o búsqueda. 'Todas' sin
+  // búsqueda trae la primera página (limit 500); el resto se ve filtrando.
+  const catParam = activeCat === 'Todas' ? '' : activeCat
   const { data: rawProductos, error: errProd } = useResource(
-    ['productos', { limit: 500 }],
-    () => getProductos({ limit: 500 }),
+    ['productos', { categoria: catParam, q: debouncedSearch }],
+    () => getProductos({ categoria: catParam, q: debouncedSearch, limit: 500 }),
     { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
   const { data: rawHerramientas, error: errHerr } = useResource(
@@ -233,7 +249,9 @@ export default function MisPedidos() {
   const productos = rawProductos ?? []
   const herramientas = rawHerramientas ?? []
   const proyectos = rawProyectos ?? []
-  const loading = !rawProductos && !rawHerramientas && !rawProyectos
+  // Skeleton de materiales mientras carga la página o se asienta el debounce.
+  const matLoading = !rawProductos || search.trim() !== debouncedSearch
+  const herrLoading = !rawHerramientas
 
   useEffect(() => {
     const err = errProd || errHerr || errProj
@@ -302,20 +320,13 @@ export default function MisPedidos() {
 
   const removeHerr = (hid) => setCartHerr((prev) => prev.filter((c) => c.herramienta_id !== hid))
 
-  const categorias = useMemo(() => {
-    const set = new Set()
-    productos.forEach((p) => p.categoria && set.add(p.categoria))
-    return ['Todas', ...Array.from(set).sort()]
-  }, [productos])
+  const categorias = useMemo(
+    () => ['Todas', ...(rawResumen ?? []).map((c) => c.nombre)],
+    [rawResumen],
+  )
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    return productos.filter((p) => {
-      const matchCat = activeCat === 'Todas' || p.categoria === activeCat
-      const matchQ = !q || p.descripcion?.toLowerCase().includes(q) || p.codigo?.toLowerCase().includes(q)
-      return matchCat && matchQ
-    })
-  }, [productos, activeCat, search])
+  // El filtrado (categoría + búsqueda) ya viene resuelto del servidor.
+  const filtered = productos
 
   const openQtyModal = (producto) => {
     const enCart = cart.find((c) => c.id === producto.id)
@@ -537,10 +548,15 @@ export default function MisPedidos() {
               </span>{' '}
               {tab === 'materiales' ? 'materiales' : 'herramientas'} disponibles
             </p>
+            {tab === 'materiales' && filtered.length >= 500 && (
+              <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                Mostrando 500 — usa la búsqueda o una categoría para acotar.
+              </p>
+            )}
           </div>
 
           {/* Grid */}
-          {loading ? (
+          {(tab === 'materiales' ? matLoading : herrLoading) ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="aspect-[3/4] bg-ink-100 dark:bg-ink-800 rounded-2xl animate-pulse" />

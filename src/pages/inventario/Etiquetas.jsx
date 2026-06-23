@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
-  Tag, Printer, Plus, Trash2, Search, QrCode, BarChart3, Layers,
+  Tag, Printer, Trash2, QrCode, BarChart3, Layers,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Card, Select, Skeleton,
+  PageHeader, Button, Card, Select,
 } from '../../components/ui'
-import { getProductos, generarEtiquetasPdf } from '../../api/inventario'
+import { generarEtiquetasPdf } from '../../api/inventario'
+import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
 
 const FORMATOS = [
@@ -16,38 +17,13 @@ const FORMATOS = [
 const TOPE_TOTAL = 500
 
 export default function Etiquetas() {
-  const [productos, setProductos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-
   const [formato, setFormato] = useState('avery_5160')
   const [tipo, setTipo] = useState('barcode')
-  // items = [{producto_id, cantidad}]
+  // items = [{producto_id, codigo, descripcion, categoria, unidad, cantidad}]
+  // Guardamos los datos del producto en el propio item: ya no precargamos el
+  // catálogo completo (no escala a miles), el picker trae el producto al elegirlo.
   const [items, setItems] = useState([])
   const [generando, setGenerando] = useState(false)
-
-  useEffect(() => {
-    getProductos({ limit: 1000 })
-      .then(setProductos)
-      .catch((err) => toast.error(extractApiError(err, 'Error al cargar productos')))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const productosMap = useMemo(() => {
-    const m = new Map()
-    productos.forEach((p) => m.set(p.id, p))
-    return m
-  }, [productos])
-
-  const productosFiltrados = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return productos
-    return productos.filter(
-      (p) =>
-        p.codigo.toLowerCase().includes(q) ||
-        p.descripcion.toLowerCase().includes(q),
-    )
-  }, [productos, search])
 
   const yaSeleccionados = useMemo(
     () => new Set(items.map((i) => i.producto_id)),
@@ -61,7 +37,14 @@ export default function Etiquetas() {
 
   const agregar = (p) => {
     if (yaSeleccionados.has(p.id)) return
-    setItems((prev) => [...prev, { producto_id: p.id, cantidad: 1 }])
+    setItems((prev) => [...prev, {
+      producto_id: p.id,
+      codigo: p.codigo,
+      descripcion: p.descripcion,
+      categoria: p.categoria,
+      unidad: p.unidad,
+      cantidad: 1,
+    }])
   }
   const quitar = (id) => setItems((prev) => prev.filter((i) => i.producto_id !== id))
   const cambiarCantidad = (id, valor) => {
@@ -195,14 +178,12 @@ export default function Etiquetas() {
               </thead>
               <tbody className="divide-y divide-ink-200 dark:divide-ink-800">
                 {items.map((i) => {
-                  const p = productosMap.get(i.producto_id)
-                  if (!p) return null
                   return (
                     <tr key={i.producto_id}>
-                      <td className="px-3 py-2 font-mono text-xs">{p.codigo}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{i.codigo}</td>
                       <td className="px-3 py-2">
-                        <p className="font-medium">{p.descripcion}</p>
-                        <p className="text-xs text-ink-500">{p.categoria} · {p.unidad}</p>
+                        <p className="font-medium">{i.descripcion}</p>
+                        <p className="text-xs text-ink-500">{i.categoria} · {i.unidad}</p>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <input
@@ -228,65 +209,18 @@ export default function Etiquetas() {
         )}
       </Card>
 
-      {/* Catálogo para agregar */}
+      {/* Agregar productos — buscador server-side */}
       <Card className="mt-4 !p-5">
-        <div className="flex items-center gap-3 mb-3">
-          <h3 className="font-semibold text-ink-900 dark:text-ink-100 flex-1">Catálogo de productos</h3>
-          <div className="relative max-w-xs flex-1">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar por código o descripción…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="block w-full h-9 pl-9 pr-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-            />
-          </div>
-        </div>
-        {loading ? (
-          <Skeleton className="h-40 w-full" />
-        ) : (
-          <div className="border border-ink-200 dark:border-ink-800 rounded-lg max-h-96 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-ink-50 dark:bg-ink-900 text-xs text-ink-500 uppercase sticky top-0">
-                <tr>
-                  <th className="text-left px-3 py-2">Código</th>
-                  <th className="text-left px-3 py-2">Descripción</th>
-                  <th className="text-left px-3 py-2 hidden sm:table-cell">Categoría</th>
-                  <th className="px-3 py-2 w-20"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-200 dark:divide-ink-800">
-                {productosFiltrados.length === 0 && (
-                  <tr><td colSpan={4} className="px-3 py-4 text-center text-ink-500">
-                    Sin productos {search ? 'para esa búsqueda' : ''}.
-                  </td></tr>
-                )}
-                {productosFiltrados.map((p) => {
-                  const usado = yaSeleccionados.has(p.id)
-                  return (
-                    <tr key={p.id} className={usado ? 'opacity-50' : ''}>
-                      <td className="px-3 py-2 font-mono text-xs">{p.codigo}</td>
-                      <td className="px-3 py-2">{p.descripcion}</td>
-                      <td className="px-3 py-2 text-xs text-ink-500 hidden sm:table-cell">{p.categoria}</td>
-                      <td className="px-3 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => agregar(p)}
-                          disabled={usado}
-                          title={usado ? 'Ya está agregado' : 'Agregar a etiquetas'}
-                        >
-                          <Plus size={14} className="mr-1" /> {usado ? 'Agregado' : 'Agregar'}
-                        </Button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <h3 className="font-semibold text-ink-900 dark:text-ink-100 mb-3">Agregar producto</h3>
+        <ProductoPicker
+          label={null}
+          placeholder="Busca por código o descripción para agregar…"
+          excludeIds={yaSeleccionados}
+          onSelect={agregar}
+        />
+        <p className="text-xs text-ink-500 mt-2">
+          Busca y selecciona un producto para añadirlo a la lista de etiquetas.
+        </p>
       </Card>
     </div>
   )

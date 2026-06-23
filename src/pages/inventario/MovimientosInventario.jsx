@@ -10,22 +10,26 @@ import {
   Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Select, SavedViews,
 } from '../../components/ui'
 import {
-  getMovimientos, getProductos, getProductosBajoMinimo,
+  getMovimientos, getProductosBajoMinimo, getCategoriasResumen,
 } from '../../api/inventario'
+import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
 
 export default function MovimientosInventario() {
   const [movimientos, setMovimientos] = useState([])
-  const [productos, setProductos] = useState([])
   const [bajoMin, setBajoMin] = useState([])
+  // Total de productos para el KPI — desde el resumen (un GROUP BY barato), sin
+  // descargar el catálogo completo.
+  const [totalProductos, setTotalProductos] = useState(0)
 
   const [loading, setLoading] = useState(true)
   const [loadingBajo, setLoadingBajo] = useState(false)
 
   const [tab, setTab] = useState('historial')
   const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroProducto, setFiltroProducto] = useState('')
+  const [filtroProducto, setFiltroProducto] = useState('')   // id (fuente de verdad del filtro + SavedViews)
+  const [productoSelFiltro, setProductoSelFiltro] = useState(null)  // objeto, solo para mostrar en el picker
   // Orden client-side: el dataset completo (≤300 filas) ya está en memoria,
   // re-ordenar no necesita round-trip. sort vacío = orden del backend (fecha desc).
   const [sort, setSort] = useState('')
@@ -35,16 +39,17 @@ export default function MovimientosInventario() {
     setLoading(true)
     Promise.all([
       getMovimientos({ limit: 300 }),
-      getProductos({ limit: 500 }),
       getProductosBajoMinimo().catch(() => []),
     ])
-      .then(([movs, prods, bajos]) => {
+      .then(([movs, bajos]) => {
         setMovimientos(movs)
-        setProductos(prods)
         setBajoMin(bajos)
       })
       .catch((err) => toast.error(extractApiError(err, 'Error al cargar movimientos')))
       .finally(() => setLoading(false))
+    getCategoriasResumen()
+      .then((r) => setTotalProductos(r.reduce((a, c) => a + (c.total || 0), 0)))
+      .catch(() => {})
   }
 
   const loadBajoMin = () => {
@@ -79,13 +84,13 @@ export default function MovimientosInventario() {
       else if (m.tipo === 'AJUSTE') ajustes++
     })
     return {
-      total: productos.length,
+      total: totalProductos,
       entradas,
       salidas,
       ajustes,
       bajoMin: bajoMin.length,
     }
-  }, [movimientos, productos, bajoMin])
+  }, [movimientos, totalProductos, bajoMin])
 
   const filteredMovs = useMemo(() => {
     return movimientos.filter((m) => {
@@ -97,13 +102,12 @@ export default function MovimientosInventario() {
 
   const sortedMovs = useMemo(() => {
     if (!sort) return filteredMovs
-    const descProducto = new Map(productos.map((p) => [p.id, (p.descripcion || '').toLowerCase()]))
     const mul = dir === 'desc' ? -1 : 1
     const val = (m) => {
       switch (sort) {
         case 'fecha': return m.fecha || ''
         case 'tipo': return m.tipo || ''
-        case 'producto': return descProducto.get(m.producto_id) || ''
+        case 'producto': return (m.producto_descripcion || '').toLowerCase()
         case 'cantidad': return Number(m.cantidad) || 0
         default: return 0
       }
@@ -115,7 +119,7 @@ export default function MovimientosInventario() {
       if (va > vb) return mul
       return 0
     })
-  }, [filteredMovs, productos, sort, dir])
+  }, [filteredMovs, sort, dir])
 
   const onSort = (field, nextDir) => {
     if (!nextDir) {
@@ -130,6 +134,7 @@ export default function MovimientosInventario() {
   const aplicarVista = (params) => {
     setFiltroTipo(params.tipo || '')
     setFiltroProducto(params.producto || '')
+    setProductoSelFiltro(null)  // no tenemos el objeto del producto guardado; el filtro por id sigue aplicando
     setSort(params.sort || '')
     setDir(params.dir || 'asc')
   }
@@ -203,12 +208,24 @@ export default function MovimientosInventario() {
                 <option value="AJUSTE">Ajuste</option>
                 <option value="TRASPASO">Traspaso</option>
               </Select>
-              <Select label="Producto" value={filtroProducto} onChange={(e) => setFiltroProducto(e.target.value)}>
-                <option value="">Todos los productos</option>
-                {productos.map((p) => (
-                  <option key={p.id} value={p.id}>{p.codigo} — {p.descripcion}</option>
-                ))}
-              </Select>
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-ink-700 dark:text-ink-200 mb-1">Producto</label>
+                <ProductoPicker
+                  label={null}
+                  value={productoSelFiltro}
+                  onSelect={(p) => { setProductoSelFiltro(p); setFiltroProducto(String(p.id)) }}
+                  placeholder="Todos (busca para filtrar)"
+                />
+                {filtroProducto && (
+                  <button
+                    type="button"
+                    onClick={() => { setProductoSelFiltro(null); setFiltroProducto('') }}
+                    className="text-[11px] text-brand-600 mt-1 hover:underline"
+                  >
+                    Quitar filtro de producto
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -238,7 +255,6 @@ export default function MovimientosInventario() {
                   </THead>
                   <TBody>
                     {sortedMovs.map((m) => {
-                      const prod = productos.find((p) => p.id === m.producto_id)
                       const cant = Number(m.cantidad)
                       const signo = m.tipo === 'SALIDA' ? '-' : m.tipo === 'ENTRADA' ? '+' : (cant > 0 ? '+' : '')
                       return (
@@ -250,10 +266,10 @@ export default function MovimientosInventario() {
                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getTypeStyle(m.tipo)}`}>{m.tipo}</span>
                           </TD>
                           <TD>
-                            <span className="font-medium">{prod ? prod.descripcion : `Prod #${m.producto_id}`}</span>
-                            {prod && <span className="text-xs text-ink-500 ml-2 font-mono">{prod.codigo}</span>}
+                            <span className="font-medium">{m.producto_descripcion || `Prod #${m.producto_id}`}</span>
+                            {m.producto_codigo && <span className="text-xs text-ink-500 ml-2 font-mono">{m.producto_codigo}</span>}
                           </TD>
-                          <TD align="right" className="font-bold">{signo}{cant} {prod?.unidad || ''}</TD>
+                          <TD align="right" className="font-bold">{signo}{cant} {m.producto_unidad || ''}</TD>
                           <TD className="text-sm text-ink-500 max-w-xs truncate" title={m.motivo}>{m.motivo || '—'}</TD>
                         </TR>
                       )

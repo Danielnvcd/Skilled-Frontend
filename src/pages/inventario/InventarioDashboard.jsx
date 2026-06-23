@@ -14,7 +14,7 @@ import { Skeleton } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import {
-  getProductos, getProductosBajoMinimo, getMovimientos, getSolicitudes,
+  getCategoriasResumen, getProductosBajoMinimo, getMovimientos, getSolicitudes,
 } from '../../api/inventario'
 import { getStatsHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
@@ -277,10 +277,12 @@ export default function InventarioDashboard() {
   // (Catalogo, BajoMinimo, Movimientos, Solicitudes, Herramientas/*). Cuando
   // el backend emite los eventos correspondientes, todas las vistas que
   // dependan del namespace se invalidan a la vez.
-  const { data: rawProductos, error: errProd } = useResource(
-    ['productos', { limit: 500 }],
-    () => getProductos({ limit: 500 }),
-    { staleMs: 60_000, invalidateOn: ['producto:changed'] },
+  // Resumen por categoría (conteos) en vez del catálogo completo: con miles de
+  // productos no podemos bajarlos solo para el chart y el total.
+  const { data: rawResumen, error: errProd } = useResource(
+    ['categorias-resumen'],
+    () => getCategoriasResumen(),
+    { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
   const { data: rawBajoMinimo, error: errBajo } = useResource(
     ['productos', 'bajo-minimo'],
@@ -302,7 +304,8 @@ export default function InventarioDashboard() {
     () => getStatsHerramientas(),
     { staleMs: 60_000, invalidateOn: HERR_STATS_EVENTS },
   )
-  const productos = rawProductos ?? []
+  const resumenCategorias = rawResumen ?? []
+  const totalProductos = resumenCategorias.reduce((a, c) => a + (c.total || 0), 0)
   const bajoMinimo = rawBajoMinimo ?? []
   const movimientos = rawMovimientos ?? []
   const solicitudes = rawSolicitudes ?? []
@@ -310,7 +313,7 @@ export default function InventarioDashboard() {
 
   // Spinner mientras llega el primer set (cualquiera de las 5 fuentes).
   const loading =
-    !rawProductos && !rawBajoMinimo && !rawMovimientos && !rawSolicitudes && !herrStatsData
+    !rawResumen && !rawBajoMinimo && !rawMovimientos && !rawSolicitudes && !herrStatsData
 
   useEffect(() => {
     const err = errProd || errBajo || errMov || errSol || errHerr
@@ -350,31 +353,23 @@ export default function InventarioDashboard() {
     return buckets
   }, [movimientos])
 
-  // Distribución de productos por categoría (top 8 + "Otras")
+  // Distribución de productos por categoría (top 8 + "Otras") — desde el resumen
+  // server-side, que ya trae el conteo por categoría.
   const productosPorCategoria = useMemo(() => {
-    const counts = new Map()
-    productos.forEach((p) => {
-      const cat = p.categoria || 'Sin categoría'
-      counts.set(cat, (counts.get(cat) || 0) + 1)
-    })
-    const arr = Array.from(counts.entries()).map(([label, value]) => ({ label, value }))
+    const arr = resumenCategorias
+      .map((c) => ({ label: c.nombre || 'Sin categoría', value: c.total || 0 }))
+      .filter((x) => x.value > 0)
     arr.sort((a, b) => b.value - a.value)
     if (arr.length <= 8) return arr
     const top = arr.slice(0, 7)
     const restoValor = arr.slice(7).reduce((acc, x) => acc + x.value, 0)
     return [...top, { label: 'Otras', value: restoValor }]
-  }, [productos])
+  }, [resumenCategorias])
 
   const movimientosRecientes = useMemo(
     () => movimientos.slice(0, 8),
     [movimientos]
   )
-
-  const productosById = useMemo(() => {
-    const m = {}
-    productos.forEach((p) => { m[p.id] = p })
-    return m
-  }, [productos])
 
   if (loading) {
     return (
@@ -416,7 +411,7 @@ export default function InventarioDashboard() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Productos activos"      value={productos.length}              Icon={Package}        to="/inventario/catalogo" />
+        <StatCard label="Productos activos"      value={totalProductos}               Icon={Package}        to="/inventario/catalogo" />
         <StatCard label="Solicitudes pendientes" value={solicitudesPendientes.length}  Icon={ClipboardList}  to="/inventario/solicitudes" />
         <StatCard label="Bajo mínimo"            value={bajoMinimo.length}             Icon={AlertTriangle}  to="/inventario/movimientos" />
         <StatCard label="Movimientos hoy"        value={movimientosHoy}                Icon={ArrowRightLeft} to="/inventario/movimientos" />
@@ -570,7 +565,7 @@ export default function InventarioDashboard() {
         >
           <ul className="space-y-2 max-h-80 overflow-y-auto scrollbar-thin">
             {movimientosRecientes.length ? movimientosRecientes.map((m) => {
-              const prod = productosById[m.producto_id]
+              const prod = { descripcion: m.producto_descripcion, unidad: m.producto_unidad }
               const sign = m.tipo === 'SALIDA' ? '-' : m.tipo === 'ENTRADA' ? '+' : ''
               const ToneIcon = m.tipo === 'ENTRADA' ? TrendingUp : m.tipo === 'SALIDA' ? TrendingDown : ArrowRightLeft
               return (

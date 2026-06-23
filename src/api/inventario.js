@@ -8,8 +8,20 @@ export async function getProductoPorCodigo(codigo) {
   return data
 }
 
-export async function getProductos({ skip = 0, limit = 200 } = {}) {
-  const { data } = await api.get(`${BASE}/productos/`, { params: { skip, limit } })
+// Listado de productos con filtros server-side. Con miles de productos el
+// catálogo NO baja todo: filtra por `categoria` y/o `q` (búsqueda) en la DB.
+export async function getProductos({ skip = 0, limit = 200, categoria, q } = {}) {
+  const params = { skip, limit }
+  if (categoria) params.categoria = categoria
+  if (q) params.q = q
+  const { data } = await api.get(`${BASE}/productos/`, { params })
+  return data
+}
+
+// Resumen de categorías con conteos (total + bajo mínimo) para las tarjetas
+// del catálogo, sin descargar los productos.
+export async function getCategoriasResumen() {
+  const { data } = await api.get(`${BASE}/categorias/resumen`)
   return data
 }
 

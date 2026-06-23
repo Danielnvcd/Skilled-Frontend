@@ -4,6 +4,7 @@ import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Ta
 import { Link } from 'react-router-dom'
 import { Button, Card, PageHeader } from '../../components/ui'
 import { descargarPlantillaMateriales, importarMateriales } from '../../api/inventario'
+import { invalidate } from '../../utils/resourceCache'
 
 export default function ImportarMateriales() {
   const [file, setFile] = useState(null)
@@ -33,6 +34,15 @@ export default function ImportarMateriales() {
     try {
       const res = await importarMateriales(file)
       setResultado(res)
+      // El backend ya creó los productos, pero el caché de productos solo se
+      // invalida vía socket cuando el Catálogo está montado — y aquí no lo está.
+      // Sin esto, al volver al catálogo dentro de la ventana de staleMs (30s) se
+      // muestran los productos viejos (la categoría sí aparece porque se refetcha
+      // en cada montaje). Invalidamos a mano para forzar el refetch al volver.
+      if (res.exitosos > 0) {
+        invalidate('productos')
+        invalidate('movimientos')
+      }
       if (res.exitosos > 0) toast.success(`${res.exitosos} productos importados`)
       if (res.categorias_creadas?.length > 0) {
         toast.success(`${res.categorias_creadas.length} categoría(s) nueva(s) creada(s) automáticamente`)

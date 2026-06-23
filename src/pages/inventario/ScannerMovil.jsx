@@ -34,9 +34,12 @@ export default function ScannerMovil() {
   const [accionSaving, setAccionSaving] = useState(false)
 
   const [estante, setEstante] = useState(null)
-  const [productos, setProductos] = useState([])
+  // Productos de la "categoría local" del estante, traídos del servidor cuando
+  // no hay asignación explícita. Antes se precargaba TODO el catálogo (no
+  // escala a miles); ahora solo la categoría del estante.
+  const [productosCategoria, setProductosCategoria] = useState([])
   // Productos asignados al estante via ProductoEstante (Pausa 4). Si está vacío
-  // caemos al kludge legacy de filtrar por categoría == descripcion.
+  // caemos al fallback de la categoría local.
   const [productosEstanteApi, setProductosEstanteApi] = useState(null)
   const [searchText, setSearchText] = useState('')
 
@@ -50,9 +53,8 @@ export default function ScannerMovil() {
   const productosEstante = useMemo(() => {
     if (!estante) return []
     if (productosEstanteApi && productosEstanteApi.length > 0) return productosEstanteApi
-    const cat = estante.descripcion
-    return cat ? productos.filter(p => p.categoria === cat) : productos
-  }, [estante, productos, productosEstanteApi])
+    return productosCategoria
+  }, [estante, productosCategoria, productosEstanteApi])
 
   const filteredProducts = useMemo(() => {
     const q = searchText.trim().toLowerCase()
@@ -63,13 +65,21 @@ export default function ScannerMovil() {
     )
   }, [productosEstante, searchText])
 
+  // Estante sin productos asignados pero con "categoría local": traemos esa
+  // categoría del servidor (no el catálogo completo).
   useEffect(() => {
-    loadProductos()
-  }, [])
-
-  const loadProductos = () => {
-    getProductos().then(setProductos).catch(console.error)
-  }
+    if (!estante || (productosEstanteApi && productosEstanteApi.length > 0)) {
+      setProductosCategoria([])
+      return
+    }
+    const cat = estante.descripcion
+    if (!cat) { setProductosCategoria([]); return }
+    let cancel = false
+    getProductos({ categoria: cat, limit: 1000 })
+      .then((res) => { if (!cancel) setProductosCategoria(res) })
+      .catch(() => { if (!cancel) setProductosCategoria([]) })
+    return () => { cancel = true }
+  }, [estante, productosEstanteApi])
 
   // Lifecycle del scanner: se monta cuando isScanning=true (el div #reader ya está en DOM).
   useEffect(() => {
@@ -192,7 +202,6 @@ export default function ScannerMovil() {
         motivo: `Móvil QR — Estante ${estante.nombre}`,
       })
       toast.success('Movimiento registrado')
-      loadProductos()  // refresca stock
       setForm({ ...form, producto_id: '', cantidad: '' })
       setView('menu')
     } catch {

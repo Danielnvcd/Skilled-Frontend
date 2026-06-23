@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   FileSpreadsheet, Boxes, ArrowRightLeft, History as HistoryIcon,
-  Send, ClipboardList, Download, Filter, Loader2,
+  Send, ClipboardList, Download, Loader2,
 } from 'lucide-react'
 import { PageHeader, Button, Card, Select } from '../../components/ui'
 import {
   descargarReporteInventarioActual, descargarReporteMovimientos,
   descargarReporteKardex, descargarReporteConsumoProyecto,
   descargarReporteSolicitudes,
-  getCategorias, getProductos,
+  getCategorias,
 } from '../../api/inventario'
+import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
 
 const TIPOS_MOV = ['ENTRADA', 'SALIDA', 'AJUSTE', 'TRASPASO']
@@ -25,11 +26,9 @@ function hoyMenosDias(n) {
 
 export default function Reportes() {
   const [categorias, setCategorias] = useState([])
-  const [productos, setProductos] = useState([])
 
   useEffect(() => {
     getCategorias().then(setCategorias).catch(() => {})
-    getProductos({ limit: 1000 }).then(setProductos).catch(() => {})
   }, [])
 
   return (
@@ -42,8 +41,8 @@ export default function Reportes() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
         <ReporteInventarioActual categorias={categorias} />
-        <ReporteMovimientos productos={productos} />
-        <ReporteKardex productos={productos} />
+        <ReporteMovimientos />
+        <ReporteKardex />
         <ReporteConsumoProyecto />
         <ReporteSolicitudes />
       </div>
@@ -139,17 +138,13 @@ function ReporteInventarioActual({ categorias }) {
 
 // ─── 2. Movimientos por periodo ────────────────────────────────────────────────
 
-function ReporteMovimientos({ productos }) {
+function ReporteMovimientos() {
   const [desde, setDesde] = useState(hoyMenosDias(30))
   const [hasta, setHasta] = useState(hoyIso())
   const [tipo, setTipo] = useState('')
-  const [productoId, setProductoId] = useState('')
+  const [productoSel, setProductoSel] = useState(null)
+  const productoId = productoSel ? productoSel.id : ''
   const [loading, setLoading] = useState(false)
-
-  const productosOrdenados = useMemo(
-    () => [...productos].sort((a, b) => a.codigo.localeCompare(b.codigo)),
-    [productos],
-  )
 
   const handle = async () => {
     setLoading(true)
@@ -190,12 +185,17 @@ function ReporteMovimientos({ productos }) {
         </div>
         <div>
           <label className="text-xs font-semibold text-ink-600 dark:text-ink-300 mb-1 block">Producto</label>
-          <Select value={productoId} onChange={(e) => setProductoId(e.target.value)}>
-            <option value="">Todos</option>
-            {productosOrdenados.map((p) => (
-              <option key={p.id} value={p.id}>{p.codigo} — {p.descripcion}</option>
-            ))}
-          </Select>
+          <ProductoPicker
+            label={null}
+            value={productoSel}
+            onSelect={setProductoSel}
+            placeholder="Todos (busca para filtrar uno)"
+          />
+          {productoSel && (
+            <button type="button" onClick={() => setProductoSel(null)} className="text-[11px] text-brand-600 mt-1 hover:underline">
+              Quitar filtro de producto
+            </button>
+          )}
         </div>
       </div>
     </ReporteCard>
@@ -205,16 +205,12 @@ function ReporteMovimientos({ productos }) {
 
 // ─── 3. Kardex ─────────────────────────────────────────────────────────────────
 
-function ReporteKardex({ productos }) {
-  const [productoId, setProductoId] = useState('')
+function ReporteKardex() {
+  const [productoSel, setProductoSel] = useState(null)
+  const productoId = productoSel ? productoSel.id : ''
   const [desde, setDesde] = useState(hoyMenosDias(30))
   const [hasta, setHasta] = useState(hoyIso())
   const [loading, setLoading] = useState(false)
-
-  const productosOrdenados = useMemo(
-    () => [...productos].sort((a, b) => a.codigo.localeCompare(b.codigo)),
-    [productos],
-  )
 
   const handle = async () => {
     if (!productoId) {
@@ -246,12 +242,12 @@ function ReporteKardex({ productos }) {
     >
       <div>
         <label className="text-xs font-semibold text-ink-600 dark:text-ink-300 mb-1 block">Producto *</label>
-        <Select value={productoId} onChange={(e) => setProductoId(e.target.value)}>
-          <option value="">Selecciona…</option>
-          {productosOrdenados.map((p) => (
-            <option key={p.id} value={p.id}>{p.codigo} — {p.descripcion}</option>
-          ))}
-        </Select>
+        <ProductoPicker
+          label={null}
+          value={productoSel}
+          onSelect={setProductoSel}
+          placeholder="Busca el producto…"
+        />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <FechaInput label="Desde" value={desde} onChange={setDesde} />

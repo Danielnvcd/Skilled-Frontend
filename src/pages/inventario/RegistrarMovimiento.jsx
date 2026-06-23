@@ -10,9 +10,10 @@ import {
   Button, Card, PageHeader, Select, Skeleton,
 } from '../../components/ui'
 import {
-  getProductos, getAlmacenes, createMovimiento, getProductoStocks,
+  getAlmacenes, createMovimiento, getProductoStocks,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import ProductoPicker from '../../components/ProductoPicker'
 
 const TIPOS = [
   {
@@ -83,13 +84,12 @@ const COLORS = {
 export default function RegistrarMovimiento() {
   const navigate = useNavigate()
 
-  const [productos, setProductos] = useState([])
   const [almacenes, setAlmacenes] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   const [tipo, setTipo] = useState('ENTRADA')
-  const [productoId, setProductoId] = useState('')
+  const [productoSel, setProductoSel] = useState(null)
   const [cantidad, setCantidad] = useState('')
   // Dirección del ajuste — solo aplica si tipo=AJUSTE. '+' suma, '-' resta.
   const [ajusteDir, setAjusteDir] = useState('+')
@@ -104,14 +104,8 @@ export default function RegistrarMovimiento() {
   const [loadingStocks, setLoadingStocks] = useState(false)
 
   useEffect(() => {
-    Promise.all([
-      getProductos({ limit: 500 }),
-      getAlmacenes().catch(() => []),
-    ])
-      .then(([prods, alms]) => {
-        setProductos(prods)
-        setAlmacenes(alms)
-      })
+    getAlmacenes()
+      .then((alms) => setAlmacenes(alms))
       .catch((err) => toast.error(extractApiError(err, 'Error al cargar datos')))
       .finally(() => setLoading(false))
   }, [])
@@ -119,10 +113,9 @@ export default function RegistrarMovimiento() {
   const tipoCfg = TIPOS.find((t) => t.key === tipo) || TIPOS[0]
   const colorCfg = COLORS[tipoCfg.color]
 
-  const producto = useMemo(
-    () => productos.find((p) => String(p.id) === String(productoId)),
-    [productos, productoId]
-  )
+  // El producto seleccionado viene completo del picker (búsqueda server-side).
+  const producto = productoSel
+  const productoId = producto ? String(producto.id) : ''
 
   // Cargar desglose por bodega cuando cambia el producto seleccionado.
   useEffect(() => {
@@ -296,20 +289,8 @@ export default function RegistrarMovimiento() {
             </div>
           </div>
 
-          {/* Selector de producto */}
-          <Select
-            label="Producto"
-            value={productoId}
-            onChange={(e) => setProductoId(e.target.value)}
-            required
-          >
-            <option value="">Selecciona un producto del catálogo...</option>
-            {productos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.codigo} — {p.descripcion} (stock: {p.stock_actual} {p.unidad})
-              </option>
-            ))}
-          </Select>
+          {/* Selector de producto — búsqueda server-side (escala a miles) */}
+          <ProductoPicker value={productoSel} onSelect={setProductoSel} />
 
           {/* Toggle Aumentar/Disminuir cuando tipo=AJUSTE */}
           {tipo === 'AJUSTE' && (

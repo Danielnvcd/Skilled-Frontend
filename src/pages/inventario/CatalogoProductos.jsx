@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
@@ -8,12 +8,13 @@ import {
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import {
-  getProductos, createProducto, updateProducto, deleteProducto,
+  getProductos, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   getProductoStocks,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
+import { invalidate } from '../../utils/resourceCache'
 import { Upload } from 'lucide-react'
 
 export default function CatalogoProductos() {
@@ -75,23 +76,60 @@ export default function CatalogoProductos() {
     return () => { cancel = true }
   }, [stocksModal])
 
+  // Búsqueda con debounce: no le pegamos al server en cada tecla.
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Vista de lista cuando hay categoría seleccionada o texto de búsqueda.
+  const mostrarLista = !!(categoriaFiltro || search.trim())
+  // El fetch se habilita con el término ya "asentado" (debounced).
+  const fetchHabilitado = !!(categoriaFiltro || debouncedSearch)
+
+  // Resumen de categorías (conteos) para las tarjetas — server-side.
+  const {
+    data: resumen,
+    loading: loadingResumen,
+  } = useResource(
+    ['categorias-resumen'],
+    () => getCategoriasResumen(),
+    { staleMs: 30_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  )
+  const categoriasResumen = resumen ?? []
+
+  // Productos filtrados server-side. Solo se piden cuando hay filtro/búsqueda.
   const {
     data: rawProductos,
-    loading,
+    loading: loadingProductos,
     error,
     refetch,
   } = useResource(
-    ['productos', 'all'],
-    () => getProductos(),
-    { staleMs: 30_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+    ['productos', { categoria: categoriaFiltro, q: debouncedSearch }],
+    () => getProductos({ categoria: categoriaFiltro, q: debouncedSearch, limit: 1000 }),
+    {
+      enabled: fetchHabilitado,
+      staleMs: 30_000,
+      invalidateOn: ['producto:changed', 'movimiento:changed'],
+    },
   )
-  const productos = rawProductos ?? []
+  const filtered = fetchHabilitado ? (rawProductos ?? []) : []
+  // Mientras el debounce se asienta mostramos el skeleton para no parpadear
+  // "Sin productos".
+  const buscando = search.trim() !== debouncedSearch
+  const loading = mostrarLista ? (loadingProductos || buscando) : loadingResumen
 
   useEffect(() => {
     if (error) toast.error(extractApiError(error, 'Error al cargar productos'))
   }, [error])
 
-  const load = () => { refetch() }
+  // Tras crear/editar/borrar refrescamos productos + conteos de categorías.
+  const load = () => {
+    refetch()
+    invalidate('productos')
+    invalidate('categorias-resumen')
+  }
 
   const loadCategorias = async () => {
     try {
@@ -110,22 +148,6 @@ export default function CatalogoProductos() {
   useEffect(() => {
     loadCategorias()
   }, [])
-
-  const filtered = useMemo(() => {
-    let result = productos
-    if (search.trim()) {
-      const s = search.toLowerCase()
-      result = result.filter((p) =>
-        p.codigo?.toLowerCase().includes(s) ||
-        p.descripcion?.toLowerCase().includes(s) ||
-        p.categoria?.toLowerCase().includes(s)
-      )
-    }
-    if (categoriaFiltro) {
-      result = result.filter((p) => p.categoria === categoriaFiltro)
-    }
-    return result
-  }, [productos, search, categoriaFiltro])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -275,11 +297,11 @@ export default function CatalogoProductos() {
         <div className="space-y-2">
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
-      ) : (!search && !categoriaFiltro) ? (
+      ) : !mostrarLista ? (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {categorias.map((cat) => {
-            const prods = productos.filter((p) => p.categoria === cat)
-            const bajos = prods.filter((p) => Number(p.stock_actual) <= Number(p.stock_minimo)).length
+          {categoriasResumen.map((c) => {
+            const cat = c.nombre
+            const bajos = c.bajo_minimo
             const img = catImages[cat]
             return (
               <Card
@@ -315,7 +337,7 @@ export default function CatalogoProductos() {
                 </div>
                 <div className="p-4">
                   <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
-                  <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{prods.length} ítem{prods.length === 1 ? '' : 's'}</p>
+                  <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{c.total} ítem{c.total === 1 ? '' : 's'}</p>
                   {bajos > 0 && (
                     <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-[11px] font-semibold rounded-full ring-1 ring-inset ring-red-200 dark:ring-red-800/60">
                       <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
@@ -351,6 +373,11 @@ export default function CatalogoProductos() {
               <span className="text-xs text-ink-500 dark:text-ink-400 tabular-nums">
                 {filtered.length} producto{filtered.length === 1 ? '' : 's'}
               </span>
+            </div>
+          )}
+          {filtered.length >= 1000 && (
+            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+              Mostrando los primeros 1000 resultados. Afina la búsqueda para ver el resto.
             </div>
           )}
           <Table>
