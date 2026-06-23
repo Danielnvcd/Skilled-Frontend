@@ -1,5 +1,5 @@
 import { Outlet, useLocation } from 'react-router-dom'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import BottomNav from './BottomNav'
@@ -9,6 +9,20 @@ import useIsMobileDevice from '../hooks/useIsMobileDevice'
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts'
 
 const STORAGE_KEY = 'sidebar:collapsed'
+
+// Fallback de carga del chunk de la página. Vive DENTRO del Layout (solo el
+// área de contenido), no a pantalla completa: así el sidebar/topbar no
+// desaparecen ni parpadean mientras se descarga el chunk lazy de la sección.
+function ContentSpinner() {
+  return (
+    <div className="flex items-center justify-center py-24 text-ink-400">
+      <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    </div>
+  )
+}
 
 function readInitial() {
   try {
@@ -82,7 +96,9 @@ export default function Layout() {
             : undefined}
         >
           <Breadcrumbs />
-          <Outlet />
+          <Suspense fallback={<ContentSpinner />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
       {isMobileDevice && <BottomNav />}
