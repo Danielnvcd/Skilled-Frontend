@@ -337,7 +337,15 @@ export default function Profile() {
   const handleRevokeSession = async (sessionId) => {
     setRevokingId(sessionId)
     try {
-      await revokeSession(sessionId)
+      const res = await revokeSession(sessionId)
+      // Si revoqué la sesión que estoy usando ahora, el backend ya mató mi
+      // access token → cierro sesión local para no quedarme "dentro" con un
+      // token muerto.
+      if (res?.self) {
+        toast.success('Cerraste tu sesión actual')
+        await logout()
+        return
+      }
       toast.success('Sesión revocada')
       // Optimismo: quitarla local sin esperar; luego reload.
       setSessions((prev) => (prev || []).filter((s) => s.id !== sessionId))

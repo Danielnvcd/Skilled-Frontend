@@ -199,7 +199,15 @@ if (typeof window !== 'undefined') {
   armProactiveRefresh()
 }
 
+// Guard de idempotencia: cuando el token expira y el refresh falla, TODAS las
+// peticiones en vuelo reciben 401 a la vez y cada una llamaría a bounceToLogin
+// → múltiples POST /auth/logout (que salen como "anon" en la bitácora porque la
+// sesión ya está muerta) + múltiples redirects. Con este flag solo la primera
+// gana; las demás salen temprano. Se resetea solo al recargar (window.location).
+let bounced = false
 function bounceToLogin() {
+  if (bounced) return
+  bounced = true
   cancelProactiveRefresh()
   // Best-effort: avisa al backend para que revoque el RT actual antes de
   // limpiar storage. Si la cookie ya no es válida (RT expirado/revocado),
