@@ -262,6 +262,16 @@ export async function deleteCategoriaConfig(nombre) {
   await api.delete(`${BASE}/categorias-config/${encodeURIComponent(nombre)}`)
 }
 
+// Borrado en cascada: elimina la categoría junto con TODOS sus productos
+// (soft-delete en backend). Devuelve { productos_eliminados, ... }.
+export async function deleteCategoriaConProductos(nombre) {
+  const { data } = await api.delete(
+    `${BASE}/categorias-config/${encodeURIComponent(nombre)}`,
+    { params: { con_productos: 1 } },
+  )
+  return data
+}
+
 // --- Proyectos (endpoint del módulo inventario; distinto del módulo de proyectos) ---
 export async function getProyectosInventario() {
   const { data } = await api.get(`${BASE}/proyectos/`)

@@ -1,4 +1,5 @@
-import { PanelLeft, Sun, Moon } from 'lucide-react'
+import { useState } from 'react'
+import { PanelLeft, Sun, Moon, RotateCw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
@@ -6,11 +7,20 @@ import NotificacionesBell from './NotificacionesBell'
 import AlertasBell from './AlertasBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
+import { forceReload } from '../utils/forceReload'
 
 export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobileDevice = false }) {
   const { user, isAdmin } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
+
+  // Fuerza traer la última versión desplegada (limpia service worker + cachés).
+  const [reloading, setReloading] = useState(false)
+  const handleForceReload = () => {
+    if (reloading) return
+    setReloading(true)
+    forceReload()  // desregistra SW, borra cachés y recarga; la página se va.
+  }
 
   return (
     <header className="sticky top-0 z-30 bg-white/85 dark:bg-ink-900/85 backdrop-blur border-b border-ink-200 dark:border-ink-800">
@@ -38,6 +48,16 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
+          <button
+            onClick={handleForceReload}
+            disabled={reloading}
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring transition-colors disabled:opacity-60"
+            aria-label="Forzar recarga: obtener la última versión"
+            title="Forzar recarga (obtener la última versión)"
+          >
+            <RotateCw size={18} className={reloading ? 'animate-spin' : ''} />
+          </button>
+
           <button
             onClick={toggleTheme}
             className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-ink-100 dark:hover:bg-ink-800 focus-ring transition-colors"

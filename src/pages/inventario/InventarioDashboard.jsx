@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, memo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -6,11 +6,8 @@ import {
   AlertTriangle, Package, TrendingUp, TrendingDown, Clock, ChevronRight,
   History, CheckCircle2, Wrench, Hammer, Settings2,
 } from 'lucide-react'
-import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, Legend, CartesianGrid,
-} from 'recharts'
 import { Skeleton } from '../../components/ui'
+import { DonutCorporativo, BarrasCorporativas } from '../../components/charts/CorporateCharts'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import {
@@ -32,15 +29,6 @@ const HERR_STATS_EVENTS = [
   'incidencia:changed', 'baja:changed',
 ]
 
-// Paleta sobria 5 tonos (igual al Dashboard) en lugar de 10 saturados.
-const CHART_COLORS = [
-  '#0ea5e9', // sky-500
-  '#10b981', // emerald-500
-  '#8b5cf6', // violet-500
-  '#f59e0b', // amber-500
-  '#64748b', // slate-500 — neutro
-]
-
 function greeting() {
   const h = new Date().getHours()
   if (h < 12) return 'Buenos días'
@@ -48,122 +36,59 @@ function greeting() {
   return 'Buenas noches'
 }
 
-// StatCard sobrio idéntico al del Dashboard: chip neutro slate + número
-// dominante. Mismo `h-12 w-12 rounded-lg` para que las dos páginas se
-// sientan parte del mismo producto.
+// StatCard corporativo idéntico al del Dashboard admin: chip neutro monocromo
+// + número dominante + drill-down con ChevronRight (regla ERP: ningún KPI sin
+// clic). Mismo `h-12 w-12 rounded-lg` para que ambas páginas se sientan parte
+// del mismo producto.
 function StatCard({ label, value, Icon, to }) {
-  const Wrap = to ? Link : 'div'
-  return (
-    <Wrap
-      to={to}
-      className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 flex items-center gap-4 ${
-        to ? 'hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all' : ''
-      }`}
-    >
-      <div className="h-12 w-12 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
-        <Icon size={22} strokeWidth={1.8} />
+  const inner = (
+    <>
+      <div className="h-9 w-9 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+        <Icon size={17} strokeWidth={1.8} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">{label}</p>
-        <p className="text-3xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-1 leading-none">{value}</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400 truncate">{label}</p>
+        <p className="text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100 mt-0.5 leading-none">{value}</p>
       </div>
-    </Wrap>
+    </>
+  )
+  const base = 'bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-3.5 flex items-center gap-3'
+  if (!to) return <div className={base}>{inner}</div>
+  return (
+    <Link
+      to={to}
+      title={`Ver ${typeof label === 'string' ? label.toLowerCase() : ''}`}
+      className={`${base} group hover:border-brand-300 dark:hover:border-brand-700 hover:shadow-sm transition-all`}
+    >
+      {inner}
+      <ChevronRight size={14} className="text-ink-300 dark:text-ink-600 group-hover:text-brand-500 flex-shrink-0 transition-colors" />
+    </Link>
   )
 }
 
-function Panel({ title, Icon, action, children, className = '' }) {
+// Panel corporativo idéntico al del Dashboard admin: soporta subtítulo y
+// `bodyClassName` para centrar gráficas. Header con icono monocromo slate.
+function Panel({ title, subtitle, Icon, action, children, className = '', bodyClassName = '' }) {
   return (
-    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-5 ${className}`}>
-      <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-ink-100 dark:border-ink-800/80">
-        <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
-          {Icon && <Icon size={16} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
-          {title}
+    <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-4 flex flex-col ${className}`}>
+      <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-ink-100 dark:border-ink-800/80 flex-shrink-0">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
+            {Icon && <Icon size={15} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
+            {title}
+          </div>
+          {subtitle && (
+            <div className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 ml-[22px]">{subtitle}</div>
+          )}
         </div>
         {action}
       </div>
-      {children}
+      <div className={`flex-1 min-h-0 ${bodyClassName}`}>
+        {children}
+      </div>
     </div>
   )
 }
-
-const ChartTooltip = memo(function ChartTooltip({ active, payload, isDark, labelText }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div
-      className="rounded-md px-3 py-2 text-xs shadow-elevated border"
-      style={{
-        background: isDark ? '#1e293b' : '#ffffff',
-        borderColor: isDark ? '#334155' : '#e2e8f0',
-        color: isDark ? '#f1f5f9' : '#0f172a',
-      }}
-    >
-      <p className="font-semibold mb-1">{payload[0].payload.label || payload[0].name}</p>
-      {payload.map((p) => (
-        <p key={p.dataKey} className="tabular-nums" style={{ color: p.color }}>
-          <span className="text-ink-500 dark:text-ink-400">{p.name}: </span>
-          <strong>{p.value}</strong> {labelText || ''}
-        </p>
-      ))}
-    </div>
-  )
-})
-
-const MovimientosBar = memo(function MovimientosBar({ data, isDark }) {
-  if (!data?.length) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin movimientos en los últimos 7 días</p>
-  }
-  return (
-    <ResponsiveContainer width="100%" height={280} debounce={200}>
-      <BarChart data={data} margin={{ top: 5, right: 8, bottom: 5, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
-        <XAxis dataKey="label" tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }} />
-        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: isDark ? '#94a3b8' : '#64748b' }} />
-        <Tooltip content={<ChartTooltip isDark={isDark} labelText="mov." />} cursor={{ fill: isDark ? '#1e293b' : '#f8fafc' }} isAnimationActive={false} />
-        <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-        <Bar dataKey="Entradas" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="Salidas"  stackId="a" fill="#ef4444" radius={[0, 0, 0, 0]} isAnimationActive={false} />
-        <Bar dataKey="Ajustes"  stackId="a" fill="#f59e0b" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-      </BarChart>
-    </ResponsiveContainer>
-  )
-})
-
-const CategoriasDonut = memo(function CategoriasDonut({ data, isDark }) {
-  if (!data?.length) {
-    return <p className="text-sm text-ink-500 italic text-center py-12">Sin productos registrados</p>
-  }
-  return (
-    <ResponsiveContainer width="100%" height={280} debounce={200}>
-      <PieChart>
-        <Pie
-          data={data}
-          dataKey="value"
-          nameKey="label"
-          cx="50%"
-          cy="50%"
-          innerRadius={60}
-          outerRadius={95}
-          paddingAngle={1}
-          stroke={isDark ? '#0f172a' : '#ffffff'}
-          strokeWidth={2}
-          isAnimationActive={false}
-        >
-          {data.map((_, i) => (
-            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip content={<ChartTooltip isDark={isDark} labelText="prod." />} isAnimationActive={false} />
-        <Legend
-          layout="vertical"
-          align="right"
-          verticalAlign="middle"
-          iconType="circle"
-          wrapperStyle={{ fontSize: 11, paddingLeft: 12 }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
-  )
-})
 
 function fmtFecha(iso) {
   if (!iso) return ''
@@ -331,26 +256,15 @@ export default function InventarioDashboard() {
     return movimientos.filter((m) => (m.fecha || '').slice(0, 10) === hoy).length
   }, [movimientos])
 
-  // Histograma de movimientos por día (últimos 7 días)
-  const movimientosPorDia = useMemo(() => {
-    const buckets = []
-    const fmt = new Intl.DateTimeFormat('es-MX', { day: '2-digit', month: '2-digit' })
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      const iso = d.toISOString().slice(0, 10)
-      buckets.push({ iso, label: fmt.format(d), Entradas: 0, Salidas: 0, Ajustes: 0 })
-    }
-    const byIso = Object.fromEntries(buckets.map((b) => [b.iso, b]))
-    movimientos.forEach((m) => {
-      const iso = (m.fecha || '').slice(0, 10)
-      const bucket = byIso[iso]
-      if (!bucket) return
-      if (m.tipo === 'ENTRADA') bucket.Entradas++
-      else if (m.tipo === 'SALIDA') bucket.Salidas++
-      else if (m.tipo === 'AJUSTE') bucket.Ajustes++
-    })
-    return buckets
+  // Distribución de movimientos por tipo (ventana cargada) — ranking para las
+  // barras corporativas. Misma forma de datos { label, value } que el admin.
+  const movimientosPorTipo = useMemo(() => {
+    const acc = { ENTRADA: 0, SALIDA: 0, AJUSTE: 0, TRASPASO: 0 }
+    movimientos.forEach((m) => { if (acc[m.tipo] != null) acc[m.tipo]++ })
+    const LABELS = { ENTRADA: 'Entradas', SALIDA: 'Salidas', AJUSTE: 'Ajustes', TRASPASO: 'Traspasos' }
+    return Object.entries(acc)
+      .filter(([, v]) => v > 0)
+      .map(([k, v]) => ({ label: LABELS[k], value: v }))
   }, [movimientos])
 
   // Distribución de productos por categoría (top 8 + "Otras") — desde el resumen
@@ -375,8 +289,8 @@ export default function InventarioDashboard() {
     return (
       <div className="space-y-5">
         <Skeleton className="h-24 rounded-xl" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Skeleton className="h-80 rounded-xl" />
@@ -410,7 +324,7 @@ export default function InventarioDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <StatCard label="Productos activos"      value={totalProductos}               Icon={Package}        to="/inventario/catalogo" />
         <StatCard label="Solicitudes pendientes" value={solicitudesPendientes.length}  Icon={ClipboardList}  to="/inventario/solicitudes" />
         <StatCard label="Bajo mínimo"            value={bajoMinimo.length}             Icon={AlertTriangle}  to="/inventario/movimientos" />
@@ -433,13 +347,34 @@ export default function InventarioDashboard() {
         )}
       </div>
 
-      {/* Gráficas */}
+      {/* Gráficas corporativas — mismo lenguaje visual que el Dashboard admin */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel title="Movimientos (últimos 7 días)" Icon={History}>
-          <MovimientosBar data={movimientosPorDia} isDark={isDark} />
+        <Panel
+          title="Productos por categoría"
+          subtitle={`${productosPorCategoria.length} ${productosPorCategoria.length === 1 ? 'categoría' : 'categorías'} · ${totalProductos} productos`}
+          Icon={Boxes}
+          bodyClassName="flex items-center justify-center"
+        >
+          <DonutCorporativo
+            data={productosPorCategoria}
+            isDark={isDark}
+            valueLabel="Productos"
+            centerLabel="Productos"
+            emptyText="Sin productos registrados"
+          />
         </Panel>
-        <Panel title="Productos por categoría" Icon={Boxes}>
-          <CategoriasDonut data={productosPorCategoria} isDark={isDark} />
+        <Panel
+          title="Movimientos por tipo"
+          subtitle={`${movimientos.length} registros recientes`}
+          Icon={History}
+        >
+          <BarrasCorporativas
+            data={movimientosPorTipo}
+            isDark={isDark}
+            valueLabel="Movimientos"
+            emptyText="Sin movimientos registrados"
+            gradientId="inv-mov-gradient"
+          />
         </Panel>
       </div>
 

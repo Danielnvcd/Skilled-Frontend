@@ -10,6 +10,7 @@ import {
 import {
   getProductos, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
+  deleteCategoriaConProductos,
   getProductoStocks,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
@@ -59,6 +60,10 @@ export default function CatalogoProductos() {
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Eliminar categoría con todos sus productos: { nombre, total }.
+  const [confirmDelCat, setConfirmDelCat] = useState(null)
+  const [deletingCat, setDeletingCat] = useState(false)
 
   // Desglose de stock por bodega (Pausa 2): null = cerrado, objeto = producto seleccionado.
   const [stocksModal, setStocksModal] = useState(null)
@@ -187,6 +192,37 @@ export default function CatalogoProductos() {
       toast.error(extractApiError(err, 'No se pudo eliminar el producto'))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleDeleteCat = async () => {
+    if (!confirmDelCat) return
+    setDeletingCat(true)
+    try {
+      const res = await deleteCategoriaConProductos(confirmDelCat.nombre)
+      // Si la categoría borrada estaba seleccionada, vuelve a la grilla.
+      if (categoriaFiltro === confirmDelCat.nombre) setCategoriaFiltro('')
+      await loadCategorias()
+      load()
+      toast.success(
+        `Categoría "${confirmDelCat.nombre}" eliminada (${res?.productos_eliminados ?? 0} producto${(res?.productos_eliminados ?? 0) === 1 ? '' : 's'})`
+      )
+      setConfirmDelCat(null)
+    } catch (err) {
+      const data = err?.response?.data
+      // Bloqueo por entregas pendientes (409): mensaje detallado y persistente
+      // para que el almacenista sepa qué solicitudes resolver primero.
+      if (err?.response?.status === 409 && data?.codigo === 'ENTREGAS_PENDIENTES') {
+        const folios = (data.solicitudes || []).join(', ')
+        toast.error(
+          `${data.detail}${folios ? `\nSolicitudes: ${folios}` : ''}`,
+          { duration: 8000 }
+        )
+      } else {
+        toast.error(extractApiError(err, 'No se pudo eliminar la categoría'))
+      }
+    } finally {
+      setDeletingCat(false)
     }
   }
 
@@ -323,17 +359,30 @@ export default function CatalogoProductos() {
                       <Package size={44} strokeWidth={1.5} />
                     </div>
                   )}
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setCatModal({ mode: 'edit', nombre: cat, imagen_url: img || '', original: cat })
-                    }}
-                    title="Editar imagen"
-                    className="absolute top-2 right-2 w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white dark:hover:bg-ink-900"
-                  >
-                    <ImageIcon size={15} strokeWidth={1.8} />
-                  </button>
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setCatModal({ mode: 'edit', nombre: cat, imagen_url: img || '', original: cat })
+                      }}
+                      title="Editar imagen"
+                      className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-white dark:hover:bg-ink-900"
+                    >
+                      <ImageIcon size={15} strokeWidth={1.8} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setConfirmDelCat({ nombre: cat, total: c.total })
+                      }}
+                      title="Eliminar categoría y sus productos"
+                      className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-red-600 dark:text-red-400 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30"
+                    >
+                      <Trash2 size={15} strokeWidth={1.8} />
+                    </button>
+                  </div>
                 </div>
                 <div className="p-4">
                   <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
@@ -589,6 +638,21 @@ export default function CatalogoProductos() {
         title="Eliminar producto"
         description={`Se desactivará el producto "${confirmDel?.name}".`}
         confirmLabel="Eliminar"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelCat}
+        onClose={() => setConfirmDelCat(null)}
+        onConfirm={handleDeleteCat}
+        loading={deletingCat}
+        title={`Eliminar categoría "${confirmDelCat?.nombre}"`}
+        description={
+          confirmDelCat?.total > 0
+            ? `⚠ Esta acción eliminará la categoría y sus ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}. Los productos se desactivarán y dejarán de aparecer en el catálogo. Esta acción no se puede deshacer.`
+            : 'Se eliminará la categoría. No tiene productos asociados.'
+        }
+        confirmLabel={confirmDelCat?.total > 0 ? `Eliminar categoría y ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}` : 'Eliminar categoría'}
         tone="danger"
       />
 
