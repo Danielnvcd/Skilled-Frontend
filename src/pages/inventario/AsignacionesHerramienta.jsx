@@ -17,7 +17,10 @@ import { CONDICION, formatDateTime } from './herramientasShared'
 import api from '../../api/axios'
 
 async function getTrabajadores() {
-  const { data } = await api.get('/trabajadores?activo=true&page_size=500')
+  // Picker ligero: el listado normal de /trabajadores bloquea al rol inventario
+  // (expone PII del padrón). /para-asignar devuelve solo id/nº empleado/nombre,
+  // abierto a inventario, que es quien crea las asignaciones.
+  const { data } = await api.get('/trabajadores/para-asignar?per_page=500')
   return Array.isArray(data) ? data : (data.items || data.results || [])
 }
 

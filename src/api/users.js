@@ -12,8 +12,14 @@ export async function crearUsuario({ username, password, role }) {
   return data
 }
 
+// Desactiva (borrado lógico) — el backend conserva el historial del usuario.
 export async function eliminarUsuario(id) {
   const { data } = await api.delete(`${BASE}/${id}`)
+  return data
+}
+
+export async function reactivarUsuario(id) {
+  const { data } = await api.post(`${BASE}/${id}/reactivar`)
   return data
 }
 

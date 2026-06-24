@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, Camera, X, IdCard } from 'lucide-react'
+import { Users, Plus, Search, Trash2, KeyRound, ShieldCheck, ShieldOff, Pencil, Camera, X, IdCard, RotateCcw } from 'lucide-react'
 import {
   Button, Card, PageHeader, Badge, Modal, ConfirmDialog,
   EmptyState, Input, Select, Skeleton,
@@ -11,7 +11,7 @@ import UserAvatar from '../components/UserAvatar'
 import { extractApiError } from '../utils/apiError'
 import { useAuth } from '../context/AuthContext'
 import {
-  listarUsuarios, crearUsuario, eliminarUsuario, cambiarPasswordUsuario, actualizarUsuario,
+  listarUsuarios, crearUsuario, eliminarUsuario, reactivarUsuario, cambiarPasswordUsuario, actualizarUsuario,
   subirFotoUsuario,
 } from '../api/users'
 import { listarTrabajadores } from '../api/trabajadores'
@@ -158,6 +158,7 @@ export default function Usuarios() {
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [reactivatingId, setReactivatingId] = useState(null)
 
   const [openEdit, setOpenEdit] = useState(null)
   const [editForm, setEditForm] = useState({
@@ -225,13 +226,26 @@ export default function Usuarios() {
     setDeleting(true)
     try {
       await eliminarUsuario(confirmDel.id)
-      toast.success('Usuario eliminado')
+      toast.success('Usuario desactivado')
       setConfirmDel(null)
       await refetch()
     } catch (err) {
-      toast.error(extractApiError(err, 'No se pudo eliminar el usuario'))
+      toast.error(extractApiError(err, 'No se pudo desactivar el usuario'))
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleReactivate = async (u) => {
+    setReactivatingId(u.id)
+    try {
+      await reactivarUsuario(u.id)
+      toast.success('Usuario reactivado')
+      await refetch()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo reactivar el usuario'))
+    } finally {
+      setReactivatingId(null)
     }
   }
 
@@ -389,6 +403,7 @@ export default function Usuarios() {
                         <p className="font-medium text-ink-900 dark:text-ink-100 flex items-center gap-2">
                           {u.username}
                           {isSelf(u) && <span className="text-[10px] uppercase tracking-wider text-brand-600 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 px-1.5 py-0.5 rounded">Tú</span>}
+                          {!u.activo && <span className="text-[10px] uppercase tracking-wider text-rose-600 dark:text-rose-300 bg-rose-50 dark:bg-rose-900/30 px-1.5 py-0.5 rounded">Desactivado</span>}
                         </p>
                         <OnlineIndicator lastSeen={u.last_seen} />
                       </div>
@@ -442,16 +457,29 @@ export default function Usuarios() {
                       >
                         <KeyRound size={14} />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        disabled={blockedDelete}
-                        onClick={() => setConfirmDel({ id: u.id, name: u.username })}
-                        aria-label="Eliminar"
-                        title={blockedDelete ? (isSelf(u) ? 'No puedes eliminar tu propia cuenta' : 'El usuario admin no se puede eliminar') : 'Eliminar usuario'}
-                      >
-                        <Trash2 size={14} className={blockedDelete ? 'text-ink-300 dark:text-ink-600' : 'text-red-600 dark:text-red-400'} />
-                      </Button>
+                      {u.activo ? (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={blockedDelete}
+                          onClick={() => setConfirmDel({ id: u.id, name: u.username })}
+                          aria-label="Desactivar"
+                          title={blockedDelete ? (isSelf(u) ? 'No puedes desactivar tu propia cuenta' : 'El usuario admin no se puede desactivar') : 'Desactivar usuario'}
+                        >
+                          <Trash2 size={14} className={blockedDelete ? 'text-ink-300 dark:text-ink-600' : 'text-red-600 dark:text-red-400'} />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          loading={reactivatingId === u.id}
+                          onClick={() => handleReactivate(u)}
+                          aria-label="Reactivar"
+                          title="Reactivar usuario"
+                        >
+                          <RotateCcw size={14} className="text-emerald-600 dark:text-emerald-400" />
+                        </Button>
+                      )}
                     </div>
                   </TD>
                 </TR>
@@ -535,9 +563,9 @@ export default function Usuarios() {
         onClose={() => setConfirmDel(null)}
         onConfirm={handleDelete}
         loading={deleting}
-        title="Eliminar usuario"
-        description={`Se eliminará el usuario "${confirmDel?.name}". Esta acción no se puede deshacer.`}
-        confirmLabel="Eliminar"
+        title="Desactivar usuario"
+        description={`Se desactivará el usuario "${confirmDel?.name}": no podrá iniciar sesión y se cerrarán sus sesiones activas. Su historial se conserva y puedes reactivarlo después.`}
+        confirmLabel="Desactivar"
         tone="danger"
       />
 

@@ -28,7 +28,7 @@ function nominaTone(tipo) {
   const v = (tipo || '').toLowerCase()
   if (v === 'semanal') return 'brand'
   if (v === 'por hora') return 'info'
-  if (v === 'cuadrado') return 'warning'
+  if (v === 'cuadrado') return 'success'
   return 'neutral'
 }
 

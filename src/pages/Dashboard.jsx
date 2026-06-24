@@ -4,8 +4,8 @@ import toast from 'react-hot-toast'
 import {
   Briefcase, History, Cake, AlertTriangle, FolderOpen,
   ShieldAlert, FileText, IdCard, CheckCircle2, ChevronRight,
-  UserRoundPlus, UsersRound, FolderKanban, LayoutGrid, CalendarClock,
-  ReceiptText, HandCoins, ClipboardList, TrendingUp, Activity,
+  UserRoundPlus, UsersRound, FolderKanban, FolderCheck, LayoutGrid, CalendarClock,
+  ReceiptText, HandCoins, ClipboardList,
 } from 'lucide-react'
 import { Card, PageHeader, Skeleton } from '../components/ui'
 import { DonutCorporativo, BarrasCorporativas } from '../components/charts/CorporateCharts'
@@ -246,9 +246,9 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={UsersRound} to="/empleados" />
         {/* Nuevos este mes → la lista ordenada por ingreso desc deja arriba justo a esos. */}
-        <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={TrendingUp} to="/empleados?sort=ingreso&dir=desc" />
+        <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={UserRoundPlus} to="/empleados?sort=ingreso&dir=desc" />
         <StatCard label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderKanban} to="/proyectos" />
-        <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={Activity} to="/proyectos" />
+        <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={FolderCheck} to="/proyectos" />
       </div>
 
       {/* Charts */}
