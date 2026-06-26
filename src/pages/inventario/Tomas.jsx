@@ -9,11 +9,17 @@ import {
 import { listTomas, createToma, getAlmacenes } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 
+const ESTATUS_LABEL = {
+  ABIERTA:   'En curso',
+  CERRADA:   'Terminada',
+  CANCELADA: 'Descartada',
+}
+
 const ESTATUS_OPTIONS = [
-  { value: '', label: 'Todas' },
-  { value: 'ABIERTA', label: 'Abiertas' },
-  { value: 'CERRADA', label: 'Cerradas' },
-  { value: 'CANCELADA', label: 'Canceladas' },
+  { value: '', label: 'Todos' },
+  { value: 'ABIERTA', label: 'En curso' },
+  { value: 'CERRADA', label: 'Terminadas' },
+  { value: 'CANCELADA', label: 'Descartadas' },
 ]
 
 function EstadoBadge({ estatus }) {
@@ -24,7 +30,7 @@ function EstadoBadge({ estatus }) {
   }
   return (
     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${map[estatus] || ''}`}>
-      {estatus}
+      {ESTATUS_LABEL[estatus] || estatus}
     </span>
   )
 }
@@ -71,7 +77,7 @@ export default function Tomas() {
         almacen_id: Number(nuevaForm.almacen_id),
         notas: nuevaForm.notas || null,
       })
-      toast.success(`Toma #${t.id} iniciada (${t.total_lineas} líneas)`)
+      toast.success(`Conteo #${t.id} listo — ${t.total_lineas} producto(s) por contar`)
       setNuevaForm(null)
       navigate(`/inventario/tomas/${t.id}`)
     } catch (err) {
@@ -85,14 +91,27 @@ export default function Tomas() {
     <div>
       <PageHeader
         icon={ClipboardCheck}
-        title="Tomas físicas de inventario"
-        description="Conteos periódicos por almacén. Las diferencias se ajustan automáticamente al cerrar."
+        title="Conteos de inventario (tomas físicas)"
+        description="Cuenta lo que hay de verdad en un almacén y el sistema corrige las diferencias por ti."
         actions={
           <Button leftIcon={<Plus size={15} />} onClick={() => setNuevaForm({ almacen_id: '', notas: '' })}>
-            Iniciar toma
+            Empezar conteo
           </Button>
         }
       />
+
+      <Card className="mt-4 border-brand-200 dark:border-brand-900 bg-brand-50/60 dark:bg-brand-900/10">
+        <div className="p-3 text-sm text-ink-700 dark:text-ink-300">
+          <p className="font-semibold mb-1">¿Para qué sirve esto?</p>
+          <p className="text-xs text-ink-600 dark:text-ink-400">
+            Con el tiempo lo que dice el sistema y lo que hay en la bodega se desajusta (mermas, errores, etc.).
+            Un conteo sirve para revisar producto por producto y dejar el inventario al día. Pasos:
+            <strong> 1)</strong> Empieza un conteo y elige el almacén.
+            <strong> 2)</strong> Cuenta y anota lo que hay de cada producto.
+            <strong> 3)</strong> Termina el conteo y el sistema corrige solo las diferencias.
+          </p>
+        </div>
+      </Card>
 
       <Card className="mt-6">
         <div className="p-3 border-b border-ink-200 dark:border-ink-800 flex flex-wrap gap-3 items-end">
@@ -120,7 +139,7 @@ export default function Tomas() {
           <div className="p-6"><Skeleton className="h-40 w-full rounded-md" /></div>
         ) : tomas.length === 0 ? (
           <p className="p-8 text-center text-sm italic text-ink-500">
-            No hay tomas con esos filtros.
+            Todavía no hay conteos. Pulsa <strong>"Empezar conteo"</strong> para hacer el primero.
           </p>
         ) : (
           <Table>
@@ -171,11 +190,11 @@ export default function Tomas() {
       <Modal
         open={!!nuevaForm}
         onClose={() => setNuevaForm(null)}
-        title="Iniciar toma física"
+        title="Empezar un conteo"
         footer={
           <>
             <Button variant="secondary" onClick={() => setNuevaForm(null)}>Cancelar</Button>
-            <Button type="submit" form="form-toma" loading={creando}>Iniciar</Button>
+            <Button type="submit" form="form-toma" loading={creando}>Empezar</Button>
           </>
         }
       >
@@ -198,11 +217,12 @@ export default function Tomas() {
               onChange={e => setNuevaForm({ ...nuevaForm, notas: e.target.value })}
               rows={3}
               className="w-full px-3 py-2 text-sm rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Ej. Toma trimestral abril 2026."
+              placeholder="Ej. Conteo de abril 2026."
             />
           </div>
           <p className="text-xs text-ink-500">
-            Snapshot del stock actual del almacén. Solo una toma ABIERTA por almacén a la vez.
+            Al empezar, el sistema guarda cuánto hay registrado ahora de cada producto; luego tú lo
+            comparas con lo que cuentes. Solo puede haber un conteo abierto por almacén a la vez.
           </p>
         </form>
       </Modal>

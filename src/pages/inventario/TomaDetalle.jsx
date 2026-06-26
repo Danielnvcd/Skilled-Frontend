@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ClipboardCheck, ArrowLeft, Search, Check, X as XIcon,
-  AlertTriangle, FileText, Lock, Ban, Printer, ScanLine,
+  AlertTriangle, FileText, Lock, Ban, Printer, ScanLine, Pencil,
 } from 'lucide-react'
 import { Html5Qrcode } from 'html5-qrcode'
 import {
@@ -21,11 +21,17 @@ const ESTATUS_COLORS = {
   CANCELADA: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
 }
 
+const ESTATUS_LABEL = {
+  ABIERTA: 'En curso',
+  CERRADA: 'Terminada',
+  CANCELADA: 'Descartada',
+}
+
 const FILTRO_VISTA = [
-  { key: 'todos',     label: 'Todos' },
-  { key: 'pendientes', label: 'Sin capturar' },
-  { key: 'diff',      label: 'Con diferencia' },
-  { key: 'iguales',   label: 'Iguales' },
+  { key: 'todos',      label: 'Todos' },
+  { key: 'pendientes', label: 'Sin contar' },
+  { key: 'diff',       label: 'Con diferencia' },
+  { key: 'iguales',    label: 'Sin diferencia' },
 ]
 
 export default function TomaDetalle() {
@@ -40,6 +46,9 @@ export default function TomaDetalle() {
   const [editingId, setEditingId] = useState(null)
   const [editVal, setEditVal] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // impresión PDF
+  const [printing, setPrinting] = useState(false)
 
   // dialogs
   const [confirmCerrar, setConfirmCerrar] = useState(false)
@@ -111,10 +120,27 @@ export default function TomaDetalle() {
     setSaving(true)
     try {
       const payload = editVal === '' ? { cantidad_fisica: null } : { cantidad_fisica: Number(editVal) }
-      await patchTomaDetalle(toma.id, d.id, payload)
+      const updated = await patchTomaDetalle(toma.id, d.id, payload)
+      // Actualiza SOLO esa línea en memoria — sin recargar toda la toma. Así no
+      // parpadea el skeleton ni salta el scroll, y la fila queda en su lugar.
+      setToma(prev => {
+        if (!prev) return prev
+        const detalles = (prev.detalles || []).map(x => (x.id === d.id ? { ...x, ...updated } : x))
+        const cap = detalles.filter(x => x.cantidad_fisica !== null).length
+        return { ...prev, detalles, progreso: detalles.length ? cap / detalles.length : 0 }
+      })
       setEditingId(null)
       setEditVal('')
-      cargar()
+      // Confirmación clara de que SÍ quedó guardado.
+      if (updated.cantidad_fisica === null) {
+        toast.success('Captura borrada')
+      } else {
+        const diff = updated.diferencia || 0
+        const detalle = Math.abs(diff) < 1e-9
+          ? 'coincide con el sistema'
+          : `diferencia ${diff > 0 ? '+' : ''}${diff.toFixed(2)}`
+        toast.success(`✓ Guardado: ${updated.cantidad_fisica.toFixed(2)} — ${detalle}`)
+      }
     } catch (err) {
       toast.error(extractApiError(err, 'Error al guardar'))
     } finally {
@@ -125,7 +151,7 @@ export default function TomaDetalle() {
   const handleCerrar = async () => {
     try {
       const r = await cerrarToma(toma.id, { asumir_cero_no_capturados: asumirCero })
-      toast.success(`Toma cerrada — ${r.ajustes_creados} ajuste(s) generado(s)`)
+      toast.success(`Conteo terminado — se corrigieron ${r.ajustes_creados} producto(s)`)
       setConfirmCerrar(false)
       cargar()
     } catch (err) {
@@ -133,10 +159,24 @@ export default function TomaDetalle() {
     }
   }
 
+  const handleImprimir = async () => {
+    if (printing) return // evita que el doble-clic genere varios PDF
+    setPrinting(true)
+    const tId = toast.loading('Generando acta PDF…')
+    try {
+      await imprimirToma(toma.id)
+      toast.success('PDF listo — se abrió en otra pestaña', { id: tId })
+    } catch (e) {
+      toast.error(extractApiError(e, 'No se pudo abrir el PDF'), { id: tId })
+    } finally {
+      setPrinting(false)
+    }
+  }
+
   const handleCancelar = async () => {
     try {
       await cancelarToma(toma.id)
-      toast.success('Toma cancelada')
+      toast.success('Conteo descartado')
       setConfirmCancelar(false)
       cargar()
     } catch (err) {
@@ -212,10 +252,10 @@ export default function TomaDetalle() {
           <Button variant="ghost" size="icon-sm"><ArrowLeft size={16} /></Button>
         </Link>
         <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100 flex items-center gap-2">
-          <ClipboardCheck size={20} /> Toma #{toma.id}
+          <ClipboardCheck size={20} /> Conteo #{toma.id}
         </h1>
         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${ESTATUS_COLORS[toma.estatus] || ''}`}>
-          {toma.estatus}
+          {ESTATUS_LABEL[toma.estatus] || toma.estatus}
         </span>
       </div>
 
@@ -230,8 +270,8 @@ export default function TomaDetalle() {
           <p className="text-sm">{new Date(toma.fecha_inicio).toLocaleString()}</p>
         </div></Card>
         <Card><div className="p-3">
-          <p className="text-[10px] uppercase text-ink-500 font-bold">Progreso</p>
-          <p className="text-sm font-bold">{resumen.capturadas}/{resumen.total}</p>
+          <p className="text-[10px] uppercase text-ink-500 font-bold">Productos contados</p>
+          <p className="text-sm font-bold">{resumen.capturadas} de {resumen.total}</p>
           <div className="mt-1 w-full h-1.5 bg-ink-100 dark:bg-ink-800 rounded overflow-hidden">
             <div className="h-full bg-brand-500" style={{ width: `${pct}%` }} />
           </div>
@@ -252,28 +292,48 @@ export default function TomaDetalle() {
               Escanear producto
             </Button>
             <Button variant="secondary" leftIcon={<Check size={15} />} onClick={() => setConfirmCerrar(true)}>
-              Cerrar y aplicar ajustes
+              Terminar conteo
             </Button>
             <Button variant="ghost" leftIcon={<Ban size={15} />} onClick={() => setConfirmCancelar(true)}>
-              Cancelar toma
+              Descartar conteo
             </Button>
           </>
         )}
         <Button
           variant="ghost"
           leftIcon={<Printer size={15} />}
-          onClick={() => imprimirToma(toma.id).catch((e) => toast.error(extractApiError(e, 'No se pudo abrir el PDF')))}
+          loading={printing}
+          disabled={printing}
+          onClick={handleImprimir}
         >
-          Imprimir acta PDF
+          {printing ? 'Generando PDF…' : 'Imprimir acta PDF'}
         </Button>
       </div>
+
+      {isOpen && (
+        <Card className="mb-4 border-brand-200 dark:border-brand-900 bg-brand-50/60 dark:bg-brand-900/10">
+          <div className="p-3 text-sm text-ink-700 dark:text-ink-300">
+            <p className="font-semibold mb-1.5 flex items-center gap-1.5">
+              <ClipboardCheck size={15} className="text-brand-600" /> ¿Cómo hago el conteo?
+            </p>
+            <ol className="space-y-1 text-xs list-decimal list-inside text-ink-600 dark:text-ink-400">
+              <li>Cuenta cuánto hay <strong>de verdad</strong> de cada producto en el almacén.</li>
+              <li>Escribe esa cantidad en la columna <strong>"Lo que conté"</strong> (toca el botón azul <strong>Capturar</strong> de cada fila).</li>
+              <li>Cuando termines todos, pulsa <strong>"Terminar conteo"</strong>. El sistema corrige el inventario solo, con lo que contaste.</li>
+            </ol>
+            <p className="text-xs text-ink-500 mt-2">
+              ¿No alcanzas a terminar hoy? No pasa nada: tus capturas se guardan solas. Puedes cerrar y volver después.
+            </p>
+          </div>
+        </Card>
+      )}
 
       {!isOpen && (
         <Card className="mb-4 border-ink-300">
           <div className="p-3 flex items-center gap-2 text-sm text-ink-600 dark:text-ink-300">
             <Lock size={16} />
-            Toma {toma.estatus.toLowerCase()} — solo lectura.
-            {toma.cerrada_por_nombre && ` Cerrada por ${toma.cerrada_por_nombre}`}
+            Este conteo ya está {(ESTATUS_LABEL[toma.estatus] || toma.estatus).toLowerCase()} — solo se puede ver, no editar.
+            {toma.cerrada_por_nombre && ` La cerró ${toma.cerrada_por_nombre}`}
             {toma.fecha_cierre && ` el ${new Date(toma.fecha_cierre).toLocaleString()}`}.
           </div>
         </Card>
@@ -316,9 +376,9 @@ export default function TomaDetalle() {
               <tr className="text-left text-[10px] uppercase text-ink-500 font-bold">
                 <th className="px-3 py-2 w-20">Código</th>
                 <th className="px-3 py-2">Producto</th>
-                <th className="px-3 py-2 text-right w-20">Sistema</th>
-                <th className="px-3 py-2 text-right w-32">Físico</th>
-                <th className="px-3 py-2 text-right w-20">Dif.</th>
+                <th className="px-3 py-2 text-right w-24" title="Lo que el sistema tiene registrado ahora mismo">Según el sistema</th>
+                <th className="px-3 py-2 text-right w-32" title="La cantidad que tú contaste físicamente">Lo que conté</th>
+                <th className="px-3 py-2 text-right w-24" title="Diferencia entre lo que contaste y lo que decía el sistema">Diferencia</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
@@ -352,14 +412,29 @@ export default function TomaDetalle() {
                           <Button size="icon-sm" loading={saving} onClick={() => saveEdit(d)}><Check size={14} /></Button>
                           <Button size="icon-sm" variant="ghost" onClick={cancelEdit}><XIcon size={14} /></Button>
                         </div>
+                      ) : !isOpen ? (
+                        <span className={`tabular-nums ${hasCap ? 'font-bold' : 'text-ink-400 italic'}`}>
+                          {hasCap ? Number(d.cantidad_fisica).toFixed(2) : 'sin contar'}
+                        </span>
+                      ) : hasCap ? (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(d)}
+                          title="Toca para editar la cantidad física"
+                          className="group inline-flex items-center gap-1.5 tabular-nums font-bold cursor-pointer rounded px-2 py-1 hover:bg-brand-50 dark:hover:bg-brand-900/20 hover:text-brand-700 dark:hover:text-brand-300 transition-colors"
+                        >
+                          {Number(d.cantidad_fisica).toFixed(2)}
+                          <Pencil size={12} className="opacity-0 group-hover:opacity-100 text-brand-500 transition-opacity" />
+                        </button>
                       ) : (
                         <button
                           type="button"
-                          disabled={!isOpen}
                           onClick={() => startEdit(d)}
-                          className={`tabular-nums ${isOpen ? 'cursor-pointer hover:underline' : 'cursor-default'} ${hasCap ? 'font-bold' : 'text-amber-600 italic'}`}
+                          title="Toca aquí para escribir la cantidad física"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/30 border border-dashed border-brand-400 dark:border-brand-600 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-brand-100 dark:hover:bg-brand-900/50 transition-colors"
                         >
-                          {hasCap ? Number(d.cantidad_fisica).toFixed(2) : 'sin contar'}
+                          <Pencil size={13} />
+                          Capturar
                         </button>
                       )}
                     </td>
@@ -386,35 +461,37 @@ export default function TomaDetalle() {
       <Modal
         open={confirmCerrar}
         onClose={() => setConfirmCerrar(false)}
-        title="Cerrar toma y aplicar ajustes"
+        title="Terminar conteo"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirmCerrar(false)}>Cancelar</Button>
-            <Button onClick={handleCerrar}>Cerrar y generar ajustes</Button>
+            <Button variant="secondary" onClick={() => setConfirmCerrar(false)}>Todavía no</Button>
+            <Button onClick={handleCerrar}>Sí, terminar y corregir</Button>
           </>
         }
       >
         <div className="space-y-3 text-sm text-ink-700 dark:text-ink-300">
           <p>
-            Se generará un <strong>AJUSTE</strong> por cada línea con diferencia. La toma quedará en estado <strong>CERRADA</strong>.
+            El sistema va a <strong>corregir el inventario</strong> para que coincida con lo que contaste.
+            Esto <strong>no se puede deshacer</strong>.
           </p>
           <div className="bg-amber-50 dark:bg-amber-900/20 border-l-4 border-amber-400 p-3 text-xs">
-            <p><strong>{resumen.diff}</strong> líneas con diferencia → se generarán {resumen.diff} ajustes.</p>
+            <p>Se corregirán <strong>{resumen.diff}</strong> producto(s) que tienen diferencia.</p>
             {resumen.pendientes > 0 && (
-              <p className="mt-1"><strong>{resumen.pendientes}</strong> líneas sin capturar.</p>
+              <p className="mt-1">Aún te faltan <strong>{resumen.pendientes}</strong> producto(s) por contar.</p>
             )}
           </div>
           {resumen.pendientes > 0 && (
-            <label className="flex items-center gap-2 text-xs">
+            <label className="flex items-start gap-2 text-xs">
               <input
                 type="checkbox"
                 checked={asumirCero}
                 onChange={e => setAsumirCero(e.target.checked)}
-                className="rounded border-ink-300"
+                className="mt-0.5 rounded border-ink-300"
               />
               <span>
-                Tratar líneas sin capturar como <strong>cantidad física = 0</strong>
-                <span className="text-amber-700 dark:text-amber-300"> (riesgoso — se aplicarán ajustes negativos)</span>
+                Tomar los productos que <strong>no conté</strong> como si hubiera <strong>0 (cero)</strong>.
+                <span className="text-amber-700 dark:text-amber-300"> Cuidado: dejará en cero el stock de los que no alcanzaste a contar.</span>
+                <br />Si lo dejas sin marcar, esos productos se quedan como están (no se tocan).
               </span>
             </label>
           )}
@@ -425,9 +502,9 @@ export default function TomaDetalle() {
         open={confirmCancelar}
         onClose={() => setConfirmCancelar(false)}
         onConfirm={handleCancelar}
-        title="Cancelar toma"
-        description="No se aplicarán ajustes. La toma quedará en estado CANCELADA y no podrá reabrirse."
-        confirmLabel="Cancelar toma"
+        title="Descartar este conteo"
+        description="Se borrará este conteo y el inventario NO se modificará. No se puede recuperar después. ¿Seguro?"
+        confirmLabel="Sí, descartar"
         tone="danger"
       />
 

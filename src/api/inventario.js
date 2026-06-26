@@ -202,6 +202,7 @@ export async function cancelarToma(tomaId) {
 // imprimirSolicitud. Antes era getTomaPdfUrl() devolviendo una ruta relativa
 // que además le faltaba el prefijo /api → 404/401.
 export async function imprimirToma(tomaId) {
+  // El interceptor de axios añade anti-caché a todas las descargas blob.
   const res = await api.get(`${BASE}/tomas/${tomaId}/pdf`, { responseType: 'blob' })
   _openBlobInTab(res)
 }

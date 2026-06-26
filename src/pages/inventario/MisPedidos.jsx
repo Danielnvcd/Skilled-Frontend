@@ -10,6 +10,7 @@ import {
   Button, Card, PageHeader, Modal, Input, Select,
 } from '../../components/ui'
 import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
+import { unidadPermiteDecimales } from '../../utils/unidades'
 import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
@@ -52,9 +53,10 @@ function SafeImage({ src, alt, fallback, className }) {
 }
 
 // ─── Stepper numérico reutilizable ──────────────────────────────────────────
-function QtyStepper({ value, onChange, step = 1, min = 0.1, unidad = '' }) {
-  const dec = () => onChange(Math.max(min, Math.round((Number(value) - step) * 10) / 10))
-  const inc = () => onChange(Math.round((Number(value) + step) * 10) / 10)
+function QtyStepper({ value, onChange, step = 1, min = 0.1, unidad = '', decimals = true }) {
+  const round = (x) => (decimals ? Math.round(x * 10) / 10 : Math.round(x))
+  const dec = () => onChange(Math.max(min, round(Number(value) - step)))
+  const inc = () => onChange(round(Number(value) + step))
   return (
     <div className="flex items-center justify-center gap-3">
       <button type="button" onClick={dec}
@@ -290,6 +292,7 @@ export default function MisPedidos() {
     if (!herrModal) return
     const qty = Number(herrModal.cantidad)
     if (!qty || qty <= 0) return toast.error('Cantidad debe ser mayor a 0')
+    if (!Number.isInteger(qty)) return toast.error('Las herramientas se piden en cantidades enteras')
     if (herrModal.fecha_uso_inicio && herrModal.fecha_uso_fin
         && herrModal.fecha_uso_inicio > herrModal.fecha_uso_fin) {
       return toast.error('Fecha inicio no puede ser posterior a fecha fin')
@@ -330,7 +333,11 @@ export default function MisPedidos() {
 
   const openQtyModal = (producto) => {
     const enCart = cart.find((c) => c.id === producto.id)
-    setQtyModal({ producto, cantidad: enCart ? enCart.cantidad : 1 })
+    setQtyModal({
+      producto,
+      cantidad: enCart ? enCart.cantidad : 1,
+      justificacion: enCart?.justificacion || '',
+    })
   }
 
   const confirmQty = () => {
@@ -340,18 +347,23 @@ export default function MisPedidos() {
       toast.error('La cantidad debe ser mayor a cero')
       return
     }
+    if (!unidadPermiteDecimales(qtyModal.producto.unidad) && !Number.isInteger(qty)) {
+      toast.error(`"${qtyModal.producto.unidad || 'pieza'}" solo admite cantidades enteras`)
+      return
+    }
+    const justificacion = (qtyModal.justificacion || '').trim()
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.id === qtyModal.producto.id)
       if (idx >= 0) {
         const copy = [...prev]
-        copy[idx] = { ...copy[idx], cantidad: qty }
+        copy[idx] = { ...copy[idx], cantidad: qty, justificacion }
         return copy
       }
       const p = qtyModal.producto
       return [...prev, {
         id: p.id, codigo: p.codigo, descripcion: p.descripcion,
         unidad: p.unidad, categoria: p.categoria, imagen_url: p.imagen_url || null,
-        cantidad: qty,
+        cantidad: qty, justificacion,
       }]
     })
     setQtyModal(null)
@@ -375,6 +387,10 @@ export default function MisPedidos() {
       toast.error('Agrega al menos un artículo a tu pedido')
       return
     }
+    if (!proyecto.trim()) {
+      toast.error('Debes seleccionar un proyecto antes de enviar la solicitud')
+      return
+    }
     setSaving(true)
     try {
       const detalles = [
@@ -382,6 +398,7 @@ export default function MisPedidos() {
           tipo_item: 'MATERIAL',
           producto_id: item.id,
           cantidad_solicitada: item.cantidad,
+          justificacion: item.justificacion || null,
         })),
         ...cartHerr.map((item) => ({
           tipo_item: 'HERRAMIENTA',
@@ -393,7 +410,7 @@ export default function MisPedidos() {
           complementos: item.complementos,
         })),
       ]
-      await createSolicitud({ proyecto: proyecto || null, detalles })
+      await createSolicitud({ proyecto: proyecto || null, notas: notas || null, detalles })
       toast.success(`Solicitud enviada (${detalles.length} ítems)`)
       setCart([])
       setCartHerr([])
@@ -423,6 +440,7 @@ export default function MisPedidos() {
           categoria: item.categoria,
           unidad: item.unidad,
           cantidad: item.cantidad,
+          justificacion: item.justificacion || null,
         })),
         herramientas: cartHerr.map((item) => ({
           descripcion: item.descripcion,
@@ -739,13 +757,13 @@ export default function MisPedidos() {
             <div className="p-4 border-t border-ink-200 dark:border-ink-800 space-y-3 bg-ink-50/50 dark:bg-ink-950/50">
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5 block inline-flex items-center gap-1.5">
-                  <FolderKanban size={11} /> Proyecto
+                  <FolderKanban size={11} /> Proyecto <span className="text-red-500">*</span>
                 </label>
                 <Select
                   value={proyecto}
                   onChange={(e) => setProyecto(e.target.value)}
                 >
-                  <option value="">Sin proyecto asociado</option>
+                  <option value="">Selecciona un proyecto…</option>
                   {proyectos.map((p) => {
                     const txt = `${p.numero_proyecto} — ${p.nombre || ''}`.trim()
                     return <option key={p.id} value={txt}>{txt}</option>
@@ -769,12 +787,17 @@ export default function MisPedidos() {
               <Button
                 onClick={handleSubmit}
                 loading={saving}
-                disabled={cartCount === 0}
+                disabled={cartCount === 0 || !proyecto.trim()}
                 leftIcon={<Send size={14} />}
                 className="w-full"
               >
                 Enviar solicitud
               </Button>
+              {cartCount > 0 && !proyecto.trim() && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 text-center">
+                  Selecciona un proyecto para poder enviar.
+                </p>
+              )}
               <Button
                 variant="secondary"
                 onClick={handlePrintPDF}
@@ -839,9 +862,29 @@ export default function MisPedidos() {
               value={qtyModal.cantidad}
               onChange={(v) => setQtyModal({ ...qtyModal, cantidad: v })}
               step={1}
-              min={0.1}
+              min={unidadPermiteDecimales(qtyModal.producto.unidad) ? 0.1 : 1}
               unidad={qtyModal.producto.unidad}
+              decimals={unidadPermiteDecimales(qtyModal.producto.unidad)}
             />
+            {!unidadPermiteDecimales(qtyModal.producto.unidad) && (
+              <p className="text-center text-[11px] text-ink-500 mt-2">
+                Este producto se pide en cantidades enteras.
+              </p>
+            )}
+
+            <div className="mt-4">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5 block">
+                Justificación / observación (opcional)
+              </label>
+              <textarea
+                value={qtyModal.justificacion}
+                onChange={(e) => setQtyModal({ ...qtyModal, justificacion: e.target.value })}
+                rows={2}
+                maxLength={2000}
+                placeholder="¿Para qué lo necesitas? ¿En qué proyecto?"
+                className="w-full rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-3 py-2 text-sm text-ink-900 dark:text-ink-100 placeholder:text-ink-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 outline-none transition-all resize-none"
+              />
+            </div>
           </div>
         )}
       </Modal>

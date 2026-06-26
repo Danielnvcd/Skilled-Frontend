@@ -14,6 +14,7 @@ import {
   patchSolicitudDetalle, entregarSolicitud, getAlmacenes,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { unidadPermiteDecimales } from '../../utils/unidades'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
 import SolicitudesKanban from './SolicitudesKanban'
@@ -27,6 +28,15 @@ const TABS = [
 ]
 
 const num = (v) => Number(v ?? 0)
+
+// Estados en palabras claras para el usuario final (el badge mostraba el código
+// crudo en mayúsculas).
+const ESTATUS_LABEL = {
+  PENDIENTE: 'En espera',
+  APROBADA:  'Aprobada',
+  RECHAZADA: 'Rechazada',
+  ENTREGADA: 'Entregada',
+}
 
 export default function SolicitudesMaterial() {
   const { user } = useAuth()
@@ -216,6 +226,31 @@ export default function SolicitudesMaterial() {
         }
       />
 
+      <Card className="mt-4 border-brand-200 dark:border-brand-900 bg-brand-50/60 dark:bg-brand-900/10">
+        <div className="p-3 text-sm text-ink-700 dark:text-ink-300">
+          {isAdmin ? (
+            <>
+              <p className="font-semibold mb-1">¿Cómo funciona?</p>
+              <p className="text-xs text-ink-600 dark:text-ink-400">
+                Aquí llegan las solicitudes de los empleados.
+                <strong> 1)</strong> Ábrela en <strong>Ver detalles</strong> para revisar lo que piden.
+                <strong> 2)</strong> <strong>Aprueba</strong> o <strong>rechaza</strong> (puedes ajustar la cantidad aprobada).
+                <strong> 3)</strong> Pulsa <strong>Entregar</strong> para surtir todo o solo una parte; lo que falte queda pendiente.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold mb-1">¿Qué es esto?</p>
+              <p className="text-xs text-ink-600 dark:text-ink-400">
+                Aquí ves tus solicitudes de material y herramienta y en qué van. El almacén las revisa,
+                las aprueba y te las entrega. Usa <strong>Ver detalles</strong> para ver lo pedido y lo entregado,
+                o <strong>Imprimir</strong> para tener el comprobante.
+              </p>
+            </>
+          )}
+        </div>
+      </Card>
+
       {/* Stats sobrios — compactos para 5 columnas: chip pequeño + número ajustado. */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-6">
         {STAT_CARDS.map((s) => {
@@ -378,10 +413,10 @@ export default function SolicitudesMaterial() {
                     <TD className="text-sm text-ink-500">{s.detalles?.length || 0}</TD>
                     <TD>
                       <div className="flex flex-col items-start gap-1">
-                        <Badge tone={getStatusTone(s.estatus)} dot>{s.estatus}</Badge>
+                        <Badge tone={getStatusTone(s.estatus)} dot>{ESTATUS_LABEL[s.estatus] || s.estatus}</Badge>
                         {s.estatus === 'APROBADA' && tienePendiente && (
                           <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold uppercase tracking-wide">
-                            Entrega parcial
+                            Falta entregar
                           </span>
                         )}
                       </div>
@@ -393,7 +428,7 @@ export default function SolicitudesMaterial() {
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          title="Imprimir PDF"
+                          title="Imprimir comprobante (PDF)"
                           onClick={() => handlePrint(s.id)}
                           loading={printingId === s.id}
                           disabled={printingId === s.id}
@@ -506,6 +541,10 @@ function DetallesModal({ solicitud, onClose, onChanged, isAdmin, getStatusTone }
       toast.error('Cantidad inválida')
       return
     }
+    if (!unidadPermiteDecimales(det.producto_unidad) && !Number.isInteger(valor)) {
+      toast.error(`Este material se maneja en cantidades enteras (${det.producto_unidad || 'pieza'})`)
+      return
+    }
     setSaving(true)
     try {
       await patchSolicitudDetalle(solicitud.id, det.id, { cantidad_aprobada: valor })
@@ -542,84 +581,129 @@ function DetallesModal({ solicitud, onClose, onChanged, isAdmin, getStatusTone }
           </div>
           <div>
             <span className="text-ink-500 block">Estado actual</span>
-            <Badge tone={getStatusTone(solicitud.estatus)}>{solicitud.estatus}</Badge>
+            <Badge tone={getStatusTone(solicitud.estatus)}>{ESTATUS_LABEL[solicitud.estatus] || solicitud.estatus}</Badge>
           </div>
         </div>
 
         {isAprobadaConPendiente(solicitud) && (
           <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 text-sm">
             <AlertTriangle size={16} className="mt-0.5" />
-            <span>Esta solicitud tiene entregas pendientes. Usa el botón <strong>Entregar</strong> para registrar lo que se va surtiendo.</span>
+            <span>
+              {isAdmin
+                ? <>Esta solicitud se entregó solo en parte. Usa el botón <strong>Entregar</strong> para surtir lo que falta.</>
+                : <>Aún falta entregarte parte de lo aprobado. El almacén lo surtirá en cuanto pueda.</>}
+            </span>
           </div>
         )}
 
-        <h4 className="font-semibold text-ink-900 dark:text-ink-100 mt-4">Artículos solicitados:</h4>
-        <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-ink-50 dark:bg-ink-900 text-xs text-ink-500 uppercase">
-              <tr>
-                <th className="text-left px-3 py-2">Ítem</th>
-                <th className="text-right px-2 py-2">Solicitada</th>
-                <th className="text-right px-2 py-2">Aprobada</th>
-                <th className="text-right px-2 py-2">Entregada</th>
-                <th className="text-right px-2 py-2">Pendiente</th>
-                {puedeEditar && <th className="px-2 py-2"></th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-200 dark:divide-ink-800">
-              {solicitud.detalles.map((d) => {
-                const sol = num(d.cantidad_solicitada)
-                const aprob = num(d.cantidad_aprobada)
-                const ent = num(d.cantidad_entregada)
-                const baseline = aprob > 0 ? aprob : sol
-                const pendiente = Math.max(0, baseline - ent)
-                const editable = puedeEditar && (d.tipo_item || 'MATERIAL') === 'MATERIAL' && d.producto_id
-                return (
-                  <tr key={d.id}>
-                    <td className="px-3 py-2">
-                      <p className="font-medium text-ink-900 dark:text-ink-100">{d.producto_descripcion}</p>
-                      <p className="text-xs text-ink-500">{d.producto_codigo} · {d.producto_unidad}</p>
-                    </td>
-                    <td className="px-2 py-2 text-right text-ink-700 dark:text-ink-300">{sol}</td>
-                    <td className="px-2 py-2 text-right font-semibold">
-                      {editable && editing === d.id ? (
-                        <input
-                          type="number"
-                          min={ent}
-                          max={sol}
-                          step="0.01"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          className="w-20 px-2 py-1 rounded border border-brand-400 text-right"
-                          autoFocus
-                        />
-                      ) : (
-                        aprob || (sol)
-                      )}
-                    </td>
-                    <td className="px-2 py-2 text-right text-emerald-700 dark:text-emerald-300">{ent}</td>
-                    <td className={`px-2 py-2 text-right font-semibold ${pendiente > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-ink-400'}`}>
-                      {pendiente}
-                    </td>
-                    {puedeEditar && (
-                      <td className="px-2 py-2 text-right">
-                        {editable && editing === d.id ? (
-                          <div className="inline-flex gap-1">
-                            <Button size="sm" variant="primary" onClick={() => saveEdit(d)} loading={saving} disabled={saving}>OK</Button>
-                            <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>X</Button>
-                          </div>
-                        ) : editable ? (
-                          <Button size="icon-sm" variant="ghost" title="Editar cantidad aprobada" onClick={() => beginEdit(d)}>
-                            <Pencil size={14} />
-                          </Button>
-                        ) : null}
-                      </td>
+        {solicitud.notas && (
+          <div className="rounded-lg border-l-4 border-ink-400 bg-ink-50 dark:bg-ink-900 p-3 text-sm">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1">Observaciones</p>
+            <p className="text-ink-700 dark:text-ink-200 whitespace-pre-line">{solicitud.notas}</p>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-4 mb-1">
+          <h4 className="font-semibold text-ink-900 dark:text-ink-100">Artículos solicitados</h4>
+          <span className="text-xs text-ink-500">{solicitud.detalles.length} ítem(s)</span>
+        </div>
+        <div className="space-y-2">
+          {solicitud.detalles.map((d) => {
+            const isTool = (d.tipo_item || 'MATERIAL') === 'HERRAMIENTA'
+            const sol = num(d.cantidad_solicitada)
+            const aprob = num(d.cantidad_aprobada)
+            const ent = num(d.cantidad_entregada)
+            const baseline = aprob > 0 ? aprob : sol
+            const pendiente = Math.max(0, baseline - ent)
+            const editable = puedeEditar && !isTool && d.producto_id
+            const isEditing = editable && editing === d.id
+            return (
+              <div key={d.id} className="border border-ink-200 dark:border-ink-800 rounded-lg p-3 bg-white dark:bg-ink-900">
+                {/* Encabezado del ítem */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        isTool
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+                          : 'bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300'
+                      }`}>
+                        {isTool ? 'Herramienta' : 'Material'}
+                      </span>
+                      <p className="font-semibold text-ink-900 dark:text-ink-100">{d.producto_descripcion}</p>
+                    </div>
+                    <p className="text-xs text-ink-500 font-mono mt-0.5">{d.producto_codigo} · {d.producto_unidad}</p>
+                    {isTool && (
+                      <div className="mt-1.5 text-xs text-ink-500 space-y-0.5">
+                        {(d.fecha_uso_inicio || d.fecha_uso_fin) && (
+                          <p>
+                            <span className="font-semibold text-ink-600 dark:text-ink-400">Uso:</span>{' '}
+                            {d.fecha_uso_inicio ? new Date(d.fecha_uso_inicio).toLocaleDateString('es-MX') : '?'}
+                            {' → '}
+                            {d.fecha_uso_fin ? new Date(d.fecha_uso_fin).toLocaleDateString('es-MX') : '?'}
+                          </p>
+                        )}
+                        {d.justificacion && (
+                          <p><span className="font-semibold text-ink-600 dark:text-ink-400">Justificación:</span> {d.justificacion}</p>
+                        )}
+                        {d.complementos && <p className="italic">+ {d.complementos}</p>}
+                      </div>
                     )}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    {!isTool && d.justificacion && (
+                      <p className="mt-1.5 text-xs text-ink-500">
+                        <span className="font-semibold text-ink-600 dark:text-ink-400">Justificación:</span> {d.justificacion}
+                      </p>
+                    )}
+                  </div>
+                  {editable && (
+                    isEditing ? (
+                      <div className="inline-flex gap-1 flex-shrink-0">
+                        <Button size="sm" variant="primary" onClick={() => saveEdit(d)} loading={saving} disabled={saving}>OK</Button>
+                        <Button size="sm" variant="ghost" onClick={cancelEdit} disabled={saving}>X</Button>
+                      </div>
+                    ) : (
+                      <Button size="icon-sm" variant="ghost" title="Editar cantidad aprobada" onClick={() => beginEdit(d)} className="flex-shrink-0">
+                        <Pencil size={14} />
+                      </Button>
+                    )
+                  )}
+                </div>
+
+                {/* Cantidades en chips */}
+                <div className="grid grid-cols-4 gap-2 mt-3">
+                  <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 px-2 py-1.5 text-center">
+                    <p className="text-[9px] uppercase font-bold tracking-wide text-ink-400">Solicitada</p>
+                    <p className="text-sm font-semibold tabular-nums text-ink-700 dark:text-ink-200">{sol}</p>
+                  </div>
+                  <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 px-2 py-1.5 text-center">
+                    <p className="text-[9px] uppercase font-bold tracking-wide text-ink-400">Aprobada</p>
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        min={ent}
+                        max={sol}
+                        step={unidadPermiteDecimales(d.producto_unidad) ? '0.01' : 1}
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="w-full mt-0.5 px-1 py-0.5 rounded border border-brand-400 text-center text-sm tabular-nums bg-white dark:bg-ink-900"
+                        autoFocus
+                      />
+                    ) : (
+                      <p className="text-sm font-semibold tabular-nums text-ink-900 dark:text-ink-100">{aprob || sol}</p>
+                    )}
+                  </div>
+                  <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1.5 text-center">
+                    <p className="text-[9px] uppercase font-bold tracking-wide text-emerald-600 dark:text-emerald-400">Entregada</p>
+                    <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{ent}</p>
+                  </div>
+                  <div className={`rounded-md px-2 py-1.5 text-center ${pendiente > 0 ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-ink-50 dark:bg-ink-800/50'}`}>
+                    <p className={`text-[9px] uppercase font-bold tracking-wide ${pendiente > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-ink-400'}`}>Pendiente</p>
+                    <p className={`text-sm font-semibold tabular-nums ${pendiente > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-ink-400'}`}>{pendiente}</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </Modal>
@@ -686,6 +770,23 @@ function EntregaModal({ solicitud, onClose, onDone }) {
       toast.error('Selecciona el almacén de origen')
       return
     }
+    // Decimales solo donde la unidad lo permite; herramientas siempre enteras.
+    const matDecimalMal = lineasMaterial.find((d) => {
+      const v = Number(cantidades[d.id] || 0)
+      return v > 0 && !unidadPermiteDecimales(d.producto_unidad) && !Number.isInteger(v)
+    })
+    if (matDecimalMal) {
+      toast.error(`"${matDecimalMal.producto_descripcion}" se entrega en cantidades enteras (${matDecimalMal.producto_unidad || 'pieza'})`)
+      return
+    }
+    const herrDecimalMal = lineasHerramienta.find((d) => {
+      const v = Number(cantidades[d.id] || 0)
+      return v > 0 && !Number.isInteger(v)
+    })
+    if (herrDecimalMal) {
+      toast.error('Las herramientas se entregan en cantidades enteras')
+      return
+    }
     const entregas = todasLasLineas
       .map((d) => ({
         detalle_id: d.id,
@@ -711,7 +812,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
       if (res.estatus === 'ENTREGADA') {
         toast.success(`Solicitud #${solicitud.id} entregada completa`)
       } else {
-        toast.success(`Entrega parcial registrada (solicitud #${solicitud.id} sigue APROBADA)`)
+        toast.success(`Entrega parcial registrada — falta surtir el resto`)
       }
       onDone?.()
     } catch (err) {
@@ -739,8 +840,9 @@ function EntregaModal({ solicitud, onClose, onDone }) {
     >
       <div className="space-y-4">
         <p className="text-sm text-ink-600 dark:text-ink-300">
-          Captura cuánto se entrega de cada línea ahora. El sistema crea una SALIDA por cada cantidad &gt; 0,
-          descuenta stock del almacén seleccionado y libera la reserva correspondiente.
+          Escribe cuánto entregas ahora de cada cosa. Puedes entregar <strong>todo</strong> o solo una
+          <strong> parte</strong>; lo que falte queda pendiente para entregarlo después. Lo entregado se
+          descuenta del almacén que elijas.
         </p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -808,6 +910,8 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                   const valor = cantidades[d.id] ?? ''
                   const numVal = Number(valor) || 0
                   const excede = numVal > pendiente
+                  const permiteDec = unidadPermiteDecimales(d.producto_unidad)
+                  const decimalInvalido = !permiteDec && numVal !== Math.floor(numVal)
                   return (
                     <tr key={d.id}>
                       <td className="px-3 py-2">
@@ -824,12 +928,12 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                           type="number"
                           min={0}
                           max={pendiente}
-                          step="0.01"
+                          step={permiteDec ? '0.01' : 1}
                           value={valor}
                           onChange={(e) => setCantidades((s) => ({ ...s, [d.id]: e.target.value }))}
                           disabled={pendiente <= 0}
                           className={`w-24 px-2 py-1 rounded border text-right text-sm ${
-                            excede
+                            excede || decimalInvalido
                               ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
                               : 'border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900'
                           }`}

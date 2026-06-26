@@ -38,6 +38,17 @@ api.interceptors.request.use((config) => {
       config.headers.Authorization = `Bearer ${token}`
     }
   }
+  // Descargas de archivos (PDF de tomas, pedidos, solicitudes; reportes Excel…)
+  // usan responseType:'blob'. El navegador cacheaba estos GET y devolvía el
+  // archivo VIEJO al reimprimir. Rompemos el caché con un parámetro único por
+  // descarga — la URL cambia siempre, así que nunca reutiliza la copia cacheada.
+  // OJO: no agregar headers tipo Cache-Control/Pragma a la PETICIÓN: no están en
+  // la lista safelisted de CORS y obligan al preflight a autorizarlos; si el
+  // backend no los permite, el navegador bloquea el GET ("Network error"). El
+  // no-cache de la RESPUESTA ya lo pone el backend (_security_headers).
+  if (config.responseType === 'blob') {
+    config.params = { ...(config.params || {}), _: Date.now() }
+  }
   return config
 })
 
