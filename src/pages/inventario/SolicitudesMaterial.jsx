@@ -237,6 +237,11 @@ export default function SolicitudesMaterial() {
                 <strong> 2)</strong> <strong>Aprueba</strong> o <strong>rechaza</strong> (puedes ajustar la cantidad aprobada).
                 <strong> 3)</strong> Pulsa <strong>Entregar</strong> para surtir todo o solo una parte; lo que falte queda pendiente.
               </p>
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+                <strong>Herramientas:</strong> para poder entregar una herramienta solicitada, el usuario que la pidió
+                debe tener un <strong>empleado ligado a su cuenta</strong> (desde <strong>Usuarios</strong>). Si no lo tiene,
+                liga la cuenta primero o entrégala manualmente desde <strong>Asignaciones de herramienta</strong>.
+              </p>
             </>
           ) : (
             <>
