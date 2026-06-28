@@ -39,6 +39,8 @@ const Bitacora = lazy(() => import('./pages/Bitacora'))
 const Metricas = lazy(() => import('./pages/Metricas'))
 const InventarioDashboard = lazy(() => import('./pages/inventario/InventarioDashboard'))
 const CatalogoProductos = lazy(() => import('./pages/inventario/CatalogoProductos'))
+const ProyectosInventario = lazy(() => import('./pages/inventario/ProyectosInventario'))
+const ProyectoInventarioDetalle = lazy(() => import('./pages/inventario/ProyectoInventarioDetalle'))
 const ProductoKardex = lazy(() => import('./pages/inventario/ProductoKardex'))
 const BajoMinimo = lazy(() => import('./pages/inventario/BajoMinimo'))
 const Reportes = lazy(() => import('./pages/inventario/Reportes'))
@@ -49,6 +51,7 @@ const TomaDetalle = lazy(() => import('./pages/inventario/TomaDetalle'))
 const MovimientosInventario = lazy(() => import('./pages/inventario/MovimientosInventario'))
 const RegistrarMovimiento = lazy(() => import('./pages/inventario/RegistrarMovimiento'))
 const SolicitudesMaterial = lazy(() => import('./pages/inventario/SolicitudesMaterial'))
+const SolicitudesCompra = lazy(() => import('./pages/inventario/SolicitudesCompra'))
 const MisPedidos = lazy(() => import('./pages/inventario/MisPedidos'))
 const ScannerMovil = lazy(() => import('./pages/inventario/ScannerMovil'))
 const ImportarMateriales = lazy(() => import('./pages/inventario/ImportarMateriales'))
@@ -99,7 +102,7 @@ function RoleBasedHome() {
   if (user?.role === 'inventario') return <InventarioDashboard />
   if (user?.role === 'finanzas') return <FinanzasPanel />
   if (user?.role === 'solicitante_material') return <Navigate to="/inventario/mis-pedidos" replace />
-  if (user?.role === 'coordinador') return <Navigate to="/horas" replace />
+  if (user?.role === 'coordinador') return <Navigate to="/mis-proyectos" replace />
   return <Dashboard />
 }
 
@@ -111,6 +114,8 @@ export default function App() {
   // Coordinador también puede crear y ver SUS solicitudes/pedidos (cambio 2026-05-25).
   const canSolicit   = role === 'solicitante_material' || role === 'inventario' || role === 'coordinador' || isAdmin
   const canOperar    = isAdmin || isCoordinador
+  // Compras (procura) es EXCLUSIVO de inventario: admin es RH y no entra.
+  const inventarioSolo = role === 'inventario' || role === 'super_admin'
 
   return (
     <Suspense fallback={<FullPageSpinner />}>
@@ -164,6 +169,8 @@ export default function App() {
         {/* Inventario: admin + rol inventario */}
         <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
         <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
+        <Route path="inventario/proyectos"   element={<RoleRoute allow={isInventario}><ProyectosInventario /></RoleRoute>} />
+        <Route path="inventario/proyectos/:id" element={<RoleRoute allow={isInventario}><ProyectoInventarioDetalle /></RoleRoute>} />
         <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={isInventario}><ProductoKardex /></RoleRoute>} />
         <Route path="inventario/bajo-minimo" element={<RoleRoute allow={isInventario}><BajoMinimo /></RoleRoute>} />
         <Route path="inventario/reportes"    element={<RoleRoute allow={isInventario}><Reportes /></RoleRoute>} />
@@ -174,6 +181,7 @@ export default function App() {
         <Route path="inventario/movimientos" element={<RoleRoute allow={isInventario}><MovimientosInventario /></RoleRoute>} />
         <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={isInventario}><RegistrarMovimiento /></RoleRoute>} />
         <Route path="inventario/solicitudes" element={<RoleRoute allow={canSolicit}><SolicitudesMaterial /></RoleRoute>} />
+        <Route path="inventario/solicitudes-compra" element={<RoleRoute allow={inventarioSolo}><SolicitudesCompra /></RoleRoute>} />
         <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
         <Route path="inventario/tomas"       element={<RoleRoute allow={isInventario}><Tomas /></RoleRoute>} />
         <Route path="inventario/tomas/:id"   element={<RoleRoute allow={isInventario}><TomaDetalle /></RoleRoute>} />

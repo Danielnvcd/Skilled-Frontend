@@ -236,7 +236,12 @@ export default function ProyectoTotal() {
   } = useResource(
     ['proyecto-total', { page, q }],
     () => listarProyectoTotal({ page, q, perPage: PER_PAGE }),
-    { staleMs: 60_000 },
+    {
+      staleMs: 60_000,
+      // Los totales se derivan de proyectos + horas (reportes) + prenómina
+      // aprobada: refrescar en vivo cuando cualquiera de esos cambia.
+      invalidateOn: ['proyecto:changed', 'reporte:lista_changed', 'prenomina:changed'],
+    },
   )
   const data = rawData ?? { items: [], total: 0, page: 1, pages: 1 }
 

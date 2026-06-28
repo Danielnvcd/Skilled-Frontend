@@ -1,19 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  Input, Skeleton, Select,
+  Input, Skeleton, Select, Badge, Pagination,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import {
   getProductos, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   deleteCategoriaConProductos,
-  getProductoStocks,
+  getProductoStocks, getProductosConCompraActiva,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { unidadPermiteDecimales } from '../../utils/unidades'
 import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
 import { Upload } from 'lucide-react'
@@ -27,7 +28,7 @@ export default function CatalogoProductos() {
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, imagen_url: ''
+    codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: ''
   })
 
   // Preview de imagen con debounce 500ms: evita disparar requests por cada tecla
@@ -120,6 +121,32 @@ export default function CatalogoProductos() {
     },
   )
   const filtered = fetchHabilitado ? (rawProductos ?? []) : []
+
+  // Paginación en cliente del listado: con categorías grandes (cientos/miles de
+  // productos) renderizar todas las filas a la vez vuelve lento el repintado.
+  const PROD_PAGE_SIZE = 50
+  const [pageProd, setPageProd] = useState(0)
+  useEffect(() => { setPageProd(0) }, [categoriaFiltro, debouncedSearch])
+  const totalPagesProd = Math.max(1, Math.ceil(filtered.length / PROD_PAGE_SIZE))
+  useEffect(() => { if (pageProd > 0 && pageProd >= totalPagesProd) setPageProd(0) }, [pageProd, totalPagesProd])
+  const pagedFiltered = useMemo(
+    () => filtered.slice(pageProd * PROD_PAGE_SIZE, pageProd * PROD_PAGE_SIZE + PROD_PAGE_SIZE),
+    [filtered, pageProd],
+  )
+
+  // Productos con solicitud de compra activa (PENDIENTE/ORDENADA) → badge "En compra".
+  const { data: comprasActivas } = useResource(
+    ['solicitudes-compra', 'productos-activos'],
+    () => getProductosConCompraActiva(),
+    { staleMs: 60_000, invalidateOn: ['compra:changed'], enabled: fetchHabilitado },
+  )
+  const compraPorProducto = useMemo(() => {
+    const m = new Map()
+    for (const c of (comprasActivas ?? [])) {
+      if (!m.has(c.producto_id)) m.set(c.producto_id, c)  // la más reciente (orden desc del backend)
+    }
+    return m
+  }, [comprasActivas])
   // Mientras el debounce se asienta mostramos el skeleton para no parpadear
   // "Sin productos".
   const buscando = search.trim() !== debouncedSearch
@@ -156,12 +183,25 @@ export default function CatalogoProductos() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Decimales según unidad: pieza/caja → enteros; kg/m/litro → admiten decimales.
+    if (!unidadPermiteDecimales(form.unidad)) {
+      const sa = Number(form.stock_actual)
+      const sm = Number(form.stock_minimo)
+      if (!Number.isInteger(sa) || !Number.isInteger(sm)) {
+        toast.error(`La unidad "${form.unidad || 'pza'}" maneja cantidades enteras (sin decimales en el stock)`)
+        return
+      }
+    }
     setSaving(true)
     try {
       const payload = {
         ...form,
         stock_actual: Number(form.stock_actual),
-        stock_minimo: Number(form.stock_minimo)
+        stock_minimo: Number(form.stock_minimo),
+        precio_unitario: Number(form.precio_unitario),
+        // Imagen opcional: '' es "sin imagen". Mandar null (no '') para no chocar
+        // con la validación de URL del backend.
+        imagen_url: form.imagen_url?.trim() || null,
       }
       
       if (editingId) {
@@ -228,7 +268,7 @@ export default function CatalogoProductos() {
 
   const openNew = () => {
     setEditingId(null)
-    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '' })
+    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '' })
     setOpenForm(true)
   }
 
@@ -241,6 +281,7 @@ export default function CatalogoProductos() {
       unidad: p.unidad,
       stock_actual: p.stock_actual,
       stock_minimo: p.stock_minimo,
+      precio_unitario: p.precio_unitario ?? 0,
       imagen_url: p.imagen_url || '',
       proveedor_default_nombre: p.proveedor_default_nombre || '',
       proveedor_default_contacto: p.proveedor_default_contacto || '',
@@ -436,10 +477,11 @@ export default function CatalogoProductos() {
               <TH>Descripción</TH>
               <TH>Categoría</TH>
               <TH>Stock</TH>
+              <TH align="right">Precio</TH>
               <TH align="right">Acciones</TH>
             </THead>
             <TBody>
-              {filtered.map((p) => (
+              {pagedFiltered.map((p) => (
                 <TR key={p.id}>
                   <TD>
                     {p.imagen_url ? (
@@ -451,7 +493,22 @@ export default function CatalogoProductos() {
                     )}
                   </TD>
                   <TD className="font-mono text-sm text-brand-700 dark:text-brand-300">{p.codigo}</TD>
-                  <TD className="font-medium">{p.descripcion}</TD>
+                  <TD className="font-medium">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>{p.descripcion}</span>
+                      {compraPorProducto.has(p.id) && (() => {
+                        const c = compraPorProducto.get(p.id)
+                        return (
+                          <Badge
+                            tone={c.estatus === 'ORDENADA' ? 'info' : 'warning'}
+                            title={`${c.folio} · ${c.estatus}`}
+                          >
+                            {c.estatus === 'ORDENADA' ? 'Ordenada' : 'En compra'}
+                          </Badge>
+                        )
+                      })()}
+                    </div>
+                  </TD>
                   <TD className="text-sm text-ink-600 dark:text-ink-300">{p.categoria}</TD>
                   <TD>
                     <div className="flex flex-col">
@@ -472,6 +529,9 @@ export default function CatalogoProductos() {
                       </span>
                       <span className="text-[10px] text-ink-500 tabular-nums">Mín: {p.stock_minimo}</span>
                     </div>
+                  </TD>
+                  <TD align="right" className="font-mono tabular-nums text-sm">
+                    {(Number(p.precio_unitario) || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                   </TD>
                   <TD align="right">
                     <div className="inline-flex items-center gap-1">
@@ -495,6 +555,15 @@ export default function CatalogoProductos() {
               ))}
             </TBody>
           </Table>
+          {filtered.length > PROD_PAGE_SIZE && (
+            <Pagination
+              page={pageProd}
+              totalPages={totalPagesProd}
+              totalElements={filtered.length}
+              size={PROD_PAGE_SIZE}
+              onChange={setPageProd}
+            />
+          )}
         </div>
       )}
 
@@ -510,20 +579,31 @@ export default function CatalogoProductos() {
         }
       >
         <form id="producto-form" onSubmit={handleSubmit} className="space-y-4">
-          <Input label="Código" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} required />
-          <Input label="Descripción" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} required />
+          <Input label="Código" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} required placeholder="Ej. RES-10K-1/4W" />
+          <Input label="Descripción" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} required placeholder="Ej. Resistencia 10kΩ 1/4W" />
           
           <div className="grid grid-cols-2 gap-4">
             <Select label="Categoría" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} required>
               <option value="">Seleccione Categoría</option>
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </Select>
-            <Input label="Unidad (ej. pza, kg)" value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} required />
+            <Input label="Unidad (ej. pza, m, rollo)" value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} required placeholder="pza" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Stock Actual" type="number" step="0.01" value={form.stock_actual} onChange={(e) => setForm({ ...form, stock_actual: e.target.value })} required />
-            <Input label="Stock Mínimo" type="number" step="0.01" value={form.stock_minimo} onChange={(e) => setForm({ ...form, stock_minimo: e.target.value })} required />
+            <Input label="Stock Actual" type="number" min="0"
+              step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
+              value={form.stock_actual}
+              onChange={(e) => setForm({ ...form, stock_actual: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
+              required />
+            <Input label="Stock Mínimo" type="number" min="0"
+              step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
+              value={form.stock_minimo}
+              onChange={(e) => setForm({ ...form, stock_minimo: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
+              required />
+          </div>
+          <div className="grid grid-cols-1 gap-3">
+            <Input label="Precio Unitario ($)" type="number" step="0.01" min="0" value={form.precio_unitario} onChange={(e) => setForm({ ...form, precio_unitario: e.target.value })} placeholder="0.00" />
           </div>
 
           <Input label="Foto del Producto (URL — opcional)" value={form.imagen_url || ''} onChange={(e) => setForm({ ...form, imagen_url: e.target.value })} placeholder="https://ejemplo.com/imagen.jpg" />
@@ -534,7 +614,7 @@ export default function CatalogoProductos() {
               label="Proveedor (opcional)"
               value={form.proveedor_default_nombre || ''}
               onChange={(e) => setForm({ ...form, proveedor_default_nombre: e.target.value })}
-              placeholder="Ej. Cementos del Norte"
+              placeholder="Ej. Electrónica Steren"
             />
             <Input
               label="Contacto (tel/email — opcional)"

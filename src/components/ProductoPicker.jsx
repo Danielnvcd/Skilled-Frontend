@@ -90,7 +90,7 @@ export default function ProductoPicker({
         />
       </div>
       {open && (
-        <div className="absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-lg">
+        <div className="absolute z-50 mt-1 w-full max-h-72 overflow-y-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-lg">
           {loading ? (
             <div className="px-3 py-3 text-sm text-ink-400">Buscando…</div>
           ) : opciones.length === 0 ? (

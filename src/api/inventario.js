@@ -239,6 +239,62 @@ export async function entregarSolicitud(solId, payload) {
   return data
 }
 
+// --- Solicitudes de compra (procura) ---
+// Módulo persistente de lista de compra. Distinto de solicitudes de material
+// (surten del stock) y de OC express (PDF desechable). Solo rol inventario.
+export async function getSolicitudesCompra({ skip = 0, limit = 200, estatus, proyecto_id, proveedor } = {}) {
+  const params = { skip, limit }
+  if (estatus) params.estatus = estatus
+  if (proyecto_id) params.proyecto_id = proyecto_id
+  if (proveedor) params.proveedor = proveedor
+  const { data } = await api.get(`${BASE}/solicitudes-compra/`, { params })
+  return data
+}
+
+export async function getSolicitudCompra(id) {
+  const { data } = await api.get(`${BASE}/solicitudes-compra/${id}`)
+  return data
+}
+
+// payload: { proveedor_sugerido?, proveedor_contacto?, proyecto_id?, prioridad?,
+//   notas?, detalles: [{ producto_id?|descripcion_libre?, unidad?, cantidad_solicitada, precio_estimado?, notas? }] }
+export async function createSolicitudCompra(payload) {
+  const { data } = await api.post(`${BASE}/solicitudes-compra/`, payload)
+  return data
+}
+
+export async function updateSolicitudCompraEstado(id, estatus) {
+  const { data } = await api.patch(`${BASE}/solicitudes-compra/${id}/estado`, { estatus })
+  return data
+}
+
+export async function patchSolicitudCompraDetalle(id, detId, payload) {
+  const { data } = await api.patch(`${BASE}/solicitudes-compra/${id}/detalles/${detId}`, payload)
+  return data
+}
+
+// payload: { almacen_destino_id?, motivo?, recepciones: [{ detalle_id, cantidad_recibida }] }
+export async function recibirSolicitudCompra(id, payload) {
+  const { data } = await api.post(`${BASE}/solicitudes-compra/${id}/recibir`, payload)
+  return data
+}
+
+export async function cancelarSolicitudCompra(id) {
+  const { data } = await api.delete(`${BASE}/solicitudes-compra/${id}`)
+  return data
+}
+
+// Mapa de productos con compra activa (PENDIENTE/ORDENADA) para indicadores.
+export async function getProductosConCompraActiva() {
+  const { data } = await api.get(`${BASE}/solicitudes-compra/productos-activos`)
+  return data  // [{ producto_id, solicitud_id, folio, estatus, cantidad_solicitada, cantidad_recibida }]
+}
+
+export async function imprimirSolicitudCompra(id) {
+  const res = await api.get(`${BASE}/solicitudes-compra/${id}/pdf`, { responseType: 'blob' })
+  _openBlobInTab(res)
+}
+
 // --- Categorías ---
 export async function getCategorias() {
   const { data } = await api.get(`${BASE}/categorias/`)
@@ -276,6 +332,43 @@ export async function deleteCategoriaConProductos(nombre) {
 // --- Proyectos (endpoint del módulo inventario; distinto del módulo de proyectos) ---
 export async function getProyectosInventario() {
   const { data } = await api.get(`${BASE}/proyectos/`)
+  return data
+}
+
+// --- Inventario → Proyectos: plan de materiales, consumo y costos ---
+// Resumen por proyecto (planeado vs. consumido, %, costos).
+export async function getProyectosMateriales() {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/`)
+  return data
+}
+
+// Detalle de un proyecto: líneas planeado vs. entregado + totales.
+export async function getProyectoMaterialDetalle(proyectoId) {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/${proyectoId}`)
+  return data
+}
+
+// Reemplaza el plan completo del proyecto. `lineas` = [{ producto_id, cantidad_planeada, notas? }]
+export async function guardarPlanMateriales(proyectoId, lineas) {
+  const { data } = await api.post(`${BASE}/proyectos-materiales/${proyectoId}/plan`, { lineas })
+  return data
+}
+
+export async function eliminarLineaPlan(proyectoId, lineaId) {
+  const { data } = await api.delete(`${BASE}/proyectos-materiales/${proyectoId}/plan/${lineaId}`)
+  return data
+}
+
+// Bitácora de cambios del plan (más reciente primero).
+export async function getProyectoPlanHistorial(proyectoId, limit = 50) {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/${proyectoId}/historial`, { params: { limit } })
+  return data
+}
+
+// Solicitudes (pedidos) ligadas al proyecto, con toda su info. El PDF se abre
+// con imprimirSolicitud(id).
+export async function getProyectoPedidos(proyectoId) {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/${proyectoId}/pedidos`)
   return data
 }
 

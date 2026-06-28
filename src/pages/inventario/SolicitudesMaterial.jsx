@@ -82,8 +82,8 @@ export default function SolicitudesMaterial() {
     error,
     refetch,
   } = useResource(
-    ['solicitudes', { limit: 200 }],
-    () => getSolicitudes({ limit: 200 }),
+    ['solicitudes', { limit: 1000 }],
+    () => getSolicitudes({ limit: 1000 }),
     { staleMs: 30_000, invalidateOn: ['solicitud:changed'] },
   )
   const solicitudes = rawSolicitudes ?? []

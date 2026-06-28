@@ -1,22 +1,25 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   AlertTriangle, History, Filter, RefreshCw, TrendingDown,
-  Package, Search, ShoppingCart, MessageCircle, Download, X,
+  Package, Search, ClipboardList, ShoppingCart,
 } from 'lucide-react'
 import {
   PageHeader, Button, Card, Select, Skeleton, EmptyState,
-  Table, THead, TH, TBody, TR, TD, Badge, Modal, Input, Textarea,
+  Table, THead, TH, TBody, TR, TD, Badge, Pagination, InfoTip,
 } from '../../components/ui'
 import {
   getProductosBajoMinimo,
-  sugerirOCExpress,
-  generarOCExpressPdf,
-  descargarPdfDesdeUrl,
+  getProductosConCompraActiva,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
+
+// Filas por página. Paginar reduce el nº de nodos en el DOM: con la lista
+// completa (cientos/miles de productos), repintar al cambiar de tema y animar el
+// sidebar se vuelve lento por el tamaño del DOM, no por React.
+const PAGE_SIZE = 50
 
 const URGENCIA_META = {
   critico:  { label: 'Crítico',    tone: 'danger',  rowBg: 'bg-rose-50/60 dark:bg-rose-900/10', icon: '🔥', sub: '< 7 días' },
@@ -26,11 +29,12 @@ const URGENCIA_META = {
 }
 
 export default function BajoMinimo() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [urgenciaFiltro, setUrgenciaFiltro] = useState('')
   const [selected, setSelected] = useState(() => new Set())
-  const [ocModalOpen, setOcModalOpen] = useState(false)
+  const [page, setPage] = useState(0)
 
   const {
     data: rawItems,
@@ -43,6 +47,20 @@ export default function BajoMinimo() {
     { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
   const items = rawItems ?? []
+
+  // Productos que ya tienen una solicitud de compra activa (PENDIENTE/ORDENADA).
+  const { data: comprasActivas } = useResource(
+    ['solicitudes-compra', 'productos-activos'],
+    () => getProductosConCompraActiva(),
+    { staleMs: 60_000, invalidateOn: ['compra:changed'] },
+  )
+  const compraPorProducto = useMemo(() => {
+    const m = new Map()
+    for (const c of (comprasActivas ?? [])) {
+      if (!m.has(c.producto_id)) m.set(c.producto_id, c)  // la más reciente (orden desc del backend)
+    }
+    return m
+  }, [comprasActivas])
 
   useEffect(() => {
     if (error) toast.error(extractApiError(error, 'Error al cargar productos bajo mínimo'))
@@ -75,17 +93,29 @@ export default function BajoMinimo() {
     return acc
   }, [items])
 
-  const toggleSelected = (id) => {
+  // Paginación en cliente: solo montamos las filas de la página actual.
+  const totalPages = Math.max(1, Math.ceil(filtrados.length / PAGE_SIZE))
+  const pageItems = useMemo(
+    () => filtrados.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [filtrados, page],
+  )
+  // Volver a la página 1 al cambiar filtros o si la página queda fuera de rango.
+  useEffect(() => { setPage(0) }, [search, categoriaFiltro, urgenciaFiltro])
+  useEffect(() => {
+    if (page > 0 && page >= totalPages) setPage(0)
+  }, [page, totalPages])
+
+  const toggleSelected = useCallback((id) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
-  }
+  }, [])
 
   const toggleAllVisibles = () => {
     setSelected((prev) => {
-      const visibles = filtrados.map((p) => p.id)
+      const visibles = pageItems.map((p) => p.id)
       const todosSeleccionados = visibles.every((id) => prev.has(id))
       const next = new Set(prev)
       if (todosSeleccionados) {
@@ -99,12 +129,21 @@ export default function BajoMinimo() {
 
   const limpiarSeleccion = () => setSelected(new Set())
 
-  const abrirGenerarOC = () => {
+  const crearSolicitudCompra = () => {
     if (selected.size === 0) {
       toast.error('Selecciona al menos un producto')
       return
     }
-    setOcModalOpen(true)
+    const seedProductos = items
+      .filter((p) => selected.has(p.id))
+      .map((p) => ({
+        producto_id: p.id,
+        codigo: p.codigo,
+        descripcion: p.descripcion,
+        unidad: p.unidad,
+        cantidad: p.faltante > 0 ? p.faltante : (p.stock_minimo || 1),
+      }))
+    navigate('/inventario/solicitudes-compra', { state: { seedProductos } })
   }
 
   return (
@@ -181,10 +220,10 @@ export default function BajoMinimo() {
           </div>
           <Button
             variant="primary"
-            leftIcon={<ShoppingCart size={14} />}
-            onClick={abrirGenerarOC}
+            leftIcon={<ClipboardList size={14} />}
+            onClick={crearSolicitudCompra}
           >
-            Generar OC express
+            Crear solicitud de compra
           </Button>
         </Card>
       )}
@@ -204,101 +243,147 @@ export default function BajoMinimo() {
           description="Cambia los filtros para ver más resultados."
         />
       ) : (
-        <Card className="overflow-hidden">
-          <Table>
-            <THead>
-              <TH style={{ width: 36 }}>
-                <input
-                  type="checkbox"
-                  checked={filtrados.length > 0 && filtrados.every((p) => selected.has(p.id))}
-                  onChange={toggleAllVisibles}
-                  aria-label="Seleccionar todos los visibles"
-                />
-              </TH>
-              <TH>Urgencia</TH>
-              <TH>Código</TH>
-              <TH>Descripción</TH>
-              <TH>Categoría</TH>
-              <TH align="right">Stock</TH>
-              <TH align="right">Mínimo</TH>
-              <TH align="right">Faltante</TH>
-              <TH align="right">Consumo/día</TH>
-              <TH align="right">Días restantes</TH>
-              <TH align="right">Acciones</TH>
-            </THead>
-            <TBody>
-              {filtrados.map((p) => {
-                const meta = URGENCIA_META[p.urgencia] || URGENCIA_META.medio
-                const checked = selected.has(p.id)
-                return (
-                  <TR key={p.id} className={meta.rowBg}>
-                    <TD>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSelected(p.id)}
-                        aria-label={`Seleccionar ${p.codigo}`}
-                      />
-                    </TD>
-                    <TD>
-                      <Badge tone={meta.tone}>{meta.label}</Badge>
-                    </TD>
-                    <TD className="font-mono text-xs">{p.codigo}</TD>
-                    <TD className="font-medium">{p.descripcion}</TD>
-                    <TD className="text-sm">{p.categoria}</TD>
-                    <TD align="right" className="font-mono font-bold tabular-nums">{p.stock_actual} <span className="text-[10px] text-ink-400">{p.unidad}</span></TD>
-                    <TD align="right" className="font-mono tabular-nums">{p.stock_minimo}</TD>
-                    <TD align="right" className="font-mono font-bold tabular-nums text-rose-600 dark:text-rose-400">
-                      −{p.faltante}
-                    </TD>
-                    <TD align="right" className="font-mono tabular-nums">{p.consumo_promedio_30d}</TD>
-                    <TD align="right" className="font-mono font-bold tabular-nums">
-                      {p.dias_de_stock_restante === null ? (
-                        <span className="text-ink-400 italic">—</span>
-                      ) : (
-                        <span className={
-                          p.dias_de_stock_restante < 7 ? 'text-rose-600 dark:text-rose-400' :
-                          p.dias_de_stock_restante < 14 ? 'text-amber-600 dark:text-amber-400' :
-                          'text-ink-700 dark:text-ink-200'
-                        }>
-                          {p.dias_de_stock_restante}d
-                        </span>
-                      )}
-                    </TD>
-                    <TD align="right">
-                      <div className="inline-flex items-center gap-1">
-                        <Link to={`/inventario/productos/${p.id}/kardex`}>
-                          <Button variant="ghost" size="icon-sm" title="Ver kardex">
-                            <History size={14} />
-                          </Button>
-                        </Link>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          title="Agregar a orden de compra"
-                          onClick={() => toggleSelected(p.id)}
-                        >
-                          <ShoppingCart size={14} className={checked ? 'text-indigo-600' : ''} />
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                )
-              })}
-            </TBody>
-          </Table>
-        </Card>
+        <Table>
+          <THead>
+            <TH className="w-10">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-ink-300 accent-indigo-600 align-middle"
+                checked={pageItems.length > 0 && pageItems.every((p) => selected.has(p.id))}
+                onChange={toggleAllVisibles}
+                aria-label="Seleccionar todos los visibles"
+              />
+            </TH>
+            <TH>
+              Urgencia <InfoTip placement="bottom" text="Qué tan pronto se agota según el consumo: Crítico < 7 días, Alto < 14, Medio ≥ 14, Sin consumo = no se ha movido." />
+            </TH>
+            <TH>Producto</TH>
+            <TH align="right">
+              Stock <InfoTip placement="bottom" text="Existencia actual y, debajo, el stock mínimo configurado." />
+            </TH>
+            <TH align="right">
+              Faltante <InfoTip placement="bottom" text="Cuánto falta para volver al stock mínimo (mínimo − stock actual)." />
+            </TH>
+            <TH align="right">
+              Consumo/día <InfoTip placement="bottom" text="Promedio de salidas por día en los últimos 30 días." />
+            </TH>
+            <TH align="right">
+              Días <InfoTip placement="bottom" text="Días estimados de stock restante al ritmo de consumo actual. “—” = sin consumo, no se puede estimar." />
+            </TH>
+            <TH align="center">
+              Compra <InfoTip placement="bottom" text="Si el producto ya tiene una solicitud de compra activa: “En compra” = pendiente, “Ordenada” = ya enviada al proveedor." />
+            </TH>
+            <TH align="right">Acciones</TH>
+          </THead>
+          <TBody>
+            {pageItems.map((p) => (
+              <FilaBajoMinimo
+                key={p.id}
+                p={p}
+                checked={selected.has(p.id)}
+                compra={compraPorProducto.get(p.id)}
+                onToggle={toggleSelected}
+              />
+            ))}
+          </TBody>
+        </Table>
       )}
 
-      <OCExpressModal
-        open={ocModalOpen}
-        onClose={() => setOcModalOpen(false)}
-        productoIds={Array.from(selected)}
-        onGenerado={() => { /* deja la selección, por si quiere reintentar */ }}
-      />
+      {!loading && filtrados.length > PAGE_SIZE && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalElements={filtrados.length}
+          size={PAGE_SIZE}
+          onChange={setPage}
+        />
+      )}
     </div>
   )
 }
+
+// Fila memoizada: con la lista completa de productos bajo mínimo, sin memo cada
+// clic en un checkbox re-renderizaba TODAS las filas (lista grande → lag visible,
+// incluido el sidebar). Con React.memo + callback estable, solo se re-renderiza
+// la fila cuya selección cambió.
+const FilaBajoMinimo = memo(function FilaBajoMinimo({ p, checked, compra, onToggle }) {
+  const meta = URGENCIA_META[p.urgencia] || URGENCIA_META.medio
+  const dias = p.dias_de_stock_restante
+  const diasCls = dias === null ? ''
+    : dias < 7 ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300'
+    : dias < 14 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+    : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  return (
+    <TR className={checked ? 'bg-indigo-50/50 dark:bg-indigo-900/10' : meta.rowBg}>
+      <TD>
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border-ink-300 accent-indigo-600 align-middle"
+          checked={checked}
+          onChange={() => onToggle(p.id)}
+          aria-label={`Seleccionar ${p.codigo}`}
+        />
+      </TD>
+      <TD>
+        <Badge tone={meta.tone} dot>{meta.label}</Badge>
+      </TD>
+      <TD>
+        <div className="font-medium text-ink-900 dark:text-ink-100 leading-tight">{p.descripcion}</div>
+        <div className="flex items-center gap-2 mt-0.5">
+          <span className="font-mono text-[11px] text-ink-400">{p.codigo}</span>
+          {p.categoria && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400">{p.categoria}</span>
+          )}
+        </div>
+      </TD>
+      <TD align="right">
+        <div className="font-mono font-bold tabular-nums text-ink-900 dark:text-ink-100">
+          {p.stock_actual} <span className="text-[10px] font-normal text-ink-400">{p.unidad}</span>
+        </div>
+        <div className="text-[10px] text-ink-400 tabular-nums">mín {p.stock_minimo}</div>
+      </TD>
+      <TD align="right">
+        <span className="inline-flex font-mono font-bold tabular-nums text-rose-600 dark:text-rose-400">−{p.faltante}</span>
+      </TD>
+      <TD align="right" className="font-mono tabular-nums text-ink-600 dark:text-ink-300">{p.consumo_promedio_30d}</TD>
+      <TD align="right">
+        {dias === null ? (
+          <span className="text-ink-300 dark:text-ink-600">—</span>
+        ) : (
+          <span className={`inline-flex items-center justify-center min-w-[44px] px-2 py-0.5 rounded-full text-xs font-bold tabular-nums ${diasCls}`}>
+            {dias}d
+          </span>
+        )}
+      </TD>
+      <TD align="center">
+        {compra ? (
+          <Badge tone={compra.estatus === 'ORDENADA' ? 'info' : 'warning'} title={`${compra.folio} · ${compra.estatus}`}>
+            {compra.estatus === 'ORDENADA' ? 'Ordenada' : 'En compra'}
+          </Badge>
+        ) : (
+          <span className="text-ink-300 dark:text-ink-600">—</span>
+        )}
+      </TD>
+      <TD align="right">
+        <div className="inline-flex items-center gap-1">
+          <Link to={`/inventario/productos/${p.id}/kardex`}>
+            <Button variant="ghost" size="icon-sm" title="Ver kardex">
+              <History size={14} />
+            </Button>
+          </Link>
+          <Button
+            variant={checked ? 'secondary' : 'ghost'}
+            size="icon-sm"
+            title={checked ? 'Quitar de la selección' : 'Agregar a solicitud de compra'}
+            onClick={() => onToggle(p.id)}
+          >
+            <ShoppingCart size={14} className={checked ? 'text-indigo-600' : ''} />
+          </Button>
+        </div>
+      </TD>
+    </TR>
+  )
+})
 
 const KPI_TONES = {
   rose:  { ring: 'ring-rose-500/30',  icon: 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300',     val: 'text-rose-700 dark:text-rose-300' },
@@ -323,239 +408,5 @@ function KpiCard({ label, value, tone, icon: Icon, active, onClick }) {
         <div className={`text-2xl font-extrabold leading-tight ${t.val}`}>{value}</div>
       </div>
     </button>
-  )
-}
-
-/* ─── Modal de OC express ──────────────────────────────────────────────────── */
-
-function OCExpressModal({ open, onClose, productoIds, onGenerado }) {
-  const [loading, setLoading] = useState(false)
-  // grupos: [{ proveedor, contacto, notas, items: [{producto_id, codigo, descripcion, unidad,
-  //   stock_actual, stock_minimo, consumo_promedio_30d, cantidad_sugerida, cantidad }] }]
-  const [grupos, setGrupos] = useState([])
-  // Resultados por proveedor después de generar: { [proveedor]: { url, whatsappLink, folio } }
-  const [resultados, setResultados] = useState({})
-  const [generando, setGenerando] = useState({})  // { [proveedor]: bool }
-
-  useEffect(() => {
-    if (!open || productoIds.length === 0) return
-    setLoading(true)
-    setResultados({})
-    sugerirOCExpress(productoIds)
-      .then((data) => {
-        // Cada item arranca con cantidad = cantidad_sugerida (editable).
-        const enriched = (data.grupos || []).map((g) => ({
-          proveedor: g.proveedor,
-          contacto: g.contacto || '',
-          notas: '',
-          items: g.items.map((it) => ({ ...it, cantidad: it.cantidad_sugerida })),
-        }))
-        setGrupos(enriched)
-      })
-      .catch((err) => {
-        toast.error(extractApiError(err, 'No se pudo cargar la sugerencia'))
-        onClose()
-      })
-      .finally(() => setLoading(false))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, productoIds.join(',')])
-
-  const setGrupoField = (idx, field, value) => {
-    setGrupos((prev) => prev.map((g, i) => i === idx ? { ...g, [field]: value } : g))
-  }
-  const setItemCantidad = (gIdx, iIdx, value) => {
-    setGrupos((prev) => prev.map((g, i) =>
-      i !== gIdx ? g : {
-        ...g,
-        items: g.items.map((it, j) => j !== iIdx ? it : { ...it, cantidad: value }),
-      }
-    ))
-  }
-  const quitarItem = (gIdx, iIdx) => {
-    setGrupos((prev) => prev.map((g, i) =>
-      i !== gIdx ? g : { ...g, items: g.items.filter((_, j) => j !== iIdx) }
-    ).filter((g) => g.items.length > 0))
-  }
-
-  const generarUno = async (gIdx) => {
-    const g = grupos[gIdx]
-    if (!g) return
-    const proveedor = g.proveedor === 'Sin proveedor'
-      ? (g.contacto?.trim() ? `Proveedor (${g.contacto.trim()})` : 'Sin proveedor')
-      : g.proveedor
-    if (!proveedor || !proveedor.trim()) {
-      toast.error('Falta nombre de proveedor')
-      return
-    }
-    const items = g.items
-      .map((it) => ({ producto_id: it.producto_id, cantidad: Number(it.cantidad) }))
-      .filter((it) => it.cantidad > 0)
-    if (items.length === 0) {
-      toast.error('Ningún ítem con cantidad > 0')
-      return
-    }
-    setGenerando((prev) => ({ ...prev, [g.proveedor]: true }))
-    try {
-      const res = await generarOCExpressPdf({
-        proveedor,
-        contacto: g.contacto || '',
-        notas: g.notas || '',
-        items,
-      })
-      setResultados((prev) => ({ ...prev, [g.proveedor]: res }))
-      // Abrimos el PDF en pestaña nueva.
-      const w = window.open(res.url, '_blank')
-      if (!w) toast.success(`PDF ${res.folio} listo — usa "Descargar" abajo.`)
-    } catch (err) {
-      toast.error(extractApiError(err, 'No se pudo generar el PDF'))
-    } finally {
-      setGenerando((prev) => ({ ...prev, [g.proveedor]: false }))
-    }
-  }
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Generar órdenes de compra express"
-      description="Una orden por proveedor. Edita cantidades, contacto y notas antes de generar el PDF."
-      size="xl"
-    >
-      {loading ? (
-        <Skeleton className="h-72 rounded-lg" />
-      ) : grupos.length === 0 ? (
-        <EmptyState
-          icon={ShoppingCart}
-          title="Sin productos para sugerir"
-          description="Vuelve a seleccionar productos en la tabla."
-        />
-      ) : (
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-          {grupos.map((g, gIdx) => {
-            const resultado = resultados[g.proveedor]
-            const isGenerating = !!generando[g.proveedor]
-            const totalItems = g.items.length
-            return (
-              <Card key={g.proveedor + gIdx} className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div>
-                    <div className="text-[10px] font-bold uppercase text-ink-500 tracking-wider">Proveedor</div>
-                    <div className="text-lg font-bold">{g.proveedor}</div>
-                  </div>
-                  <Badge tone={g.proveedor === 'Sin proveedor' ? 'warning' : 'info'}>
-                    {totalItems} ítem{totalItems === 1 ? '' : 's'}
-                  </Badge>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <Input
-                    label="Contacto (tel/email)"
-                    value={g.contacto}
-                    onChange={(e) => setGrupoField(gIdx, 'contacto', e.target.value)}
-                    placeholder="55 1234 5678"
-                  />
-                  <Textarea
-                    label="Notas / observaciones"
-                    rows={1}
-                    value={g.notas}
-                    onChange={(e) => setGrupoField(gIdx, 'notas', e.target.value)}
-                    placeholder="Entregar en planta 2, etc."
-                  />
-                </div>
-
-                <div className="overflow-x-auto">
-                  <Table>
-                    <THead>
-                      <TH>Código</TH>
-                      <TH>Descripción</TH>
-                      <TH align="right">Stock / Mín.</TH>
-                      <TH align="right">Consumo/día</TH>
-                      <TH align="right">Sugerido</TH>
-                      <TH align="right">Cantidad a comprar</TH>
-                      <TH align="right">Quitar</TH>
-                    </THead>
-                    <TBody>
-                      {g.items.map((it, iIdx) => (
-                        <TR key={it.producto_id}>
-                          <TD className="font-mono text-xs">{it.codigo}</TD>
-                          <TD>{it.descripcion}</TD>
-                          <TD align="right" className="font-mono text-xs">
-                            {it.stock_actual} / {it.stock_minimo} {it.unidad}
-                          </TD>
-                          <TD align="right" className="font-mono tabular-nums">{it.consumo_promedio_30d}</TD>
-                          <TD align="right" className="font-mono tabular-nums text-ink-500">
-                            {it.cantidad_sugerida}
-                          </TD>
-                          <TD align="right" style={{ width: 130 }}>
-                            <input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              value={it.cantidad}
-                              onChange={(e) => setItemCantidad(gIdx, iIdx, e.target.value)}
-                              className="w-24 text-right font-mono tabular-nums rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 px-2 py-1 text-sm"
-                            />
-                          </TD>
-                          <TD align="right">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              title="Quitar línea"
-                              onClick={() => quitarItem(gIdx, iIdx)}
-                            >
-                              <X size={14} />
-                            </Button>
-                          </TD>
-                        </TR>
-                      ))}
-                    </TBody>
-                  </Table>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
-                  {resultado && (
-                    <>
-                      <Badge tone="success">{resultado.folio}</Badge>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        leftIcon={<Download size={13} />}
-                        onClick={() => descargarPdfDesdeUrl(resultado.url, `${resultado.folio}.pdf`)}
-                      >
-                        Descargar
-                      </Button>
-                      {resultado.whatsappLink && (
-                        <a href={resultado.whatsappLink} target="_blank" rel="noopener noreferrer">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            leftIcon={<MessageCircle size={13} />}
-                          >
-                            WhatsApp
-                          </Button>
-                        </a>
-                      )}
-                    </>
-                  )}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    leftIcon={<ShoppingCart size={13} />}
-                    disabled={isGenerating || g.items.length === 0}
-                    onClick={() => generarUno(gIdx)}
-                  >
-                    {isGenerating ? 'Generando…' : resultado ? 'Regenerar PDF' : 'Generar PDF'}
-                  </Button>
-                </div>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
-      <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-ink-200 dark:border-ink-700">
-        <Button variant="ghost" onClick={onClose}>Cerrar</Button>
-      </div>
-    </Modal>
   )
 }

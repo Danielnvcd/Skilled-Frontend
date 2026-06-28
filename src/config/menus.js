@@ -3,7 +3,7 @@ import {
   Settings2, IdCard, PieChart, FileClock, History,
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
-  Wrench, Hammer, AlertTriangle, ClipboardCheck,
+  Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -99,13 +99,30 @@ export const MENUS = {
         { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
         { path: '/inventario/bajo-minimo', label: 'Bajo mínimo', icon: AlertTriangle },
         { path: '/inventario/almacenes', label: 'Almacenes', icon: Boxes },
-        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: ArrowRightLeft, end: true },
-        { path: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', icon: PlusSquare },
-        { path: '/inventario/solicitudes', label: 'Solicitudes', icon: ClipboardList },
-        { path: '/inventario/tomas', label: 'Tomas físicas', icon: ClipboardCheck },
-        { path: '/inventario/reportes', label: 'Reportes', icon: FileSpreadsheet },
         { path: '/inventario/etiquetas', label: 'Etiquetas', icon: Tag },
+      ],
+    },
+    {
+      label: 'Movimientos',
+      items: [
+        { path: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', icon: PlusSquare },
+        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: ArrowRightLeft, end: true },
+        { path: '/inventario/tomas', label: 'Tomas físicas', icon: ClipboardCheck },
         { path: '/inventario/scanner', label: 'Escáner QR', icon: ScanLine, mobileOnly: true },
+      ],
+    },
+    {
+      label: 'Compras y solicitudes',
+      items: [
+        { path: '/inventario/solicitudes', label: 'Solicitudes de material', icon: ClipboardList },
+        { path: '/inventario/solicitudes-compra', label: 'Solicitudes de compra', icon: ShoppingCart },
+      ],
+    },
+    {
+      label: 'Proyectos y reportes',
+      items: [
+        { path: '/inventario/proyectos', label: 'Proyectos', icon: FolderOpen },
+        { path: '/inventario/reportes', label: 'Reportes', icon: FileSpreadsheet },
       ],
     },
     {

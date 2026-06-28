@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Boxes, Plus, Edit2, Trash2, QrCode, Printer, Package } from 'lucide-react'
+import { Boxes, Plus, Edit2, Trash2, QrCode, Printer, Package, Search, Check, Loader2, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -9,9 +9,8 @@ import {
 import {
   getAlmacenes, createAlmacen, updateAlmacen, deleteAlmacen,
   getEstantesPorAlmacen, createEstante, updateEstante, deleteEstante,
-  getCategorias, getProductosDeEstante, setProductosDeEstante,
+  getCategorias, getProductosDeEstante, setProductosDeEstante, getProductos,
 } from '../../api/inventario'
-import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
 
@@ -32,11 +31,8 @@ export default function AlmacenesEstantes() {
   const [confirmDelEst, setConfirmDelEst] = useState(null)
 
   // Modal de asignar productos a un estante (Pausa 4 — scanner móvil).
-  // Guardamos los asignados como objetos completos (no precargamos el catálogo
-  // entero: con miles no escala). Para agregar se usa un buscador server-side.
+  // Toda la lógica vive en <ProductosEstanteModal/> (abajo).
   const [productosModalEstante, setProductosModalEstante] = useState(null)
-  const [asignadosList, setAsignadosList] = useState([])
-  const [productosLoading, setProductosLoading] = useState(false)
 
   const [saving, setSaving] = useState(false)
 
@@ -91,8 +87,13 @@ export default function AlmacenesEstantes() {
     setSaving(true)
     try {
       if (formAlmacen.id) {
-        await updateAlmacen(formAlmacen.id, formAlmacen)
+        const actualizado = await updateAlmacen(formAlmacen.id, formAlmacen)
         toast.success('Almacén actualizado')
+        // Sincroniza el panel derecho si se editó el almacén seleccionado
+        // (antes seguía mostrando el nombre viejo).
+        if (selectedAlmacen?.id === formAlmacen.id) {
+          setSelectedAlmacen(actualizado || { ...selectedAlmacen, ...formAlmacen })
+        }
       } else {
         await createAlmacen(formAlmacen)
         toast.success('Almacén creado')
@@ -159,44 +160,6 @@ export default function AlmacenesEstantes() {
     }
   }
 
-  // --- Handlers Productos del Estante (Pausa 4) ---
-  const openProductosModal = async (estante) => {
-    setProductosModalEstante(estante)
-    setAsignadosList([])
-    setProductosLoading(true)
-    try {
-      const asignados = await getProductosDeEstante(estante.id)
-      setAsignadosList(asignados)
-    } catch (err) {
-      toast.error(extractApiError(err, 'Error al cargar productos'))
-      setProductosModalEstante(null)
-    } finally {
-      setProductosLoading(false)
-    }
-  }
-
-  const agregarProductoEstante = (p) => {
-    setAsignadosList(prev => prev.some(x => x.id === p.id) ? prev : [...prev, p])
-  }
-
-  const quitarProductoEstante = (id) => {
-    setAsignadosList(prev => prev.filter(p => p.id !== id))
-  }
-
-  const guardarProductosEstante = async () => {
-    if (!productosModalEstante) return
-    setSaving(true)
-    try {
-      await setProductosDeEstante(productosModalEstante.id, asignadosList.map(p => p.id))
-      toast.success(`${asignadosList.length} producto(s) asignado(s) a ${productosModalEstante.nombre}`)
-      setProductosModalEstante(null)
-    } catch (err) {
-      toast.error(extractApiError(err, 'Error al guardar'))
-    } finally {
-      setSaving(false)
-    }
-  }
-
   return (
     <div>
       <PageHeader
@@ -218,8 +181,9 @@ export default function AlmacenesEstantes() {
             <Skeleton className="h-20 w-full rounded-xl" />
           ) : (
             almacenes.map(a => (
-              <Card 
-                key={a.id} 
+              <Card
+                key={a.id}
+                padded={false}
                 className={`cursor-pointer transition-all ${selectedAlmacen?.id === a.id ? 'border-brand-500 ring-1 ring-brand-500' : 'hover:border-brand-300'}`}
                 onClick={() => setSelectedAlmacen(a)}
               >
@@ -245,26 +209,28 @@ export default function AlmacenesEstantes() {
         {/* Lista de Estantes del Almacén seleccionado */}
         <div className="lg:col-span-2">
           {selectedAlmacen ? (
-            <Card>
-              <div className="p-4 border-b border-ink-200 dark:border-ink-800 flex justify-between items-center">
-                <div>
-                  <h3 className="font-semibold text-ink-900 dark:text-ink-100">Estantes en {selectedAlmacen.nombre}</h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center gap-3">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-ink-900 dark:text-ink-100 truncate">Estantes en {selectedAlmacen.nombre}</h3>
                   <p className="text-sm text-ink-500">Agrega divisiones físicas para organizar los productos.</p>
                 </div>
-                <Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setFormEstante({ nombre: '', descripcion: '', almacen_id: selectedAlmacen.id })}>
+                <Button size="sm" leftIcon={<Plus size={14} />} className="flex-shrink-0" onClick={() => setFormEstante({ nombre: '', descripcion: '', almacen_id: selectedAlmacen.id })}>
                   Añadir estante
                 </Button>
               </div>
-              
+
               {loadingEst ? (
-                <div className="p-6"><Skeleton className="h-10 w-full" /></div>
+                <Skeleton className="h-40 w-full rounded-xl" />
               ) : estantes.length === 0 ? (
-                <div className="p-10 text-center text-ink-500">Este almacén no tiene estantes registrados.</div>
+                <div className="min-h-[200px] flex items-center justify-center border-2 border-dashed border-ink-200 dark:border-ink-800 rounded-xl text-ink-400 text-sm">
+                  Este almacén no tiene estantes registrados.
+                </div>
               ) : (
                 <Table>
                   <THead>
                     <TH>Nombre</TH>
-                    <TH>Descripción</TH>
+                    <TH>Categoría local</TH>
                     <TH align="center">QR</TH>
                     <TH align="right">Acciones</TH>
                   </THead>
@@ -272,31 +238,33 @@ export default function AlmacenesEstantes() {
                     {estantes.map(e => (
                       <TR key={e.id}>
                         <TD className="font-medium">{e.nombre}</TD>
-                        <TD>{e.descripcion}</TD>
+                        <TD>{e.descripcion || <span className="text-ink-400">Todo el catálogo</span>}</TD>
                         <TD align="center">
                           <Link to={`/inventario/qr/${e.id}`}>
-                            <Button variant="ghost" size="sm">
-                              <Printer size={15} /> Imprimir QR
+                            <Button variant="ghost" size="sm" leftIcon={<Printer size={15} />}>
+                              Imprimir QR
                             </Button>
                           </Link>
                         </TD>
                         <TD align="right">
-                          <Button variant="ghost" size="sm" leftIcon={<Package size={13} />} onClick={() => openProductosModal(e)}>
-                            Productos
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" onClick={() => setFormEstante(e)}>
-                            <Edit2 size={13} />
-                          </Button>
-                          <Button variant="ghost" size="icon-sm" onClick={() => setConfirmDelEst(e)}>
-                            <Trash2 size={13} className="text-red-500" />
-                          </Button>
+                          <div className="inline-flex items-center gap-1">
+                            <Button variant="ghost" size="sm" leftIcon={<Package size={13} />} onClick={() => setProductosModalEstante(e)}>
+                              Productos
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => setFormEstante(e)}>
+                              <Edit2 size={13} />
+                            </Button>
+                            <Button variant="ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDelEst(e)}>
+                              <Trash2 size={13} className="text-red-500" />
+                            </Button>
+                          </div>
                         </TD>
                       </TR>
                     ))}
                   </TBody>
                 </Table>
               )}
-            </Card>
+            </div>
           ) : (
             <div className="h-full min-h-[300px] flex items-center justify-center border-2 border-dashed border-ink-200 dark:border-ink-800 rounded-xl text-ink-400">
               Selecciona un almacén para ver sus estantes.
@@ -339,18 +307,21 @@ export default function AlmacenesEstantes() {
       }>
         <form id="form-est" onSubmit={(e) => handleSaveEstante(e)} className="space-y-4">
           <Input label="Nombre (ej. Rack 1, Pasillo A)" value={formEstante?.nombre || ''} onChange={e => setFormEstante({...formEstante, nombre: e.target.value})} required />
-          <Input
+          <Select
             label="Categoría local"
-            placeholder="Ej. Tornillería (déjalo vacío para mostrar todo el catálogo)"
-            list="categorias-estante-list"
+            hint="Filtra qué productos se muestran al escanear el QR. Deja “Todo el catálogo” para no filtrar."
             value={formEstante?.descripcion || ''}
             onChange={e => setFormEstante({ ...formEstante, descripcion: e.target.value })}
-          />
-          <datalist id="categorias-estante-list">
-            {categorias.map(c => <option key={c} value={c} />)}
-          </datalist>
+          >
+            <option value="">Todo el catálogo</option>
+            {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            {/* Conserva un valor previo que ya no esté en el catálogo, para no perderlo al editar */}
+            {formEstante?.descripcion && !categorias.includes(formEstante.descripcion) && (
+              <option value={formEstante.descripcion}>{formEstante.descripcion}</option>
+            )}
+          </Select>
           {formEstante?.id && (
-            <Select label="Mover a otro almacén" value={formEstante?.almacen_id || ''} onChange={e => setFormEstante({...formEstante, almacen_id: e.target.value})}>
+            <Select label="Mover a otro almacén" value={formEstante?.almacen_id || ''} onChange={e => setFormEstante({...formEstante, almacen_id: Number(e.target.value)})}>
               {almacenes.map(a => <option key={a.id} value={a.id}>{a.nombre}</option>)}
             </Select>
           )}
@@ -360,60 +331,174 @@ export default function AlmacenesEstantes() {
       <ConfirmDialog open={!!confirmDelEst} onClose={() => setConfirmDelEst(null)} onConfirm={handleDeleteEstante} title="Eliminar Estante" description="Se desactivará el estante." confirmLabel="Eliminar" tone="danger" />
 
       {/* Modal: asignar productos al estante (Pausa 4) */}
-      <Modal
-        open={!!productosModalEstante}
+      <ProductosEstanteModal
+        estante={productosModalEstante}
+        categorias={categorias}
         onClose={() => setProductosModalEstante(null)}
-        title={productosModalEstante ? `Productos en ${productosModalEstante.nombre}` : ''}
-        size="lg"
-        footer={
-          <>
-            <span className="text-xs text-ink-500 mr-auto">
-              {asignadosList.length} asignado(s)
-            </span>
-            <Button variant="secondary" onClick={() => setProductosModalEstante(null)}>Cancelar</Button>
-            <Button onClick={guardarProductosEstante} loading={saving}>Guardar</Button>
-          </>
-        }
-      >
-        <p className="text-xs text-ink-500 mb-3">
-          Busca y agrega los productos que se guardan en este estante. Al escanear
-          el QR desde el móvil verás aquí su lista.
-        </p>
-        <div className="mb-3">
-          <ProductoPicker
-            label={null}
-            placeholder="Busca por código o descripción para agregar…"
-            excludeIds={new Set(asignadosList.map(p => p.id))}
-            onSelect={agregarProductoEstante}
-          />
-        </div>
-        {productosLoading ? (
-          <Skeleton className="h-60 w-full rounded-md" />
-        ) : asignadosList.length === 0 ? (
-          <p className="p-4 text-sm italic text-ink-500 text-center border border-ink-200 dark:border-ink-800 rounded-md">
-            Ningún producto asignado todavía. Búscalos arriba para agregarlos.
-          </p>
-        ) : (
-          <div className="max-h-[55vh] overflow-y-auto border border-ink-200 dark:border-ink-800 rounded-md divide-y divide-ink-100 dark:divide-ink-800">
-            {asignadosList.map(p => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 px-3 py-2 hover:bg-ink-50 dark:hover:bg-ink-800/50"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-mono text-ink-500">{p.codigo}</p>
-                  <p className="text-sm text-ink-900 dark:text-ink-100 truncate">{p.descripcion}</p>
-                </div>
-                <span className="text-xs text-ink-400">{p.categoria}</span>
-                <Button variant="ghost" size="icon-sm" onClick={() => quitarProductoEstante(p.id)} title="Quitar">
-                  <Trash2 size={14} className="text-red-500" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
+      />
 
     </div>
+  )
+}
+
+/* ─── Modal de productos del estante: catálogo (izq) + asignados (der) ──────── */
+function ProductosEstanteModal({ estante, categorias, onClose }) {
+  const open = !!estante
+  const [asignados, setAsignados] = useState([])   // objetos producto completos
+  const [loadingAsig, setLoadingAsig] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const [q, setQ] = useState('')
+  const [cat, setCat] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscando, setBuscando] = useState(false)
+
+  // Carga inicial de asignados al abrir.
+  useEffect(() => {
+    if (!estante) return
+    setQ(''); setCat(''); setResultados([])
+    setLoadingAsig(true)
+    getProductosDeEstante(estante.id)
+      .then(setAsignados)
+      .catch((err) => { toast.error(extractApiError(err, 'Error al cargar productos')); onClose() })
+      .finally(() => setLoadingAsig(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estante])
+
+  // Búsqueda server-side (debounce) del catálogo, filtrable por categoría.
+  useEffect(() => {
+    if (!open) return
+    let cancel = false
+    setBuscando(true)
+    const t = setTimeout(() => {
+      getProductos({ q: q.trim(), categoria: cat || undefined, limit: 50 })
+        .then((res) => { if (!cancel) setResultados(res || []) })
+        .catch(() => { if (!cancel) setResultados([]) })
+        .finally(() => { if (!cancel) setBuscando(false) })
+    }, 250)
+    return () => { cancel = true; clearTimeout(t) }
+  }, [q, cat, open])
+
+  const asignadosIds = useMemo(() => new Set(asignados.map(p => p.id)), [asignados])
+
+  const agregar = (p) => setAsignados(prev => prev.some(x => x.id === p.id) ? prev : [...prev, p])
+  const quitar = (id) => setAsignados(prev => prev.filter(p => p.id !== id))
+
+  const guardar = async () => {
+    if (!estante) return
+    setSaving(true)
+    try {
+      await setProductosDeEstante(estante.id, asignados.map(p => p.id))
+      toast.success(`${asignados.length} producto(s) asignado(s) a ${estante.nombre}`)
+      onClose()
+    } catch (err) {
+      toast.error(extractApiError(err, 'Error al guardar'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Productos en ${estante.nombre}`}
+      description="Agrega desde el catálogo (izquierda) los productos que se guardan aquí. Al escanear el QR verás esta lista."
+      size="xl"
+      footer={
+        <>
+          <span className="text-xs text-ink-500 mr-auto">{asignados.length} asignado(s)</span>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={guardar} loading={saving}>Guardar</Button>
+        </>
+      }
+    >
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* Izquierda: catálogo */}
+        <div className="flex flex-col min-h-0">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-ink-500 mb-2">Catálogo</div>
+          <div className="flex gap-2 mb-2">
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Buscar código o descripción…"
+                className="w-full pl-8 pr-2 py-1.5 text-sm rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900"
+              />
+            </div>
+            <Select value={cat} onChange={(e) => setCat(e.target.value)} className="w-36">
+              <option value="">Todas</option>
+              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
+          <div className="border border-ink-200 dark:border-ink-800 rounded-lg divide-y divide-ink-100 dark:divide-ink-800 h-[48vh] overflow-y-auto">
+            {buscando ? (
+              <div className="px-3 py-3 text-xs text-ink-400 flex items-center gap-2"><Loader2 size={13} className="animate-spin" /> Buscando…</div>
+            ) : resultados.length === 0 ? (
+              <div className="px-3 py-6 text-xs text-ink-400 text-center">Sin resultados</div>
+            ) : (
+              resultados.map((p) => {
+                const ya = asignadosIds.has(p.id)
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    disabled={ya}
+                    onClick={() => agregar(p)}
+                    className={`w-full text-left px-3 py-2 flex items-center gap-2 transition-colors ${ya ? 'opacity-50 cursor-default' : 'hover:bg-brand-50 dark:hover:bg-brand-900/20'}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-ink-900 dark:text-ink-100 truncate leading-tight">{p.descripcion}</p>
+                      <p className="text-[11px] font-mono text-ink-400">{p.codigo}</p>
+                    </div>
+                    <span className="text-[10px] text-ink-400 tabular-nums flex-shrink-0">{p.stock_actual} {p.unidad}</span>
+                    {ya ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex-shrink-0"><Check size={13} /> Agregado</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400 flex-shrink-0"><Plus size={13} /> Agregar</span>
+                    )}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Derecha: asignados */}
+        <div className="flex flex-col min-h-0">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-ink-500">Asignados a este estante</span>
+            <span className="text-[11px] font-semibold text-ink-500">{asignados.length}</span>
+          </div>
+          {loadingAsig ? (
+            <Skeleton className="h-[48vh] w-full rounded-lg" />
+          ) : asignados.length === 0 ? (
+            <div className="h-[48vh] flex items-center justify-center text-center text-sm text-ink-400 border border-dashed border-ink-300 dark:border-ink-700 rounded-lg px-4">
+              Ningún producto asignado todavía.<br />Agrégalos desde el catálogo de la izquierda.
+            </div>
+          ) : (
+            <div className="border border-ink-200 dark:border-ink-800 rounded-lg divide-y divide-ink-100 dark:divide-ink-800 h-[48vh] overflow-y-auto">
+              {asignados.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2 hover:bg-ink-50 dark:hover:bg-ink-800/50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink-900 dark:text-ink-100 truncate leading-tight">{p.descripcion}</p>
+                    <p className="text-[11px] font-mono text-ink-400">{p.codigo}</p>
+                  </div>
+                  {p.categoria && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-ink-100 dark:bg-ink-800 text-ink-500 dark:text-ink-400 flex-shrink-0">{p.categoria}</span>
+                  )}
+                  <Button variant="ghost" size="icon-sm" onClick={() => quitar(p.id)} title="Quitar del estante">
+                    <X size={14} className="text-red-500" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }

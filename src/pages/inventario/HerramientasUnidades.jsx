@@ -71,7 +71,9 @@ export default function HerramientasUnidades() {
   const load = () => { refetch() }
 
   useEffect(() => {
-    getHerramientas().then(setHerramientas).catch(() => {})
+    // limit alto: los <select> de herramienta deben listar TODAS (con el default
+    // de 200 las herramientas #201+ no aparecían para filtrar/seleccionar).
+    getHerramientas({ limit: 1000 }).then(setHerramientas).catch(() => {})
     getAlmacenes().then(setAlmacenes).catch(() => {})
   }, [])
 

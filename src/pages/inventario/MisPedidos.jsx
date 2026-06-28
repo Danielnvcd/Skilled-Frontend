@@ -207,7 +207,8 @@ export default function MisPedidos() {
   const [search, setSearch] = useState('')
   const [searchHerr, setSearchHerr] = useState('')
   const [activeCat, setActiveCat] = useState('Todas')
-  const [proyecto, setProyecto] = useState('')
+  const [proyecto, setProyecto] = useState('')      // texto (para PDF y campo requerido)
+  const [proyectoId, setProyectoId] = useState('')  // FK real, se manda al backend
   const [notas, setNotas] = useState('')
 
   const [cart, setCart] = useState([])             // materiales
@@ -221,6 +222,14 @@ export default function MisPedidos() {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 350)
     return () => clearTimeout(t)
   }, [search])
+
+  // Búsqueda de herramientas también server-side (antes filtraba en cliente
+  // sobre 500 → con más herramientas, el resto quedaba inalcanzable).
+  const [debouncedSearchHerr, setDebouncedSearchHerr] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchHerr(searchHerr.trim()), 350)
+    return () => clearTimeout(t)
+  }, [searchHerr])
 
   // Categorías (chips) desde el resumen server-side — no dependen de cuántos
   // productos se hayan cargado (con miles, derivarlas del listado las ocultaba).
@@ -239,8 +248,8 @@ export default function MisPedidos() {
     { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
   const { data: rawHerramientas, error: errHerr } = useResource(
-    ['herramientas', 'catalogo'],
-    () => getHerramientas({ limit: 500 }),
+    ['herramientas', 'catalogo', { q: debouncedSearchHerr }],
+    () => getHerramientas({ q: debouncedSearchHerr || undefined, limit: 200 }),
     { staleMs: 60_000, invalidateOn: ['herramienta:changed'] },
   )
   const { data: rawProyectos, error: errProj } = useResource(
@@ -261,17 +270,9 @@ export default function MisPedidos() {
   }, [errProd, errHerr, errProj])
 
   // ─── Herramientas ─────────────────────────────────────────────────────────
-  const herramientasFiltradas = useMemo(() => {
-    const q = searchHerr.toLowerCase().trim()
-    if (!q) return herramientas
-    return herramientas.filter((h) => (
-      h.sku?.toLowerCase().includes(q) ||
-      h.descripcion?.toLowerCase().includes(q) ||
-      h.marca?.toLowerCase().includes(q) ||
-      h.modelo?.toLowerCase().includes(q) ||
-      h.clasificacion?.toLowerCase().includes(q)
-    ))
-  }, [herramientas, searchHerr])
+  // La búsqueda ya se hace en el servidor (debouncedSearchHerr); aquí solo
+  // exponemos el resultado para no filtrar dos veces ni ocultar coincidencias.
+  const herramientasFiltradas = herramientas
 
   const openHerrModal = (h) => {
     const en = cartHerr.find((c) => c.herramienta_id === h.id)
@@ -330,6 +331,16 @@ export default function MisPedidos() {
 
   // El filtrado (categoría + búsqueda) ya viene resuelto del servidor.
   const filtered = productos
+
+  // Tope de tarjetas renderizadas (DOM ligero con catálogos grandes). "Mostrar
+  // más" agrega de a bloques; se reinicia al cambiar filtro/categoría/pestaña.
+  const CARD_STEP = 60
+  const [matVisible, setMatVisible] = useState(CARD_STEP)
+  const [herrVisible, setHerrVisible] = useState(CARD_STEP)
+  useEffect(() => { setMatVisible(CARD_STEP) }, [catParam, debouncedSearch])
+  useEffect(() => { setHerrVisible(CARD_STEP) }, [debouncedSearchHerr])
+  const filteredVisibles = filtered.slice(0, matVisible)
+  const herramientasVisibles = herramientasFiltradas.slice(0, herrVisible)
 
   const openQtyModal = (producto) => {
     const enCart = cart.find((c) => c.id === producto.id)
@@ -391,6 +402,12 @@ export default function MisPedidos() {
       toast.error('Debes seleccionar un proyecto antes de enviar la solicitud')
       return
     }
+    // El backend acepta máximo 500 líneas por solicitud. Avisar antes para no
+    // mostrar un error técnico de validación al enviar un carrito enorme.
+    if (cart.length + cartHerr.length > 500) {
+      toast.error('Máximo 500 ítems por solicitud. Divide el pedido en varias solicitudes.')
+      return
+    }
     setSaving(true)
     try {
       const detalles = [
@@ -410,11 +427,17 @@ export default function MisPedidos() {
           complementos: item.complementos,
         })),
       ]
-      await createSolicitud({ proyecto: proyecto || null, notas: notas || null, detalles })
+      await createSolicitud({
+        proyecto: proyecto || null,
+        proyecto_id: proyectoId ? Number(proyectoId) : null,
+        notas: notas || null,
+        detalles,
+      })
       toast.success(`Solicitud enviada (${detalles.length} ítems)`)
       setCart([])
       setCartHerr([])
       setProyecto('')
+      setProyectoId('')
       setNotas('')
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo enviar la solicitud'))
@@ -588,16 +611,25 @@ export default function MisPedidos() {
                 <p className="text-xs text-ink-400 mt-1">Cambia la búsqueda o el filtro de categoría</p>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {filtered.map((p) => (
-                  <ProductoCard
-                    key={p.id}
-                    producto={p}
-                    enCart={cart.find((c) => c.id === p.id)}
-                    onClick={() => openQtyModal(p)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {filteredVisibles.map((p) => (
+                    <ProductoCard
+                      key={p.id}
+                      producto={p}
+                      enCart={cart.find((c) => c.id === p.id)}
+                      onClick={() => openQtyModal(p)}
+                    />
+                  ))}
+                </div>
+                {filtered.length > matVisible && (
+                  <div className="mt-4 text-center">
+                    <Button variant="secondary" onClick={() => setMatVisible((n) => n + CARD_STEP)}>
+                      Mostrar más ({filtered.length - matVisible} restantes)
+                    </Button>
+                  </div>
+                )}
+              </>
             )
           ) : (
             herramientasFiltradas.length === 0 ? (
@@ -607,16 +639,25 @@ export default function MisPedidos() {
                 <p className="text-xs text-ink-400 mt-1">Ajusta la búsqueda</p>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {herramientasFiltradas.map((h) => (
-                  <HerramientaCard
-                    key={h.id}
-                    herramienta={h}
-                    enCart={cartHerr.find((c) => c.herramienta_id === h.id)}
-                    onClick={() => openHerrModal(h)}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {herramientasVisibles.map((h) => (
+                    <HerramientaCard
+                      key={h.id}
+                      herramienta={h}
+                      enCart={cartHerr.find((c) => c.herramienta_id === h.id)}
+                      onClick={() => openHerrModal(h)}
+                    />
+                  ))}
+                </div>
+                {herramientasFiltradas.length > herrVisible && (
+                  <div className="mt-4 text-center">
+                    <Button variant="secondary" onClick={() => setHerrVisible((n) => n + CARD_STEP)}>
+                      Mostrar más ({herramientasFiltradas.length - herrVisible} restantes)
+                    </Button>
+                  </div>
+                )}
+              </>
             )
           )}
         </div>
@@ -760,13 +801,18 @@ export default function MisPedidos() {
                   <FolderKanban size={11} /> Proyecto <span className="text-red-500">*</span>
                 </label>
                 <Select
-                  value={proyecto}
-                  onChange={(e) => setProyecto(e.target.value)}
+                  value={proyectoId}
+                  onChange={(e) => {
+                    const pid = e.target.value
+                    setProyectoId(pid)
+                    const p = proyectos.find((x) => String(x.id) === pid)
+                    setProyecto(p ? `${p.numero_proyecto} — ${p.nombre || ''}`.trim() : '')
+                  }}
                 >
                   <option value="">Selecciona un proyecto…</option>
                   {proyectos.map((p) => {
                     const txt = `${p.numero_proyecto} — ${p.nombre || ''}`.trim()
-                    return <option key={p.id} value={txt}>{txt}</option>
+                    return <option key={p.id} value={p.id}>{txt}</option>
                   })}
                 </Select>
               </div>

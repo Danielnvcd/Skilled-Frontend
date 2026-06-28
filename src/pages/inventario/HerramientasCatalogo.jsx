@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Wrench, Plus, Search, Trash2, Edit2, Eye } from 'lucide-react'
@@ -19,11 +19,23 @@ const FORM_INICIAL = {
   uso: 'OTRO', unidad: 'pieza', piezas: 1, serializada: true, imagen_url: '',
 }
 
+const HERR_PAGE_SIZE = 60
+
 export default function HerramientasCatalogo() {
   const [clasifs, setClasifs] = useState([])
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [clasifFiltro, setClasifFiltro] = useState('')
   const [serFiltro, setSerFiltro] = useState('')
+  const [page, setPage] = useState(0)
+
+  // Debounce de la búsqueda (server-side): no pegamos al backend por cada tecla.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(t)
+  }, [search])
+  // Volver a la página 1 al cambiar cualquier filtro.
+  useEffect(() => { setPage(0) }, [debouncedSearch, clasifFiltro, serFiltro])
 
   const [openForm, setOpenForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -33,17 +45,28 @@ export default function HerramientasCatalogo() {
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Filtrado y paginación SERVER-SIDE: con miles de herramientas no se puede
+  // bajar todo y filtrar en cliente (las herramientas más allá del límite
+  // quedaban invisibles). El backend soporta q / clasificacion / serializada.
   const {
     data: rawItems,
     loading,
     error,
     refetch,
   } = useResource(
-    ['herramientas', 'catalogo'],
-    () => getHerramientas(),
+    ['herramientas', 'catalogo', { q: debouncedSearch, clasif: clasifFiltro, ser: serFiltro, page }],
+    () => getHerramientas({
+      q: debouncedSearch || undefined,
+      clasificacion: clasifFiltro || undefined,
+      serializada: serFiltro || undefined,
+      skip: page * HERR_PAGE_SIZE,
+      limit: HERR_PAGE_SIZE,
+    }),
     { staleMs: 30_000, invalidateOn: ['herramienta:changed'] },
   )
-  const items = rawItems ?? []
+  const filtered = rawItems ?? []
+  // Sin total del backend: si la página vino llena, asumimos que hay más.
+  const hayMas = filtered.length === HERR_PAGE_SIZE
 
   useEffect(() => {
     if (error) toast.error(extractApiError(error, 'Error cargando herramientas'))
@@ -54,23 +77,6 @@ export default function HerramientasCatalogo() {
   useEffect(() => {
     getClasificaciones().then(setClasifs).catch(() => {})
   }, [])
-
-  const filtered = useMemo(() => {
-    let r = items
-    if (search.trim()) {
-      const s = search.toLowerCase()
-      r = r.filter((h) => (
-        h.sku?.toLowerCase().includes(s) ||
-        h.descripcion?.toLowerCase().includes(s) ||
-        h.marca?.toLowerCase().includes(s) ||
-        h.modelo?.toLowerCase().includes(s)
-      ))
-    }
-    if (clasifFiltro) r = r.filter((h) => h.clasificacion === clasifFiltro)
-    if (serFiltro === 'true') r = r.filter((h) => h.serializada)
-    if (serFiltro === 'false') r = r.filter((h) => !h.serializada)
-    return r
-  }, [items, search, clasifFiltro, serFiltro])
 
   const handleOpenNuevo = () => {
     setForm(FORM_INICIAL)
@@ -287,6 +293,19 @@ export default function HerramientasCatalogo() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Paginación server-side (sin total: Prev/Siguiente por página) */}
+      {!loading && (page > 0 || hayMas) && (
+        <div className="flex items-center justify-end gap-2 text-sm">
+          <span className="text-ink-500 mr-auto">Página {page + 1}</span>
+          <Button variant="secondary" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+            Anterior
+          </Button>
+          <Button variant="secondary" size="sm" disabled={!hayMas} onClick={() => setPage((p) => p + 1)}>
+            Siguiente
+          </Button>
         </div>
       )}
 

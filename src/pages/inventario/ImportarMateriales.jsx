@@ -39,11 +39,12 @@ export default function ImportarMateriales() {
       // Sin esto, al volver al catálogo dentro de la ventana de staleMs (30s) se
       // muestran los productos viejos (la categoría sí aparece porque se refetcha
       // en cada montaje). Invalidamos a mano para forzar el refetch al volver.
-      if (res.exitosos > 0) {
+      if (res.exitosos > 0 || res.actualizados > 0) {
         invalidate('productos')
         invalidate('movimientos')
       }
       if (res.exitosos > 0) toast.success(`${res.exitosos} productos importados`)
+      if (res.actualizados > 0) toast.success(`${res.actualizados} productos actualizados`)
       if (res.categorias_creadas?.length > 0) {
         toast.success(`${res.categorias_creadas.length} categoría(s) nueva(s) creada(s) automáticamente`)
       }
@@ -99,8 +100,9 @@ export default function ImportarMateriales() {
           <ul className="text-sm text-ink-500 dark:text-ink-400 space-y-1 list-disc list-inside flex-1">
             <li>No alteres los encabezados</li>
             <li>SKU único (A-Z 0-9 - _ . /)</li>
-            <li>Stock: solo números &ge; 0</li>
-            <li>URL Imagen es opcional — solo HTTPS</li>
+            <li>Stock y Precio: solo números &ge; 0</li>
+            <li>Precio y URL Imagen son opcionales</li>
+            <li>Si el SKU ya existe, se <strong>actualiza</strong> (el stock no se toca)</li>
           </ul>
         </Card>
 
@@ -168,11 +170,16 @@ export default function ImportarMateriales() {
         <Card className="p-6 space-y-4">
           <h3 className="font-bold text-ink-900 dark:text-ink-100">Resultado de la importación</h3>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
               <CheckCircle2 size={28} className="mx-auto text-emerald-600 mb-1" />
               <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{resultado.exitosos}</p>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">Productos importados</p>
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">Nuevos</p>
+            </div>
+            <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl p-4 text-center">
+              <CheckCircle2 size={28} className="mx-auto text-sky-600 mb-1" />
+              <p className="text-2xl font-bold text-sky-700 dark:text-sky-400">{resultado.actualizados ?? 0}</p>
+              <p className="text-sm text-sky-600 dark:text-sky-400">Actualizados</p>
             </div>
             <div className={`border rounded-xl p-4 text-center ${resultado.errores.length > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-ink-50 dark:bg-ink-800 border-ink-200 dark:border-ink-700'}`}>
               <XCircle size={28} className={`mx-auto mb-1 ${resultado.errores.length > 0 ? 'text-red-600' : 'text-ink-400'}`} />
