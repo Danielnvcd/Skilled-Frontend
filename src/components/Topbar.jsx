@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { PanelLeft, Sun, Moon, RotateCw } from 'lucide-react'
+import { PanelLeft, Sun, Moon, RotateCw, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
@@ -7,12 +7,19 @@ import NotificacionesBell from './NotificacionesBell'
 import AlertasBell from './AlertasBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
+import { ConfirmDialog } from './ui'
 import { forceReload } from '../utils/forceReload'
 
 export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobileDevice = false }) {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
+  const [confirmLogout, setConfirmLogout] = useState(false)
+
+  // En los roles inventario y coordinador, la versión móvil en modo claro usa el
+  // logo alterno (logo1.png de /public); el resto mantiene logo.png.
+  const usaLogoAlterno = ['inventario', 'coordinador'].includes(user?.role)
+  const mobileLogo = (usaLogoAlterno && !isDark) ? '/logo1.png' : '/logo.png'
 
   // Fuerza traer la última versión desplegada (limpia service worker + cachés).
   const [reloading, setReloading] = useState(false)
@@ -23,13 +30,14 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
   }
 
   return (
+    <>
     <header className="sticky top-0 z-30 bg-white/85 dark:bg-ink-900/85 backdrop-blur border-b border-ink-200 dark:border-ink-800">
       <div className="flex items-center justify-between gap-3 px-4 sm:px-6 h-16">
         <div className="flex items-center gap-2 min-w-0">
           {isMobileDevice ? (
             <Link to="/" className="flex items-center" aria-label="Inicio">
               <img
-                src="/logo.png"
+                src={mobileLogo}
                 alt="Skilled"
                 className="h-8 max-w-[120px] object-contain"
                 draggable={false}
@@ -82,8 +90,30 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
               size="md"
             />
           </Link>
+
+          {/* Cerrar sesión: en escritorio el logout vive en el sidebar, así que
+              este botón se muestra solo en móvil (donde no hay sidebar visible). */}
+          <button
+            onClick={() => setConfirmLogout(true)}
+            className="sm:hidden inline-flex h-9 w-9 items-center justify-center rounded-md text-ink-600 dark:text-ink-300 hover:bg-rose-50 dark:hover:bg-rose-900/30 hover:text-rose-600 dark:hover:text-rose-400 focus-ring transition-colors"
+            aria-label="Cerrar sesión"
+            title="Cerrar sesión"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </div>
     </header>
+
+    <ConfirmDialog
+      open={confirmLogout}
+      onClose={() => setConfirmLogout(false)}
+      onConfirm={() => { setConfirmLogout(false); logout() }}
+      title="Cerrar sesión"
+      description="¿Seguro que quieres cerrar tu sesión?"
+      confirmLabel="Cerrar sesión"
+      tone="warning"
+    />
+    </>
   )
 }

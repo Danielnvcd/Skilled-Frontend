@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { AlertTriangle, Eye, CheckCircle2, XCircle, Ban } from 'lucide-react'
 import {
   Card, PageHeader, Modal, Skeleton, Badge, Button, Select, EmptyState,
-  Table, THead, TH, TBody, TR, TD,
+  Table, THead, TH, TBody, TR, TD, ConfirmDialog, Textarea, InfoTip,
 } from '../../components/ui'
 import {
   getIncidencias, atenderIncidencia,
@@ -22,6 +22,9 @@ export default function IncidenciasYBajas() {
   const [estadoBaja, setEstadoBaja] = useState('PENDIENTE')
   const [atender, setAtender] = useState(null)
   const [busy, setBusy] = useState(false)
+  // Confirmaciones con UI propia (sin confirm()/prompt() nativos del navegador).
+  const [confirmAccion, setConfirmAccion] = useState(null)  // { id, tipo: 'aceptar' | 'ejecutar' }
+  const [rechazo, setRechazo] = useState(null)              // { id, motivo }
 
   const {
     data: rawIncs,
@@ -54,17 +57,6 @@ export default function IncidenciasYBajas() {
 
   const load = () => { refetchIncs(); refetchBajas() }
 
-  const handleEjecutar = async (id) => {
-    if (!confirm('¿Ejecutar la baja? La unidad quedará DADA_DE_BAJA.')) return
-    setBusy(true)
-    try {
-      await ejecutarBaja(id)
-      toast.success('Baja ejecutada')
-      load()
-    } catch (e) { toast.error(extractApiError(e, 'Error')) }
-    finally { setBusy(false) }
-  }
-
   const handleAutorizar = async (id) => {
     setBusy(true)
     try {
@@ -75,13 +67,35 @@ export default function IncidenciasYBajas() {
     finally { setBusy(false) }
   }
 
-  const handleRechazar = async (id) => {
-    const obs = prompt('Motivo del rechazo:')
-    if (obs === null) return
+  // Ejecuta la confirmación del diálogo. 'aceptar' = autorizar + ejecutar en un
+  // paso (la unidad queda DADA_DE_BAJA y se libera su asignación de inmediato);
+  // 'ejecutar' = solo ejecutar una baja ya APROBADA.
+  const confirmarAccion = async () => {
+    if (!confirmAccion) return
+    const { id, tipo } = confirmAccion
     setBusy(true)
     try {
-      await rechazarBaja(id, { observaciones: obs || null })
+      if (tipo === 'aceptar') {
+        await autorizarBaja(id, {})
+        await ejecutarBaja(id)
+        toast.success('Baja aceptada y ejecutada')
+      } else {
+        await ejecutarBaja(id)
+        toast.success('Baja ejecutada')
+      }
+      setConfirmAccion(null)
+      load()
+    } catch (e) { toast.error(extractApiError(e, 'Error')) }
+    finally { setBusy(false) }
+  }
+
+  const confirmarRechazo = async () => {
+    if (!rechazo) return
+    setBusy(true)
+    try {
+      await rechazarBaja(rechazo.id, { observaciones: rechazo.motivo?.trim() || null })
       toast.success('Solicitud rechazada')
+      setRechazo(null)
       load()
     } catch (e) { toast.error(extractApiError(e, 'Error')) }
     finally { setBusy(false) }
@@ -90,7 +104,10 @@ export default function IncidenciasYBajas() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader icon={AlertTriangle}
-                  title="Incidencias y Solicitudes de Baja"
+                  title={<span className="inline-flex items-center gap-1.5">
+                    Incidencias y Solicitudes de Baja
+                    <InfoTip text="Bandeja de inventario para atender lo que reportan los demás. En bajas: “Aceptar y dar de baja” autoriza y ejecuta en un paso; “Solo autorizar” deja la baja pendiente de ejecutar." />
+                  </span>}
                   description="Bandeja de entrada para inventario" />
 
       <div className="flex gap-1 border-b border-ink-200 dark:border-ink-800">
@@ -212,16 +229,21 @@ export default function IncidenciasYBajas() {
                         <div className="inline-flex gap-1">
                           {b.estado === 'PENDIENTE' && (
                             <>
-                              <Button size="sm" onClick={() => handleAutorizar(b.id)} disabled={busy}>
-                                <CheckCircle2 size={14} className="mr-1" /> Autorizar
+                              <Button size="sm" onClick={() => setConfirmAccion({ id: b.id, tipo: 'aceptar' })} disabled={busy}
+                                      title="Autoriza y da de baja la unidad de inmediato">
+                                <CheckCircle2 size={14} className="mr-1" /> Aceptar y dar de baja
                               </Button>
-                              <Button size="sm" variant="ghost" onClick={() => handleRechazar(b.id)} disabled={busy}>
+                              <Button size="sm" variant="secondary" onClick={() => handleAutorizar(b.id)} disabled={busy}
+                                      title="Solo autoriza; la baja se ejecuta después con “Ejecutar baja”">
+                                Solo autorizar
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => setRechazo({ id: b.id, motivo: '' })} disabled={busy}>
                                 <XCircle size={14} className="mr-1" /> Rechazar
                               </Button>
                             </>
                           )}
                           {b.estado === 'APROBADA' && (
-                            <Button size="sm" onClick={() => handleEjecutar(b.id)} disabled={busy}>
+                            <Button size="sm" onClick={() => setConfirmAccion({ id: b.id, tipo: 'ejecutar' })} disabled={busy}>
                               <Ban size={14} className="mr-1" /> Ejecutar baja
                             </Button>
                           )}
@@ -240,6 +262,40 @@ export default function IncidenciasYBajas() {
         <ModalAtender inc={atender} onClose={() => setAtender(null)}
                        onDone={() => { setAtender(null); load() }} />
       )}
+
+      {/* Confirmación de aceptar / ejecutar baja (sin confirm() nativo) */}
+      <ConfirmDialog
+        open={!!confirmAccion}
+        onClose={() => !busy && setConfirmAccion(null)}
+        onConfirm={confirmarAccion}
+        loading={busy}
+        tone="danger"
+        title={confirmAccion?.tipo === 'aceptar' ? 'Aceptar y dar de baja' : 'Ejecutar baja'}
+        description="La unidad quedará DADA_DE_BAJA y se cerrará su asignación. Esta acción no se puede deshacer."
+        confirmLabel={confirmAccion?.tipo === 'aceptar' ? 'Aceptar y dar de baja' : 'Ejecutar baja'}
+      />
+
+      {/* Rechazo con motivo (sin prompt() nativo) */}
+      <Modal
+        open={!!rechazo}
+        onClose={() => !busy && setRechazo(null)}
+        title="Rechazar solicitud de baja"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRechazo(null)} disabled={busy}>Cancelar</Button>
+            <Button variant="danger" onClick={confirmarRechazo} loading={busy}>Rechazar</Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Motivo del rechazo (opcional)"
+          rows={3}
+          value={rechazo?.motivo || ''}
+          onChange={(e) => setRechazo((r) => ({ ...r, motivo: e.target.value }))}
+          placeholder="Explica por qué se rechaza la baja…"
+        />
+      </Modal>
     </div>
   )
 }

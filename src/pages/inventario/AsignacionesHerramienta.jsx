@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { HardHat, Plus, Search, Eye, Info, Undo2, ChevronsUpDown } from 'lucide-react'
 import {
   Button, Card, PageHeader, Modal, Skeleton, Badge,
-  Input, Select, EmptyState,
+  Input, Select, EmptyState, InfoTip,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import {
@@ -210,10 +210,14 @@ export default function AsignacionesHerramienta() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader title="Asignaciones de Herramientas"
+      <PageHeader
+        title={<span className="inline-flex items-center gap-1.5">
+          Asignaciones de Herramientas
+          <InfoTip text="Préstamo/entrega de una unidad a un trabajador. Mientras está asignada, la unidad queda como ASIGNADA. Usa “Devolver” cuando la regresen." />
+        </span>}
         description="Préstamo de unidades a trabajadores"
         actions={
-          <Button onClick={() => setOpenForm(true)}>
+          <Button onClick={() => setOpenForm(true)} title="Prestar/entregar una unidad disponible a un trabajador">
             <Plus size={16} className="mr-1.5" /> Nueva asignación
           </Button>
         } />
@@ -282,7 +286,7 @@ export default function AsignacionesHerramienta() {
                   <TD align="right">
                     <div className="inline-flex items-center gap-1 justify-end">
                       {a.estado === 'ACTIVA' && (
-                        <Button size="sm" variant="ghost" onClick={() => abrirDevolver(a)}>
+                        <Button size="sm" variant="ghost" onClick={() => abrirDevolver(a)} title="Registrar la devolución de esta unidad (vuelve a DISPONIBLE)">
                           <Undo2 size={15} className="mr-1" /> Devolver
                         </Button>
                       )}

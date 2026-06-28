@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Search, Users as UsersIcon, AlertCircle } from 'lucide-react'
-import { Modal, Button, Input, Select } from '../../components/ui'
+import { Modal, Button, Input, Select, ConfirmDialog } from '../../components/ui'
 import { obtenerMeta, obtenerProyecto, crearProyecto, actualizarProyecto } from '../../api/proyectos'
 import { useResource } from '../../hooks/useResource'
 
@@ -25,6 +25,8 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
   const [saving, setSaving] = useState(false)
   const [filterParticipantes, setFilterParticipantes] = useState('')
   const [errors, setErrors] = useState({})
+  // Confirmación de "cerrar con cambios sin guardar" con UI propia (sin window.confirm).
+  const [confirmClose, setConfirmClose] = useState(false)
   // Estado inicial del form para detectar cambios sin guardar al cerrar.
   const initialRef = useRef(snapshot(EMPTY_FORM))
 
@@ -75,7 +77,12 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
 
   const requestClose = () => {
     if (saving) return
-    if (isDirty() && !window.confirm('Hay cambios sin guardar. ¿Cerrar de todas formas?')) return
+    if (isDirty()) { setConfirmClose(true); return }
+    onClose?.()
+  }
+
+  const doClose = () => {
+    setConfirmClose(false)
     onClose?.()
   }
 
@@ -142,6 +149,7 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
   const seleccionadosCount = form.participantes_ids.length
 
   return (
+    <>
     <Modal
       open={open}
       onClose={saving ? undefined : requestClose}
@@ -281,5 +289,17 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
         </div>
       </form>
     </Modal>
+
+    <ConfirmDialog
+      open={confirmClose}
+      onClose={() => setConfirmClose(false)}
+      onConfirm={doClose}
+      title="Cambios sin guardar"
+      description="Hay cambios sin guardar. ¿Cerrar de todas formas? Se perderán los cambios."
+      confirmLabel="Cerrar sin guardar"
+      cancelLabel="Seguir editando"
+      tone="warning"
+    />
+    </>
   )
 }

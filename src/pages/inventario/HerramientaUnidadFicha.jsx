@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  Badge, Skeleton, Input, Select, AuthImage, ImageViewer,
+  Badge, Skeleton, Input, Select, AuthImage, ImageViewer, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -37,6 +37,12 @@ export default function HerramientaUnidadFicha() {
   const { id } = useParams()
   const { user } = useAuth()
   const esInventario = ['inventario', 'admin', 'super_admin'].includes(user?.role)
+  // El coordinador solo necesita lo indispensable para identificar la herramienta
+  // y solicitar su baja: nada de costos, vida útil, ubicación ni bitácoras.
+  const esCoordinador = user?.role === 'coordinador'
+
+  // Pestañas visibles según rol. El coordinador solo ve General y sus bajas.
+  const tabs = esCoordinador ? ['general', 'bajas'] : TABS
 
   const [unidad, setUnidad] = useState(null)
   const [eventos, setEventos] = useState([])
@@ -53,11 +59,13 @@ export default function HerramientaUnidadFicha() {
   const recarga = useCallback(async () => {
     setLoading(true)
     try {
+      // El coordinador solo ve General + sus bajas: omitimos timeline,
+      // mantenimientos e incidencias para no hacer peticiones de más.
       const [u, e, m, i, b] = await Promise.all([
         getUnidad(id),
-        getEventosUnidad(id),
+        esCoordinador ? Promise.resolve([]) : getEventosUnidad(id),
         esInventario ? getMantenimientos({ unidad_id: id }) : Promise.resolve([]),
-        getIncidencias({ unidad_id: id }),
+        esCoordinador ? Promise.resolve([]) : getIncidencias({ unidad_id: id }),
         getSolicitudesBaja({ unidad_id: id }).catch(() => []),
       ])
       setUnidad(u)
@@ -70,7 +78,7 @@ export default function HerramientaUnidadFicha() {
     } finally {
       setLoading(false)
     }
-  }, [id, esInventario])
+  }, [id, esInventario, esCoordinador])
 
   useEffect(() => { recarga() }, [recarga])
 
@@ -91,7 +99,10 @@ export default function HerramientaUnidadFicha() {
       </div>
 
       <PageHeader
-        title={unidad.herramienta?.descripcion || 'Herramienta'}
+        title={<span className="inline-flex items-center gap-1.5">
+          {unidad.herramienta?.descripcion || 'Herramienta'}
+          <InfoTip text="Ficha de una unidad física. Desde aquí se asigna, se manda a mantenimiento, se reportan incidencias o se solicita/ejecuta su baja, según tu rol." />
+        </span>}
         description={`SKU ${unidad.herramienta?.sku} · ${unidad.herramienta?.marca || ''} ${unidad.herramienta?.modelo || ''}`}
         actions={
           <div className="flex flex-wrap gap-2">
@@ -99,27 +110,27 @@ export default function HerramientaUnidadFicha() {
               {ESTADO_LABEL[unidad.estado]}
             </Badge>
             {esInventario && unidad.estado === 'ASIGNADA' && asig && (
-              <Button size="sm" onClick={() => setModal('devolver')}>
+              <Button size="sm" onClick={() => setModal('devolver')} title="Registrar que el trabajador devolvió esta unidad">
                 <UserCheck size={14} className="mr-1" /> Recibir devolución
               </Button>
             )}
             {esInventario && ['DISPONIBLE', 'ASIGNADA', 'DAÑADA'].includes(unidad.estado) && (
-              <Button size="sm" variant="ghost" onClick={() => setModal('mant')}>
+              <Button size="sm" variant="ghost" onClick={() => setModal('mant')} title="Mandar esta unidad a mantenimiento (quedará EN_MANTENIMIENTO)">
                 <Settings2 size={14} className="mr-1" /> Enviar a mantenimiento
               </Button>
             )}
             {(['solicitante_material', 'inventario', 'admin', 'super_admin'].includes(user?.role)) && (
-              <Button size="sm" variant="ghost" onClick={() => setModal('inc')}>
+              <Button size="sm" variant="ghost" onClick={() => setModal('inc')} title="Reportar una incidencia (daño, extravío, etc.) de esta unidad">
                 <AlertTriangle size={14} className="mr-1" /> Reportar incidencia
               </Button>
             )}
             {unidad.estado !== 'DADA_DE_BAJA' && (
               esInventario ? (
-                <Button size="sm" variant="ghost" onClick={() => setModal('baja-directa')}>
+                <Button size="sm" variant="ghost" onClick={() => setModal('baja-directa')} title="Dar de baja la unidad ahora mismo (autoriza y ejecuta en un paso)">
                   <Ban size={14} className="mr-1" /> Dar de baja
                 </Button>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => setModal('baja')}>
+                <Button size="sm" variant="ghost" onClick={() => setModal('baja')} title="Enviar a inventario una solicitud de baja para esta unidad">
                   <Send size={14} className="mr-1" /> Solicitar baja
                 </Button>
               )
@@ -130,7 +141,7 @@ export default function HerramientaUnidadFicha() {
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-1 border-b border-ink-200 dark:border-ink-800">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -170,22 +181,27 @@ export default function HerramientaUnidadFicha() {
           </Card>
 
           <Card className="p-4 lg:col-span-2 space-y-3">
-            <h3 className="text-sm font-semibold border-b border-ink-200 dark:border-ink-800 pb-2">Datos físicos</h3>
+            <h3 className="text-sm font-semibold border-b border-ink-200 dark:border-ink-800 pb-2">
+              {esCoordinador ? 'Identificación' : 'Datos físicos'}
+            </h3>
             <DataRow k="Código interno" v={<span className="font-mono">{unidad.codigo_interno}</span>} />
             <DataRow k="No. de serie" v={unidad.no_serie || '—'} />
-            <DataRow k="Cantidad" v={unidad.cantidad} />
-            <DataRow k="Almacén" v={unidad.almacen_nombre || '—'} />
-            <DataRow k="Estante" v={unidad.estante_nombre || '—'} />
-            <DataRow k="Complementos" v={unidad.complementos || '—'} />
-            <DataRow k="Fecha adquisición" v={unidad.fecha_adquisicion || '—'} />
-            <DataRow k="Costo adquisición" v={unidad.costo_adquisicion ? `$${unidad.costo_adquisicion.toLocaleString('es-MX')}` : '—'} />
-            <DataRow k="Vida útil" v={unidad.vida_util_meses ? `${unidad.vida_util_meses} meses` : '—'} />
-            {unidad.observaciones && (
-              <div className="text-sm">
-                <div className="text-xs uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1">Observaciones</div>
-                <div className="whitespace-pre-wrap">{unidad.observaciones}</div>
-              </div>
-            )}
+            <DataRow k="Estado" v={ESTADO_LABEL[unidad.estado] || unidad.estado} />
+            {!esCoordinador && <>
+              <DataRow k="Cantidad" v={unidad.cantidad} />
+              <DataRow k="Almacén" v={unidad.almacen_nombre || '—'} />
+              <DataRow k="Estante" v={unidad.estante_nombre || '—'} />
+              <DataRow k="Complementos" v={unidad.complementos || '—'} />
+              <DataRow k="Fecha adquisición" v={unidad.fecha_adquisicion || '—'} />
+              <DataRow k="Costo adquisición" v={unidad.costo_adquisicion ? `$${unidad.costo_adquisicion.toLocaleString('es-MX')}` : '—'} />
+              <DataRow k="Vida útil" v={unidad.vida_util_meses ? `${unidad.vida_util_meses} meses` : '—'} />
+              {unidad.observaciones && (
+                <div className="text-sm">
+                  <div className="text-xs uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1">Observaciones</div>
+                  <div className="whitespace-pre-wrap">{unidad.observaciones}</div>
+                </div>
+              )}
+            </>}
 
             {asig && (
               <div className="mt-4 p-3 rounded-lg bg-sky-500/10 border border-sky-500/20">

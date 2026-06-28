@@ -177,9 +177,9 @@ function MobileInventarioHome() {
           <span className="text-sm font-medium flex-1">Registrar movimiento</span>
           <ChevronRight size={16} className="text-ink-400" />
         </Link>
-        <Link to="/inventario/tomas" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
+        <Link to="/inventario/solicitudes" className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3 active:bg-ink-50 dark:active:bg-ink-800">
           <ClipboardList size={18} className="text-ink-500 dark:text-ink-400" strokeWidth={1.8} />
-          <span className="text-sm font-medium flex-1">Tomas físicas</span>
+          <span className="text-sm font-medium flex-1">Solicitudes</span>
           <ChevronRight size={16} className="text-ink-400" />
         </Link>
       </div>

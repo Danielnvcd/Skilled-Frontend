@@ -77,6 +77,15 @@ export const MENUS = {
       ],
     },
     {
+      // Coordinador ve sus herramientas asignadas y puede solicitar baja / reportar
+      // incidencias desde la ficha de cada unidad.
+      label: 'Herramientas',
+      items: [
+        { path: '/inventario/mis-herramientas', label: 'Mis herramientas', icon: Hammer },
+        { path: '/inventario/mis-incidencias', label: 'Mis incidencias / bajas', icon: AlertTriangle },
+      ],
+    },
+    {
       label: 'Ayuda',
       items: [
         { path: '/manual-coordinador', label: 'Manual de uso', icon: BookOpen },

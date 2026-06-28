@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { AlertTriangle, Ban } from 'lucide-react'
-import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../../components/ui'
+import { Card, PageHeader, Badge, EmptyState, Skeleton, InfoTip } from '../../components/ui'
 import { getIncidencias, getSolicitudesBaja } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
@@ -43,8 +43,12 @@ export default function MisIncidencias() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader title="Mis incidencias y solicitudes de baja"
-                   description="Historial de reportes enviados a inventario" />
+      <PageHeader
+        title={<span className="inline-flex items-center gap-1.5">
+          Mis incidencias y solicitudes de baja
+          <InfoTip text="Historial de lo que has enviado a inventario y su estado (PENDIENTE, APROBADA/RECHAZADA, EJECUTADA). Aquí solo consultas; las creas desde la ficha de cada herramienta." />
+        </span>}
+        description="Historial de reportes enviados a inventario" />
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold flex items-center gap-2 text-ink-700 dark:text-ink-200">

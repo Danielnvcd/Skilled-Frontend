@@ -35,6 +35,9 @@ export default function AjustePeriodoDetalle() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [busyBulk, setBusyBulk] = useState(false)
+  // Eliminar un descuento individual con confirmación de UI (sin window.confirm).
+  const [confirmDelDesc, setConfirmDelDesc] = useState(null)  // descId
+  const [busyDelDesc, setBusyDelDesc] = useState(false)
   const headerCbRef = useRef(null)
 
   // useResource + invalidateOn: cuando otro admin agrega/quita descuentos
@@ -74,15 +77,23 @@ export default function AjustePeriodoDetalle() {
     }
   }
 
-  const handleEliminarDescuento = async (descId, cobrado) => {
+  const pedirEliminarDescuento = (descId, cobrado) => {
     if (cobrado) return toast.error('Este descuento ya fue cobrado en prenómina')
-    if (!window.confirm('¿Eliminar este descuento?')) return
+    setConfirmDelDesc(descId)
+  }
+
+  const confirmarEliminarDescuento = async () => {
+    if (confirmDelDesc == null) return
+    setBusyDelDesc(true)
     try {
-      await eliminarDescuento(descId)
+      await eliminarDescuento(confirmDelDesc)
       toast.success('Descuento eliminado')
+      setConfirmDelDesc(null)
       await refetch()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al eliminar')
+    } finally {
+      setBusyDelDesc(false)
     }
   }
 
@@ -328,7 +339,7 @@ export default function AjustePeriodoDetalle() {
                         <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-300">{mxn.format(d.monto)}</span>
                         {editable && !d.cobrado && (
                           <button
-                            onClick={() => handleEliminarDescuento(d.id, d.cobrado)}
+                            onClick={() => pedirEliminarDescuento(d.id, d.cobrado)}
                             className="text-ink-400 hover:text-red-600 dark:hover:text-red-400"
                             title="Eliminar"
                           >
@@ -380,6 +391,17 @@ export default function AjustePeriodoDetalle() {
         title={`Eliminar ${selectedIds.size} descuento${selectedIds.size === 1 ? '' : 's'}`}
         description="Esta acción no se puede deshacer. Los descuentos ya cobrados se omitirán automáticamente."
         confirmLabel="Eliminar selección"
+        tone="danger"
+      />
+
+      <ConfirmDialog
+        open={confirmDelDesc != null}
+        onClose={() => !busyDelDesc && setConfirmDelDesc(null)}
+        onConfirm={confirmarEliminarDescuento}
+        loading={busyDelDesc}
+        title="Eliminar descuento"
+        description="¿Eliminar este descuento? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
         tone="danger"
       />
     </>

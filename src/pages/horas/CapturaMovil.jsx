@@ -5,6 +5,7 @@ import {
   CheckCircle2, Users as UsersIcon, Clock,
 } from 'lucide-react'
 import { crearRegistro, editarRegistro, eliminarRegistro } from '../../api/horas'
+import { ConfirmDialog } from '../../components/ui'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ function DayRow({
   const [local, setLocal] = useState(() => fromRegistro(registro))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
 
   // Si el padre actualiza el registro (por ej. tras refetch), sincronizar.
   useEffect(() => { setLocal(fromRegistro(registro)) }, [registro?.id, registro?.hora_entrada, registro?.hora_salida, registro?.tomo_comida, registro?.incidencia])
@@ -113,11 +115,11 @@ function DayRow({
 
   const handleDelete = async () => {
     if (!registro || !editable) return
-    if (!window.confirm('¿Eliminar este registro?')) return
     setDeleting(true)
     try {
       await eliminarRegistro(registro.id)
       toast.success('Registro eliminado')
+      setConfirmDel(false)
       onDeleted?.(registro.id)
       setLocal(defaultDayState())
     } catch (err) {
@@ -205,7 +207,7 @@ function DayRow({
           {registro && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setConfirmDel(true)}
               disabled={saving || deleting}
               className="inline-flex items-center justify-center h-9 px-3 rounded-md border border-rose-300 dark:border-rose-700/60 bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 text-sm font-semibold disabled:opacity-40 active:scale-[0.98] transition-transform"
               aria-label="Eliminar"
@@ -215,6 +217,17 @@ function DayRow({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDel}
+        onClose={() => !deleting && setConfirmDel(false)}
+        onConfirm={handleDelete}
+        loading={deleting}
+        title="Eliminar registro"
+        description="¿Eliminar este registro de horas? Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        tone="danger"
+      />
     </div>
   )
 }

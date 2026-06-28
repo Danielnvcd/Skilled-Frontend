@@ -33,40 +33,48 @@ function estadoMeta(estado) {
 
 function TrabajadorCard({ p, incidencias, prestamos, editable, onActualizar, onAjusteRapido }) {
   const [open, setOpen] = useState(false)
+  // Confirmación con UI propia (sin window.confirm). { tipo:'descuento'|'deposito', id }
+  const [confirmDel, setConfirmDel] = useState(null)
+  const [delBusy, setDelBusy] = useState(false)
 
-  const handleDelDescuento = async (descId) => {
-    if (!window.confirm('¿Eliminar este descuento?')) return
-    try {
-      const res = await eliminarDescuento(descId)
-      onActualizar({
-        ...p,
-        descuentos_detalle: p.descuentos_detalle.filter((d) => d.id !== descId),
-        total_deducciones: res.total_deducciones,
-        total_a_pagar: res.total_a_pagar,
-      })
-      toast.success('Descuento eliminado')
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al eliminar')
-    }
+  const doDelDescuento = async (descId) => {
+    const res = await eliminarDescuento(descId)
+    onActualizar({
+      ...p,
+      descuentos_detalle: p.descuentos_detalle.filter((d) => d.id !== descId),
+      total_deducciones: res.total_deducciones,
+      total_a_pagar: res.total_a_pagar,
+    })
+    toast.success('Descuento eliminado')
   }
 
-  const handleDelDeposito = async (depId) => {
-    if (!window.confirm('¿Eliminar este depósito?')) return
+  const doDelDeposito = async (depId) => {
+    const res = await eliminarDeposito(depId)
+    onActualizar({
+      ...p,
+      depositos_detalle: p.depositos_detalle.filter((d) => d.id !== depId),
+      total_percepciones: res.total_percepciones,
+      total_a_pagar: res.total_a_pagar,
+    })
+    toast.success('Depósito eliminado')
+  }
+
+  const confirmarDel = async () => {
+    if (!confirmDel) return
+    setDelBusy(true)
     try {
-      const res = await eliminarDeposito(depId)
-      onActualizar({
-        ...p,
-        depositos_detalle: p.depositos_detalle.filter((d) => d.id !== depId),
-        total_percepciones: res.total_percepciones,
-        total_a_pagar: res.total_a_pagar,
-      })
-      toast.success('Depósito eliminado')
+      if (confirmDel.tipo === 'descuento') await doDelDescuento(confirmDel.id)
+      else await doDelDeposito(confirmDel.id)
+      setConfirmDel(null)
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al eliminar')
+    } finally {
+      setDelBusy(false)
     }
   }
 
   return (
+    <>
     <div className="rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 overflow-hidden">
       <button
         type="button"
@@ -170,7 +178,7 @@ function TrabajadorCard({ p, incidencias, prestamos, editable, onActualizar, onA
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-red-600 dark:text-red-400">- {mxn.format(d.monto)}</span>
                       {editable && (
-                        <button onClick={() => handleDelDescuento(d.id)} className="text-ink-400 hover:text-red-600 dark:hover:text-red-400" title="Eliminar"><X size={14} /></button>
+                        <button onClick={() => setConfirmDel({ tipo: 'descuento', id: d.id })} className="text-ink-400 hover:text-red-600 dark:hover:text-red-400" title="Eliminar"><X size={14} /></button>
                       )}
                     </div>
                   </li>
@@ -201,7 +209,7 @@ function TrabajadorCard({ p, incidencias, prestamos, editable, onActualizar, onA
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-emerald-700 dark:text-emerald-300">+ {mxn.format(d.monto)}</span>
                       {editable && (
-                        <button onClick={() => handleDelDeposito(d.id)} className="text-ink-400 hover:text-red-600 dark:hover:text-red-400" title="Eliminar"><X size={14} /></button>
+                        <button onClick={() => setConfirmDel({ tipo: 'deposito', id: d.id })} className="text-ink-400 hover:text-red-600 dark:hover:text-red-400" title="Eliminar"><X size={14} /></button>
                       )}
                     </div>
                   </li>
@@ -245,6 +253,18 @@ function TrabajadorCard({ p, incidencias, prestamos, editable, onActualizar, onA
         </div>
       )}
     </div>
+
+    <ConfirmDialog
+      open={!!confirmDel}
+      onClose={() => !delBusy && setConfirmDel(null)}
+      onConfirm={confirmarDel}
+      loading={delBusy}
+      tone="danger"
+      title={confirmDel?.tipo === 'deposito' ? 'Eliminar depósito' : 'Eliminar descuento'}
+      description={`¿Eliminar este ${confirmDel?.tipo === 'deposito' ? 'depósito' : 'descuento'}? Esta acción no se puede deshacer.`}
+      confirmLabel="Eliminar"
+    />
+    </>
   )
 }
 

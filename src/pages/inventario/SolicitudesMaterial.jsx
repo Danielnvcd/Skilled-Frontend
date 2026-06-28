@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, ConfirmDialog,
-  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Badge, Modal, Select, SavedViews,
+  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Badge, Modal, Select, SavedViews, InfoTip,
 } from '../../components/ui'
 import {
   getSolicitudes, updateSolicitudEstado, imprimirSolicitud,
@@ -218,7 +218,12 @@ export default function SolicitudesMaterial() {
     <div>
       <PageHeader
         icon={ClipboardList}
-        title={isAdmin ? 'Solicitudes de Material' : 'Mis solicitudes'}
+        title={<span className="inline-flex items-center gap-1.5">
+          {isAdmin ? 'Solicitudes de Material' : 'Mis solicitudes'}
+          <InfoTip text={isAdmin
+            ? 'Bandeja para revisar pedidos: aprobar, rechazar o entregar. El comprobante en PDF se imprime con el ícono de impresora.'
+            : 'Tus pedidos y su estado (pendiente, aprobada, entregada o rechazada). Para crear uno nuevo usa “Pedir material”.'} />
+        </span>}
         description={
           isAdmin
             ? 'Gestión de solicitudes realizadas por los empleados.'
@@ -393,7 +398,7 @@ export default function SolicitudesMaterial() {
               : 'Sin solicitudes para los filtros seleccionados.'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden md:block">
             <Table>
               <THead>
                 <THSort field="id" sort={sort} dir={dir} onSort={onSort}>ID</THSort>
@@ -476,6 +481,62 @@ export default function SolicitudesMaterial() {
                 )})}
               </TBody>
             </Table>
+          </div>
+        )}
+
+        {/* Móvil: tarjetas */}
+        {!loading && sorted.length > 0 && (
+          <div className="md:hidden space-y-2 p-3">
+            {sorted.map((s) => {
+              const tienePendiente = isAprobadaConPendiente(s)
+              return (
+                <div key={s.id} className="rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-ink-900 dark:text-ink-100 truncate">
+                        <span className="font-mono text-ink-500">#{s.id}</span> · {s.solicitante_nombre}
+                      </p>
+                      <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">
+                        {s.proyecto || 'Sin proyecto'} · {s.detalles?.length || 0} ítem{(s.detalles?.length || 0) === 1 ? '' : 's'}
+                      </p>
+                      <p className="text-[11px] text-ink-400">
+                        {new Date(s.fecha_creacion).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <Badge tone={getStatusTone(s.estatus)} dot>{ESTATUS_LABEL[s.estatus] || s.estatus}</Badge>
+                      {s.estatus === 'APROBADA' && tienePendiente && (
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold uppercase tracking-wide">Falta entregar</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-1 mt-2 border-t border-ink-100 dark:border-ink-800 pt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setViewDetails(s)}>Ver detalles</Button>
+                    <Button variant="ghost" size="icon-sm" title="Imprimir comprobante (PDF)"
+                            onClick={() => handlePrint(s.id)} loading={printingId === s.id} disabled={printingId === s.id}>
+                      <Printer size={16} className="text-brand-600 dark:text-brand-300" />
+                    </Button>
+                    {isAdmin && s.estatus === 'PENDIENTE' && (
+                      <>
+                        <Button variant="ghost" size="icon-sm" title="Aprobar"
+                                onClick={() => setConfirmStatus({ id: s.id, newStatus: 'APROBADA', title: 'Aprobar solicitud', text: '¿Confirmas la aprobación de esta solicitud?' })}>
+                          <CheckCircle2 size={16} className="text-emerald-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon-sm" title="Rechazar"
+                                onClick={() => setConfirmStatus({ id: s.id, newStatus: 'RECHAZADA', title: 'Rechazar solicitud', text: '¿Confirmas el rechazo de esta solicitud?' })}>
+                          <XCircle size={16} className="text-red-600" />
+                        </Button>
+                      </>
+                    )}
+                    {isAdmin && s.estatus === 'APROBADA' && (
+                      <Button variant="primary" size="sm" onClick={() => setEntregaTarget(s)}>
+                        <PackageCheck size={16} className="mr-1.5" /> Entregar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>

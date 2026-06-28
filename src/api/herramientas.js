@@ -28,6 +28,11 @@ export async function deleteHerramienta(id) {
   return data
 }
 
+export async function reactivarHerramienta(id) {
+  const { data } = await api.post(`${BASE}/herramientas/${id}/reactivar`)
+  return data
+}
+
 export async function getClasificaciones() {
   const { data } = await api.get(`${BASE}/herramientas/clasificaciones`)
   return data

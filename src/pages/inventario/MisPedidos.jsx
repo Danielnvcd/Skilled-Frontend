@@ -7,7 +7,7 @@ import {
   CalendarRange, FileText, Settings2, Sparkles, X,
 } from 'lucide-react'
 import {
-  Button, Card, PageHeader, Modal, Input, Select,
+  Button, Card, PageHeader, Modal, Input, Select, InfoTip,
 } from '../../components/ui'
 import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
 import { unidadPermiteDecimales } from '../../utils/unidades'
@@ -203,6 +203,16 @@ export default function MisPedidos() {
   const [tab, setTab] = useState('materiales')   // 'materiales' | 'herramientas'
 
   const [saving, setSaving] = useState(false)
+  // Hoja inferior del pedido en móvil (estilo app nativa). En escritorio el
+  // carrito vive en el panel lateral, así que este estado solo aplica a < xl.
+  const [cartOpen, setCartOpen] = useState(false)
+  // Bloquea el scroll del fondo mientras la hoja está abierta (solo móvil).
+  useEffect(() => {
+    if (!cartOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [cartOpen])
 
   const [search, setSearch] = useState('')
   const [searchHerr, setSearchHerr] = useState('')
@@ -439,6 +449,7 @@ export default function MisPedidos() {
       setProyecto('')
       setProyectoId('')
       setNotas('')
+      setCartOpen(false)
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo enviar la solicitud'))
     } finally {
@@ -488,7 +499,10 @@ export default function MisPedidos() {
     <div className="space-y-5">
       <PageHeader
         icon={ShoppingCart}
-        title="Pedir material y herramientas"
+        title={<span className="inline-flex items-center gap-1.5">
+          Pedir material y herramientas
+          <InfoTip text="Arma tu pedido: toca productos del catálogo para agregarlos, ajusta cantidades y envíalo a almacén. Lo enviado lo sigues en “Mis solicitudes”." />
+        </span>}
         description="Selecciona del catálogo y arma tu solicitud para almacén."
         actions={
           cartCount > 0 && (
@@ -662,9 +676,23 @@ export default function MisPedidos() {
           )}
         </div>
 
-        {/* ─── Carrito ─── */}
-        <div className="xl:sticky xl:top-4 xl:self-start">
-          <Card className="!p-0 overflow-hidden">
+        {/* ─── Carrito ─── (panel lateral en escritorio · hoja inferior en móvil) */}
+        {/* Backdrop solo móvil */}
+        <div
+          className={`xl:hidden fixed inset-0 z-40 bg-ink-950/50 backdrop-blur-sm transition-opacity duration-300 ${cartOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          onClick={() => setCartOpen(false)}
+        />
+        <div
+          id="mi-solicitud"
+          className={`fixed inset-x-0 bottom-0 z-50 transition-transform duration-300 ease-out
+            ${cartOpen ? 'translate-y-0' : 'translate-y-full'}
+            xl:sticky xl:inset-x-auto xl:bottom-auto xl:top-4 xl:z-auto xl:translate-y-0 xl:self-start`}
+        >
+          <Card className="!p-0 overflow-hidden rounded-b-none xl:rounded-xl flex flex-col max-h-[88vh] xl:max-h-none">
+            {/* Asa de arrastre (solo móvil) */}
+            <div className="xl:hidden pt-2 pb-1 flex justify-center" onClick={() => setCartOpen(false)}>
+              <span className="h-1.5 w-10 rounded-full bg-ink-300 dark:bg-ink-600" />
+            </div>
             {/* Header */}
             <div className="px-4 py-3 bg-brand-800 dark:bg-brand-600 text-white">
               <div className="flex items-center justify-between">
@@ -672,9 +700,19 @@ export default function MisPedidos() {
                   <ShoppingCart size={16} strokeWidth={2} />
                   Mi solicitud
                 </h3>
-                <span className="text-xs font-semibold tabular-nums bg-white/20 px-2 py-0.5 rounded-full">
-                  {cartCount} {cartCount === 1 ? 'ítem' : 'ítems'}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold tabular-nums bg-white/20 px-2 py-0.5 rounded-full">
+                    {cartCount} {cartCount === 1 ? 'ítem' : 'ítems'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCartOpen(false)}
+                    className="xl:hidden inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-white/20"
+                    aria-label="Cerrar"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -836,6 +874,7 @@ export default function MisPedidos() {
                 disabled={cartCount === 0 || !proyecto.trim()}
                 leftIcon={<Send size={14} />}
                 className="w-full"
+                title={cartCount === 0 ? 'Agrega productos al pedido primero' : !proyecto.trim() ? 'Selecciona un proyecto para poder enviar' : 'Enviar el pedido a almacén'}
               >
                 Enviar solicitud
               </Button>
@@ -851,13 +890,39 @@ export default function MisPedidos() {
                 loading={printingPdf}
                 leftIcon={<Printer size={14} />}
                 className="w-full"
+                title="Generar un PDF del pedido sin enviarlo (vista previa)"
               >
                 Imprimir PDF
               </Button>
+              <button
+                type="button"
+                onClick={() => setCartOpen(false)}
+                className="xl:hidden w-full text-center text-xs font-semibold text-brand-700 dark:text-brand-300 py-1"
+              >
+                Seguir agregando productos
+              </button>
             </div>
           </Card>
         </div>
       </div>
+
+      {/* Botón flotante (solo móvil): abre la hoja del pedido como en una app. */}
+      {cartCount > 0 && !cartOpen && (
+        <button
+          type="button"
+          onClick={() => setCartOpen(true)}
+          className="xl:hidden fixed bottom-24 right-4 z-40 inline-flex items-center gap-2 pl-4 pr-5 h-12 rounded-full bg-brand-700 text-white shadow-lg shadow-brand-900/30 active:scale-95 transition-transform"
+          aria-label="Ver mi solicitud"
+        >
+          <span className="relative inline-flex">
+            <ShoppingCart size={20} strokeWidth={2} />
+            <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center text-[10px] font-bold rounded-full bg-white text-brand-700">
+              {cartCount}
+            </span>
+          </span>
+          <span className="text-sm font-semibold">Ver pedido</span>
+        </button>
+      )}
 
       {/* ─── Modal cantidad (material) ─── */}
       <Modal

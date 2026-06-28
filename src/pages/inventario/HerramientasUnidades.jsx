@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { Hammer, Plus, Search } from 'lucide-react'
 import {
   Button, Card, PageHeader, Modal, EmptyState,
-  Input, Select, Skeleton, Badge, AuthImage,
+  Input, Select, Skeleton, Badge, AuthImage, InfoTip,
 } from '../../components/ui'
 import {
   getUnidades, createUnidad, getHerramientas, authFotoPath,
@@ -144,10 +144,13 @@ export default function HerramientasUnidades() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
-        title="Unidades de Herramientas"
+        title={<span className="inline-flex items-center gap-1.5">
+          Unidades de Herramientas
+          <InfoTip text="Cada pieza física real (con su código interno y número de serie). Toca una tarjeta para abrir su ficha: asignar, mantenimiento, incidencias o baja." />
+        </span>}
         description="Instancias físicas rastreables del catálogo"
         actions={
-          <Button onClick={() => setOpenForm(true)}>
+          <Button onClick={() => setOpenForm(true)} title="Registrar una nueva unidad física de una herramienta del catálogo">
             <Plus size={16} className="mr-1.5" /> Nueva unidad
           </Button>
         }

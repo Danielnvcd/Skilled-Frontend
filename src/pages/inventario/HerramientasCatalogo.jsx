@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Wrench, Plus, Search, Trash2, Edit2, Eye } from 'lucide-react'
+import { Wrench, Plus, Search, Trash2, Edit2, Eye, RotateCcw } from 'lucide-react'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  EmptyState, Input, Select, Skeleton, Badge,
+  EmptyState, Input, Select, Skeleton, Badge, InfoTip,
 } from '../../components/ui'
 import {
   getHerramientas, createHerramienta, updateHerramienta, deleteHerramienta,
-  getClasificaciones,
+  reactivarHerramienta, getClasificaciones,
 } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
@@ -27,7 +27,9 @@ export default function HerramientasCatalogo() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [clasifFiltro, setClasifFiltro] = useState('')
   const [serFiltro, setSerFiltro] = useState('')
+  const [incluirInactivas, setIncluirInactivas] = useState(false)
   const [page, setPage] = useState(0)
+  const [reactivandoId, setReactivandoId] = useState(null)
 
   // Debounce de la búsqueda (server-side): no pegamos al backend por cada tecla.
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function HerramientasCatalogo() {
     return () => clearTimeout(t)
   }, [search])
   // Volver a la página 1 al cambiar cualquier filtro.
-  useEffect(() => { setPage(0) }, [debouncedSearch, clasifFiltro, serFiltro])
+  useEffect(() => { setPage(0) }, [debouncedSearch, clasifFiltro, serFiltro, incluirInactivas])
 
   const [openForm, setOpenForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -54,11 +56,12 @@ export default function HerramientasCatalogo() {
     error,
     refetch,
   } = useResource(
-    ['herramientas', 'catalogo', { q: debouncedSearch, clasif: clasifFiltro, ser: serFiltro, page }],
+    ['herramientas', 'catalogo', { q: debouncedSearch, clasif: clasifFiltro, ser: serFiltro, inact: incluirInactivas, page }],
     () => getHerramientas({
       q: debouncedSearch || undefined,
       clasificacion: clasifFiltro || undefined,
       serializada: serFiltro || undefined,
+      incluir_inactivas: incluirInactivas ? 1 : undefined,
       skip: page * HERR_PAGE_SIZE,
       limit: HERR_PAGE_SIZE,
     }),
@@ -153,13 +156,29 @@ export default function HerramientasCatalogo() {
     }
   }
 
+  const handleReactivar = async (h) => {
+    setReactivandoId(h.id)
+    try {
+      await reactivarHerramienta(h.id)
+      toast.success('Herramienta reactivada')
+      load()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo reactivar'))
+    } finally {
+      setReactivandoId(null)
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
-        title="Catálogo de Herramientas"
+        title={<span className="inline-flex items-center gap-1.5">
+          Catálogo de Herramientas
+          <InfoTip text="Tipos/modelos de herramienta (no las piezas físicas). Aquí defines SKU, marca y si lleva número de serie. Las piezas reales se registran en “Unidades”." />
+        </span>}
         description="Tipos de herramienta del inventario corporativo"
         actions={
-          <Button onClick={handleOpenNuevo}>
+          <Button onClick={handleOpenNuevo} title="Registrar un nuevo tipo de herramienta en el catálogo">
             <Plus size={16} className="mr-1.5" /> Nueva herramienta
           </Button>
         }
@@ -196,6 +215,15 @@ export default function HerramientasCatalogo() {
             <option value="false">No serializadas</option>
           </Select>
         </div>
+        <label className="inline-flex items-center gap-2 text-sm text-ink-700 dark:text-ink-200 cursor-pointer pb-1.5 select-none">
+          <input
+            type="checkbox"
+            checked={incluirInactivas}
+            onChange={(e) => setIncluirInactivas(e.target.checked)}
+            className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500"
+          />
+          Mostrar inactivas
+        </label>
       </Card>
 
       {loading ? (
@@ -219,7 +247,12 @@ export default function HerramientasCatalogo() {
             const asig = stats.ASIGNADA || 0
             const otros = total - disp - asig
             return (
-              <Card key={h.id} className="!p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
+              <Card key={h.id} className={`!p-4 flex flex-col gap-3 hover:shadow-md transition-shadow ${!h.activo ? 'opacity-70 border-dashed' : ''}`}>
+                {!h.activo && (
+                  <div className="-mt-1 -mx-1">
+                    <Badge tone="neutral">Inactiva</Badge>
+                  </div>
+                )}
                 <div className="flex items-start gap-3">
                   {h.imagen_url ? (
                     <img src={h.imagen_url} alt={h.sku}
@@ -279,16 +312,31 @@ export default function HerramientasCatalogo() {
                   >
                     <Eye size={16} />
                   </Link>
-                  <button onClick={() => handleEditar(h)}
-                    className="p-1.5 rounded hover:bg-ink-100 dark:hover:bg-ink-800 text-ink-500 dark:text-ink-400 hover:text-brand-600 dark:hover:text-brand-300"
-                    title="Editar">
-                    <Edit2 size={16} />
-                  </button>
-                  <button onClick={() => setConfirmDel(h)}
-                    className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-ink-500 dark:text-ink-400 hover:text-red-600 dark:hover:text-red-400"
-                    title="Desactivar">
-                    <Trash2 size={16} />
-                  </button>
+                  {h.activo ? (
+                    <>
+                      <button onClick={() => handleEditar(h)}
+                        className="p-1.5 rounded hover:bg-ink-100 dark:hover:bg-ink-800 text-ink-500 dark:text-ink-400 hover:text-brand-600 dark:hover:text-brand-300"
+                        title="Editar">
+                        <Edit2 size={16} />
+                      </button>
+                      <button onClick={() => setConfirmDel(h)}
+                        className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/30 text-ink-500 dark:text-ink-400 hover:text-red-600 dark:hover:text-red-400"
+                        title="Desactivar">
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="success"
+                      leftIcon={<RotateCcw size={14} />}
+                      onClick={() => handleReactivar(h)}
+                      loading={reactivandoId === h.id}
+                      title="Volver a activar esta herramienta"
+                    >
+                      Activar
+                    </Button>
+                  )}
                 </div>
               </Card>
             )

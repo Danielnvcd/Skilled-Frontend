@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { CheckCircle2, Plus, Receipt, Hand } from 'lucide-react'
-import { Modal, Button, Input, Badge } from '../../components/ui'
+import { Modal, Button, Input, Badge, ConfirmDialog } from '../../components/ui'
 import { obtenerPrestamo, abonarPrestamo, liquidarPrestamo } from '../../api/prestamos'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
@@ -19,6 +19,7 @@ export default function PrestamoDetalleModal({ open, onClose, prestamoId, onChan
   const [monto, setMonto] = useState('')
   const [abonando, setAbonando] = useState(false)
   const [liquidando, setLiquidando] = useState(false)
+  const [confirmLiquidar, setConfirmLiquidar] = useState(false)
 
   const cargar = () => {
     if (!prestamoId) return
@@ -56,11 +57,11 @@ export default function PrestamoDetalleModal({ open, onClose, prestamoId, onChan
   }
 
   const handleLiquidar = async () => {
-    if (!window.confirm('¿Marcar este préstamo como liquidado?')) return
     setLiquidando(true)
     try {
       await liquidarPrestamo(prestamoId)
       toast.success('Préstamo liquidado')
+      setConfirmLiquidar(false)
       cargar()
       onChanged?.()
     } catch (err) {
@@ -73,6 +74,7 @@ export default function PrestamoDetalleModal({ open, onClose, prestamoId, onChan
   if (!open) return null
 
   return (
+    <>
     <Modal
       open={open}
       onClose={abonando || liquidando ? undefined : onClose}
@@ -121,7 +123,7 @@ export default function PrestamoDetalleModal({ open, onClose, prestamoId, onChan
                 <Button variant="primary" leftIcon={<Plus size={13} />} loading={abonando} onClick={handleAbonar}>
                   Abonar
                 </Button>
-                <Button variant="success" leftIcon={<CheckCircle2 size={13} />} loading={liquidando} onClick={handleLiquidar}>
+                <Button variant="success" leftIcon={<CheckCircle2 size={13} />} loading={liquidando} onClick={() => setConfirmLiquidar(true)}>
                   Liquidar todo
                 </Button>
               </div>
@@ -156,6 +158,18 @@ export default function PrestamoDetalleModal({ open, onClose, prestamoId, onChan
         </div>
       )}
     </Modal>
+
+    <ConfirmDialog
+      open={confirmLiquidar}
+      onClose={() => !liquidando && setConfirmLiquidar(false)}
+      onConfirm={handleLiquidar}
+      loading={liquidando}
+      title="Liquidar préstamo"
+      description="¿Marcar este préstamo como liquidado? Se saldará el monto restante."
+      confirmLabel="Liquidar"
+      tone="warning"
+    />
+    </>
   )
 }
 

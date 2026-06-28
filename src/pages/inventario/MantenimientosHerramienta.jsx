@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Settings2, Eye } from 'lucide-react'
 import {
-  Card, PageHeader, Modal, Skeleton, Badge, Button, Select, Input, EmptyState,
+  Card, PageHeader, Modal, Skeleton, Badge, Button, Select, Input, EmptyState, InfoTip,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import { getMantenimientos, cerrarMantenimiento } from '../../api/herramientas'
@@ -28,7 +28,11 @@ export default function MantenimientosHerramienta() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
-      <PageHeader title="Mantenimientos de Herramientas"
+      <PageHeader
+        title={<span className="inline-flex items-center gap-1.5">
+          Mantenimientos de Herramientas
+          <InfoTip text="Unidades enviadas a reparación/servicio. Un mantenimiento abierto deja la unidad EN_MANTENIMIENTO; al cerrarlo defines en qué estado regresa. El envío se inicia desde la ficha de la unidad." />
+        </span>}
         description="Registro de envíos y cierres de mantenimiento" />
 
       <Card className="p-4 flex gap-3 items-end">
@@ -81,7 +85,7 @@ export default function MantenimientosHerramienta() {
                   <TD><Badge tone={m.estado === 'CERRADO' ? 'success' : 'warning'} dot>{m.estado}</Badge></TD>
                   <TD align="right">
                     {m.estado !== 'CERRADO' && (
-                      <Button size="sm" onClick={() => setCierre(m)}>Cerrar</Button>
+                      <Button size="sm" onClick={() => setCierre(m)} title="Cerrar el mantenimiento y definir en qué estado regresa la unidad">Cerrar</Button>
                     )}
                   </TD>
                 </TR>

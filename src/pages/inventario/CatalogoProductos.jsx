@@ -335,18 +335,24 @@ export default function CatalogoProductos() {
         title="Catálogo de Productos"
         description="Gestión del catálogo maestro de inventario."
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => setCatModal({ mode: 'new', nombre: '', imagen_url: '' })}>+ Nueva Categoría</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setCatModal({ mode: 'new', nombre: '', imagen_url: '' })}>
+              <Plus size={15} className="mr-1 sm:hidden" /><span className="sm:hidden">Categoría</span><span className="hidden sm:inline">+ Nueva Categoría</span>
+            </Button>
             <Link to="/inventario/importar">
-              <Button variant="secondary" leftIcon={<Upload size={15} />}>Importar Excel</Button>
+              <Button variant="secondary" size="sm" leftIcon={<Upload size={15} />}>
+                <span className="sm:hidden">Importar</span><span className="hidden sm:inline">Importar Excel</span>
+              </Button>
             </Link>
-            <Button leftIcon={<Plus size={15} />} onClick={openNew}>Nuevo producto</Button>
+            <Button size="sm" leftIcon={<Plus size={15} />} onClick={openNew}>
+              <span className="sm:hidden">Producto</span><span className="hidden sm:inline">Nuevo producto</span>
+            </Button>
           </div>
         }
       />
 
       <Card className="!p-3 mb-5">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <div className="relative flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
             <input
@@ -360,7 +366,7 @@ export default function CatalogoProductos() {
           <select
             value={categoriaFiltro}
             onChange={(e) => setCategoriaFiltro(e.target.value)}
-            className="h-9 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-ink-700 dark:text-ink-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+            className="h-9 px-3 w-full sm:w-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-ink-700 dark:text-ink-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
           >
             <option value="">Todas las categorías</option>
             {categorias.map((cat) => (
@@ -375,7 +381,7 @@ export default function CatalogoProductos() {
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : !mostrarLista ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
           {categoriasResumen.map((c) => {
             const cat = c.nombre
             const bajos = c.bajo_minimo
@@ -470,6 +476,8 @@ export default function CatalogoProductos() {
               Mostrando los primeros 1000 resultados. Afina la búsqueda para ver el resto.
             </div>
           )}
+          {/* Escritorio: tabla completa */}
+          <div className="hidden md:block">
           <Table>
             <THead>
               <TH>Foto</TH>
@@ -555,6 +563,59 @@ export default function CatalogoProductos() {
               ))}
             </TBody>
           </Table>
+          </div>
+
+          {/* Móvil: tarjetas */}
+          <div className="md:hidden space-y-2">
+            {pagedFiltered.map((p) => {
+              const bajoStock = p.stock_actual <= p.stock_minimo
+              const compra = compraPorProducto.get(p.id)
+              return (
+                <Card key={p.id} className="!p-3">
+                  <div className="flex gap-3">
+                    {p.imagen_url ? (
+                      <img src={p.imagen_url} alt={p.descripcion} className="w-12 h-12 rounded-md object-cover bg-ink-100 flex-shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 flex-shrink-0">
+                        <Package size={22} />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm text-ink-900 dark:text-ink-100 leading-tight truncate">{p.descripcion}</p>
+                          <p className="font-mono text-[11px] text-brand-700 dark:text-brand-300">{p.codigo}</p>
+                          <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
+                        </div>
+                        {compra && (
+                          <Badge tone={compra.estatus === 'ORDENADA' ? 'info' : 'warning'}>
+                            {compra.estatus === 'ORDENADA' ? 'Ordenada' : 'En compra'}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-2">
+                        <span className={`text-xs tabular-nums ${bajoStock ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-ink-600 dark:text-ink-300'}`}>
+                          {p.stock_disponible ?? p.stock_actual} {p.unidad}
+                          <span className="text-ink-400 font-normal"> · Mín {p.stock_minimo}</span>
+                        </span>
+                        <span className="font-mono tabular-nums text-xs text-ink-700 dark:text-ink-200">
+                          {(Number(p.precio_unitario) || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-end gap-1 mt-2 border-t border-ink-100 dark:border-ink-800 pt-2">
+                        <Link to={`/inventario/productos/${p.id}/kardex`}>
+                          <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={15} /></Button>
+                        </Link>
+                        <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={15} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={15} /></Button>
+                        <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={15} /></Button>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
           {filtered.length > PROD_PAGE_SIZE && (
             <Pagination
               page={pageProd}

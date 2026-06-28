@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Trash2 } from 'lucide-react'
-import { Modal, Button, Select, Input } from '../../components/ui'
+import { Modal, Button, Select, Input, ConfirmDialog } from '../../components/ui'
 import { crearRegistro, editarRegistro, eliminarRegistro } from '../../api/horas'
 
 // El kiosko RFID guarda horas EXACTAS (ej. 14:37). Usamos <input type="time">
@@ -31,6 +31,7 @@ export default function RegistroModal({
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -81,7 +82,6 @@ export default function RegistroModal({
 
   const handleDelete = async () => {
     if (!existing || !editable) return
-    if (!window.confirm('¿Eliminar este registro?')) return
     setDeleting(true)
     try {
       await eliminarRegistro(existing.id)
@@ -96,6 +96,7 @@ export default function RegistroModal({
   }
 
   return (
+    <>
     <Modal
       open={open}
       onClose={saving || deleting ? undefined : onClose}
@@ -106,7 +107,7 @@ export default function RegistroModal({
         editable ? (
           <>
             {existing && (
-              <Button variant="danger-ghost" onClick={handleDelete} loading={deleting} disabled={saving} leftIcon={<Trash2 size={14} />}>
+              <Button variant="danger-ghost" onClick={() => setConfirmDel(true)} loading={deleting} disabled={saving} leftIcon={<Trash2 size={14} />}>
                 Eliminar
               </Button>
             )}
@@ -173,5 +174,17 @@ export default function RegistroModal({
 
       </form>
     </Modal>
+
+    <ConfirmDialog
+      open={confirmDel}
+      onClose={() => !deleting && setConfirmDel(false)}
+      onConfirm={handleDelete}
+      loading={deleting}
+      title="Eliminar registro"
+      description="¿Eliminar este registro de horas? Esta acción no se puede deshacer."
+      confirmLabel="Eliminar"
+      tone="danger"
+    />
+    </>
   )
 }

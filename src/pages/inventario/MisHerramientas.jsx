@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Hammer, AlertTriangle, Ban, ChevronRight, QrCode } from 'lucide-react'
-import { Card, PageHeader, Badge, EmptyState, Skeleton, Button } from '../../components/ui'
+import { Card, PageHeader, Badge, EmptyState, Skeleton, Button, InfoTip } from '../../components/ui'
 import { getUnidades } from '../../api/herramientas'
 import { useAuth } from '../../context/AuthContext'
 import { extractApiError } from '../../utils/apiError'
@@ -55,7 +55,10 @@ export default function MisHerramientas() {
   return (
     <div className="p-4 sm:p-6 space-y-4">
       <PageHeader
-        title="Mis herramientas"
+        title={<span className="inline-flex items-center gap-1.5">
+          Mis herramientas
+          <InfoTip text="Equipos asignados a tu nombre. Toca una tarjeta para abrir su ficha y, si hace falta, solicitar su baja o reportar una incidencia." />
+        </span>}
         description="Equipos asignados a tu nombre"
       />
 
