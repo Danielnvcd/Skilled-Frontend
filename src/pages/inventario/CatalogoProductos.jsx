@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -11,7 +11,7 @@ import {
   getProductos, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   deleteCategoriaConProductos,
-  getProductoStocks, getProductosConCompraActiva,
+  getProductoStocks, getProductosConCompraActiva, getUnidadesProductos,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
@@ -23,6 +23,19 @@ export default function CatalogoProductos() {
   const [search, setSearch] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [categorias, setCategorias] = useState([])
+
+  // Filtros avanzados del catálogo (server-side, combinables con categoría/búsqueda).
+  const [stockFiltro, setStockFiltro] = useState('')   // '' | 'bajo' | 'sin'
+  const [imagenFiltro, setImagenFiltro] = useState('') // '' | 'con' | 'sin'
+  const [unidadFiltro, setUnidadFiltro] = useState('') // '' | <unidad>
+  const [compraFiltro, setCompraFiltro] = useState(false) // solo con compra en curso
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
+  const [unidades, setUnidades] = useState([])
+  useEffect(() => {
+    getUnidadesProductos().then(setUnidades).catch(() => {})
+  }, [])
+  const nFiltros = (stockFiltro ? 1 : 0) + (imagenFiltro ? 1 : 0) + (unidadFiltro ? 1 : 0) + (compraFiltro ? 1 : 0)
+  const limpiarFiltros = () => { setStockFiltro(''); setImagenFiltro(''); setUnidadFiltro(''); setCompraFiltro(false) }
 
   const [openForm, setOpenForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -89,10 +102,10 @@ export default function CatalogoProductos() {
     return () => clearTimeout(t)
   }, [search])
 
-  // Vista de lista cuando hay categoría seleccionada o texto de búsqueda.
-  const mostrarLista = !!(categoriaFiltro || search.trim())
-  // El fetch se habilita con el término ya "asentado" (debounced).
-  const fetchHabilitado = !!(categoriaFiltro || debouncedSearch)
+  // Vista de lista cuando hay categoría, texto de búsqueda o algún filtro avanzado.
+  const mostrarLista = !!(categoriaFiltro || search.trim() || nFiltros > 0)
+  // El fetch se habilita con el término ya "asentado" (debounced) o filtros activos.
+  const fetchHabilitado = !!(categoriaFiltro || debouncedSearch || nFiltros > 0)
 
   // Resumen de categorías (conteos) para las tarjetas — server-side.
   const {
@@ -112,8 +125,8 @@ export default function CatalogoProductos() {
     error,
     refetch,
   } = useResource(
-    ['productos', { categoria: categoriaFiltro, q: debouncedSearch }],
-    () => getProductos({ categoria: categoriaFiltro, q: debouncedSearch, limit: 1000 }),
+    ['productos', { categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro }],
+    () => getProductos({ categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro, limit: 1000 }),
     {
       enabled: fetchHabilitado,
       staleMs: 30_000,
@@ -126,7 +139,7 @@ export default function CatalogoProductos() {
   // productos) renderizar todas las filas a la vez vuelve lento el repintado.
   const PROD_PAGE_SIZE = 50
   const [pageProd, setPageProd] = useState(0)
-  useEffect(() => { setPageProd(0) }, [categoriaFiltro, debouncedSearch])
+  useEffect(() => { setPageProd(0) }, [categoriaFiltro, debouncedSearch, stockFiltro, imagenFiltro, unidadFiltro, compraFiltro])
   const totalPagesProd = Math.max(1, Math.ceil(filtered.length / PROD_PAGE_SIZE))
   useEffect(() => { if (pageProd > 0 && pageProd >= totalPagesProd) setPageProd(0) }, [pageProd, totalPagesProd])
   const pagedFiltered = useMemo(
@@ -373,7 +386,48 @@ export default function CatalogoProductos() {
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<SlidersHorizontal size={14} />}
+            onClick={() => setFiltrosAbiertos((v) => !v)}
+          >
+            Filtros{nFiltros > 0 ? ` (${nFiltros})` : ''}
+          </Button>
+          {nFiltros > 0 && (
+            <Button variant="ghost" size="sm" leftIcon={<X size={14} />} onClick={limpiarFiltros}>
+              Limpiar
+            </Button>
+          )}
         </div>
+
+        {filtrosAbiertos && (
+          <div className="mt-3 pt-3 border-t border-ink-100 dark:border-ink-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Select label="Estado de stock" value={stockFiltro} onChange={(e) => setStockFiltro(e.target.value)}>
+              <option value="">Todos</option>
+              <option value="bajo">Stock bajo (≤ mínimo)</option>
+              <option value="sin">Sin existencias</option>
+            </Select>
+            <Select label="Imagen" value={imagenFiltro} onChange={(e) => setImagenFiltro(e.target.value)}>
+              <option value="">Todas</option>
+              <option value="con">Con imagen</option>
+              <option value="sin">Sin imagen</option>
+            </Select>
+            <Select label="Unidad" value={unidadFiltro} onChange={(e) => setUnidadFiltro(e.target.value)}>
+              <option value="">Todas</option>
+              {unidades.map((u) => <option key={u} value={u}>{u}</option>)}
+            </Select>
+            <label className="inline-flex items-center gap-2 text-sm text-ink-700 dark:text-ink-300 sm:col-span-3">
+              <input
+                type="checkbox"
+                checked={compraFiltro}
+                onChange={(e) => setCompraFiltro(e.target.checked)}
+                className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+              />
+              Solo productos con compra en curso (pendiente u ordenada)
+            </label>
+          </div>
+        )}
       </Card>
 
       {loading ? (

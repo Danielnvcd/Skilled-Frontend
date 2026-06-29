@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
@@ -15,6 +15,7 @@ import CredencialesEditor from '../../components/empleados/CredencialesEditor'
 import DocumentosManager from '../../components/empleados/DocumentosManager'
 import FotoUploader from '../../components/empleados/FotoUploader'
 import { useAuth } from '../../context/AuthContext'
+import useUnsavedChanges, { confirmIfDirty } from '../../hooks/useUnsavedChanges'
 
 const TABS = [
   { id: 'datos',    label: 'Datos personales', icon: User },
@@ -98,6 +99,16 @@ export default function EmpleadoForm({ modo }) {
   const [errors, setErrors] = useState({}) // por-campo
   const [globalError, setGlobalError] = useState('')
 
+  // Detección de cambios sin guardar. `baselineRef` guarda el snapshot "limpio"
+  // (EMPTY al crear; los datos cargados al editar) y lo comparamos contra el
+  // estado actual. Los documentos no cuentan: se suben/borran al instante, no
+  // dependen del botón Guardar.
+  const baselineRef = useRef(editando ? null : JSON.stringify({ form: EMPTY, credenciales: [] }))
+  const isDirty = baselineRef.current != null
+    && !saving
+    && (JSON.stringify({ form, credenciales }) !== baselineRef.current || Boolean(foto))
+  useUnsavedChanges(isDirty)
+
   useEffect(() => {
     if (!editando) return
     let cancelled = false
@@ -112,6 +123,8 @@ export default function EmpleadoForm({ modo }) {
         setCredenciales(data.credenciales || [])
         setDocumentos(data.documentos || [])
         setHasFoto(Boolean(data.foto_perfil))
+        // Baseline = datos recién cargados → el form arranca "limpio".
+        baselineRef.current = JSON.stringify({ form: next, credenciales: data.credenciales || [] })
       })
       .catch((err) => {
         const msg = err.response?.data?.error || 'No se pudo cargar el empleado'
@@ -157,7 +170,13 @@ export default function EmpleadoForm({ modo }) {
         res.warnings.forEach((w) => toast(w, { icon: '⚠️' }))
       }
       toast.success(editando ? 'Empleado actualizado' : 'Empleado creado')
-      if (!editando) navigate(`/empleados/${res.id}/editar`, { replace: true })
+      if (!editando) {
+        navigate(`/empleados/${res.id}/editar`, { replace: true })
+      } else {
+        // Guardado OK → el estado actual pasa a ser el nuevo baseline limpio.
+        baselineRef.current = JSON.stringify({ form, credenciales })
+        setFoto(null)
+      }
     } catch (err) {
       const msg = err.response?.data?.error || 'Error al guardar'
       const details = err.response?.data?.details
@@ -196,7 +215,11 @@ export default function EmpleadoForm({ modo }) {
         title={editando ? (nombreCompleto || `Empleado #${id}`) : 'Nuevo empleado'}
         description={editando ? `Folio interno: #${form.no_empleado}` : 'Captura los datos del nuevo empleado.'}
         breadcrumb={
-          <Link to="/empleados" className="hover:underline inline-flex items-center gap-1">
+          <Link
+            to="/empleados"
+            onClick={(e) => { if (!confirmIfDirty(isDirty)) e.preventDefault() }}
+            className="hover:underline inline-flex items-center gap-1"
+          >
             <ArrowLeft size={12} /> Volver a empleados
           </Link>
         }

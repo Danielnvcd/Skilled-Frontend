@@ -6,7 +6,7 @@ import {
   Pencil, Eye, FileCheck2, Lock, X,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, EmptyState, Pagination, Skeleton, Badge,
+  PageHeader, Button, Input, EmptyState, Pagination, Skeleton, Badge, InfoTip,
 } from '../../components/ui'
 import { listarReportes } from '../../api/horas'
 import { useResource } from '../../hooks/useResource'
@@ -241,7 +241,12 @@ export default function ReportesList() {
     <>
       <PageHeader
         icon={CalendarClock}
-        title="Reporte de Horas"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Reporte de Horas
+            <InfoTip text="Reportes semanales de horas por proyecto. Cada reporte se abre, se captura y al marcarlo TERMINADO alimenta la prenómina de esa semana. Solo los cerrados entran a nómina." />
+          </span>
+        }
         description="Captura semanal por proyecto. Abre, registra y envía a prenómina cuando termines."
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setModalOpen(true)}>

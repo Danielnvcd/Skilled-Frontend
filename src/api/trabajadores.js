@@ -2,13 +2,28 @@ import api from './axios'
 
 const BASE = '/trabajadores'
 
-export async function listarTrabajadores({ page = 1, q = '', estado = 'activos', perPage = 20, sort = '', dir = '' } = {}) {
+export async function listarTrabajadores({
+  page = 1, q = '', estado = 'activos', perPage = 20, sort = '', dir = '',
+  area = '', puesto = '', tipoNomina = '', tipoPago = '', sinSalario = false,
+} = {}) {
   const params = { page, q, estado, per_page: perPage }
   if (sort) {
     params.sort = sort
     params.dir = dir || 'asc'
   }
+  if (area) params.area = area
+  if (puesto) params.puesto = puesto
+  if (tipoNomina) params.tipo_nomina = tipoNomina
+  if (tipoPago) params.tipo_pago = tipoPago
+  if (sinSalario) params.sin_salario = 1
   const { data } = await api.get(BASE, { params })
+  return data
+}
+
+// Opciones para los selects de filtro (áreas, puestos, tipos). Respeta el scope
+// de rol en el backend.
+export async function obtenerFiltrosTrabajadores() {
+  const { data } = await api.get(`${BASE}/filtros`)
   return data
 }
 
@@ -137,8 +152,17 @@ export async function exportarEmpleado(id, nombreSugerido) {
   triggerDownload(res, nombreSugerido || `empleado_${id}.xlsx`)
 }
 
-export async function exportarTodos() {
-  const res = await api.get(`${BASE}/exportar-todos`, { responseType: 'blob' })
+// Exporta el listado completo respetando los filtros activos (búsqueda + área,
+// puesto, tipo nómina/pago, sin salario). Sin filtros baja todos los activos.
+export async function exportarTodos({ q = '', area = '', puesto = '', tipoNomina = '', tipoPago = '', sinSalario = false } = {}) {
+  const params = {}
+  if (q) params.q = q
+  if (area) params.area = area
+  if (puesto) params.puesto = puesto
+  if (tipoNomina) params.tipo_nomina = tipoNomina
+  if (tipoPago) params.tipo_pago = tipoPago
+  if (sinSalario) params.sin_salario = 1
+  const res = await api.get(`${BASE}/exportar-todos`, { params, responseType: 'blob' })
   triggerDownload(res, `empleados_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 

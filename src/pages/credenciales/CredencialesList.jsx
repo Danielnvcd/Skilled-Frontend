@@ -6,7 +6,7 @@ import {
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, TBody, TR, TD,
-  Badge, Pagination, EmptyState, Skeleton, Modal,
+  Badge, Pagination, EmptyState, Skeleton, Modal, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { listarCredencialesPlanta, guardarCredencialesPlanta } from '../../api/credenciales'
@@ -417,7 +417,12 @@ export default function CredencialesList() {
     <>
       <PageHeader
         icon={IdCard}
-        title="Credenciales"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Credenciales
+            <InfoTip text="Credenciales de planta de cada trabajador: alta, edición y control de vigencia. Las caducadas se marcan en rojo. Filtra por planta o estado para ubicar las que están por vencer." />
+          </span>
+        }
         description="Recuento de personal por ubicación y credenciales de planta."
       />
 

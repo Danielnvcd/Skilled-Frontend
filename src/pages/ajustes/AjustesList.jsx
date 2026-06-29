@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { Plus, Search, Settings2, ChevronRight, CalendarRange } from 'lucide-react'
 import {
   PageHeader, Button, Input, Table, THead, TH, TBody, TR, TD,
-  Badge, EmptyState, Pagination, Skeleton,
+  Badge, EmptyState, Pagination, Skeleton, InfoTip,
 } from '../../components/ui'
 import { listarPeriodos } from '../../api/ajustes'
 import { useResource } from '../../hooks/useResource'
@@ -52,7 +52,12 @@ export default function AjustesList() {
     <>
       <PageHeader
         icon={Settings2}
-        title="Ajustes (Inbursa)"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Ajustes (Inbursa)
+            <InfoTip text="Periodos mensuales que agrupan los descuentos de recuperación de depósitos adelantados por Inbursa. Cada descuento se aplica en la prenómina de la semana que cae dentro del periodo." />
+          </span>
+        }
         description="Periodos mensuales que agrupan descuentos de depósitos adelantados por trabajador."
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setModalOpen(true)}>

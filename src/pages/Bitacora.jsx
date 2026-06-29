@@ -6,7 +6,7 @@ import {
   AlertTriangle, MapPin, User as UserIcon, Globe,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Pagination, EmptyState, Skeleton, Modal,
+  PageHeader, Button, Pagination, EmptyState, Skeleton, Modal, InfoTip,
 } from '../components/ui'
 import { listarBitacora, detalleLog } from '../api/bitacora'
 import { extractApiError } from '../utils/apiError'
@@ -156,7 +156,12 @@ export default function Bitacora() {
     <>
       <PageHeader
         icon={History}
-        title="Bitácora completa"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Bitácora completa
+            <InfoTip text="Registro de auditoría de todas las acciones del sistema. Filtra por fecha y abre el detalle de cada evento (usuario, IP y ubicación aproximada). Las acciones sospechosas se resaltan." />
+          </span>
+        }
         description="Registro histórico de todas las actividades en el sistema."
       />
 

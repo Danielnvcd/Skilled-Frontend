@@ -65,6 +65,13 @@ export default function ScannerMovil() {
     )
   }, [productosEstante, searchText])
 
+  // En móvil, pintar cientos de filas con imagen cuelga. Mostramos de a bloques
+  // ("Mostrar más"); se reinicia al cambiar la búsqueda o el estante.
+  const SCAN_STEP = 50
+  const [scanVisible, setScanVisible] = useState(SCAN_STEP)
+  useEffect(() => { setScanVisible(SCAN_STEP) }, [searchText, estante])
+  const productosVisibles = filteredProducts.slice(0, scanVisible)
+
   // Estante sin productos asignados pero con "categoría local": traemos esa
   // categoría del servidor (no el catálogo completo).
   useEffect(() => {
@@ -363,7 +370,7 @@ export default function ScannerMovil() {
                 {productosEstante.length === 0 ? 'No hay productos en esta categoría.' : 'Sin resultados.'}
               </p>
             ) : (
-              filteredProducts.map(p => {
+              productosVisibles.map(p => {
                 const stockActual = parseFloat(p.stock_actual) || 0
                 const stockMin = parseFloat(p.stock_minimo) || 0
                 const isLow = stockActual <= stockMin
@@ -395,6 +402,15 @@ export default function ScannerMovil() {
                   </button>
                 )
               })
+            )}
+            {filteredProducts.length > scanVisible && (
+              <button
+                type="button"
+                onClick={() => setScanVisible((n) => n + SCAN_STEP)}
+                className="w-full p-3 text-center text-sm font-semibold text-brand-700 dark:text-brand-300 hover:bg-ink-50 dark:hover:bg-ink-800/50"
+              >
+                Mostrar más ({filteredProducts.length - scanVisible} restantes)
+              </button>
             )}
           </div>
         </Card>

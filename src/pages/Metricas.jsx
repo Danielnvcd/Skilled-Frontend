@@ -5,7 +5,7 @@ import {
   AlertTriangle, Clock, Search,
 } from 'lucide-react'
 import {
-  PageHeader, Skeleton, Badge,
+  PageHeader, Skeleton, Badge, InfoTip,
   Table, THead, TH, TBody, TR, TD,
 } from '../components/ui'
 import {
@@ -148,7 +148,12 @@ export default function Metricas() {
     <div className="space-y-5">
       <PageHeader
         icon={BarChart3}
-        title="Métricas"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Métricas
+            <InfoTip text="Indicadores agregados de la plantilla activa: distribución por planta y cobertura de permisos DC3. Vista de solo lectura para tomar decisiones de capacitación y credencialización." />
+          </span>
+        }
         description="Visión general de credenciales por planta y permisos DC3 del personal activo."
         actions={
           <span className="text-[11px] text-ink-500 inline-flex items-center gap-1.5">

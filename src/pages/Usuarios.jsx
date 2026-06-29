@@ -5,7 +5,7 @@ import {
   Button, Card, PageHeader, Badge, Modal, ConfirmDialog,
   EmptyState, Input, Select, Skeleton,
   Table, THead, TH, TBody, TR, TD,
-  PasswordStrengthIndicator,
+  PasswordStrengthIndicator, InfoTip,
 } from '../components/ui'
 import UserAvatar from '../components/UserAvatar'
 import { extractApiError } from '../utils/apiError'
@@ -349,7 +349,12 @@ export default function Usuarios() {
     <div>
       <PageHeader
         icon={Users}
-        title="Usuarios"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Usuarios
+            <InfoTip text="Cuentas de acceso al sistema (no empleados de RRHH). Crea usuarios, asigna su rol y permisos, cambia contraseñas y activa/desactiva accesos. Desactivar conserva el historial; no se borra físicamente." />
+          </span>
+        }
         description="Administración de cuentas, roles y accesos del sistema."
         actions={<Button leftIcon={<Plus size={15} />} onClick={() => setOpenCreate(true)}>Nuevo usuario</Button>}
       />

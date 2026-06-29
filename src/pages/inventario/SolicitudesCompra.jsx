@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   PageHeader, Button, Card, Select, Skeleton, EmptyState,
-  Table, THead, TH, TBody, TR, TD, Badge, Modal, Input, Textarea, ConfirmDialog, InfoTip,
+  Table, THead, TH, TBody, TR, TD, Badge, Modal, Input, Textarea, ConfirmDialog, InfoTip, Pagination,
 } from '../../components/ui'
 import {
   getSolicitudesCompra,
@@ -123,6 +123,17 @@ export default function SolicitudesCompra() {
     return r
   }, [solicitudes, estatusFiltro, search])
 
+  // Paginación del render para no colgar el navegador con muchas solicitudes.
+  // Los stats se calculan sobre la lista completa, no sobre la página visible.
+  const COMPRA_PAGE = 30
+  const [pageCompra, setPageCompra] = useState(0)
+  useEffect(() => { setPageCompra(0) }, [estatusFiltro, search])
+  const totalPagesCompra = Math.max(1, Math.ceil(filtradas.length / COMPRA_PAGE))
+  const filtradasPage = useMemo(
+    () => filtradas.slice(pageCompra * COMPRA_PAGE, pageCompra * COMPRA_PAGE + COMPRA_PAGE),
+    [filtradas, pageCompra],
+  )
+
   const detalle = useMemo(
     () => solicitudes.find((s) => s.id === detalleId) || null,
     [solicitudes, detalleId],
@@ -226,7 +237,7 @@ export default function SolicitudesCompra() {
               <TH align="right">Acciones</TH>
             </THead>
             <TBody>
-              {filtradas.map((s) => {
+              {filtradasPage.map((s) => {
                 const meta = ESTATUS_META[s.estatus] || ESTATUS_META.PENDIENTE
                 const prio = PRIORIDAD_META[s.prioridad] || PRIORIDAD_META.MEDIA
                 const totalSol = (s.detalles || []).reduce((a, d) => a + (d.cantidad_solicitada || 0), 0)
@@ -267,6 +278,15 @@ export default function SolicitudesCompra() {
               })}
             </TBody>
           </Table>
+          {filtradas.length > COMPRA_PAGE && (
+            <Pagination
+              page={pageCompra}
+              totalPages={totalPagesCompra}
+              totalElements={filtradas.length}
+              size={COMPRA_PAGE}
+              onChange={setPageCompra}
+            />
+          )}
         </Card>
       )}
 

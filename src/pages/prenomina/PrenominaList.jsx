@@ -6,7 +6,7 @@ import {
   List, CheckCircle2, Calculator, Eye, FolderKanban, Layers, CalendarX,
   Wallet, ReceiptText,
 } from 'lucide-react'
-import { PageHeader, Skeleton, EmptyState, Badge, Button } from '../../components/ui'
+import { PageHeader, Skeleton, EmptyState, Badge, Button, InfoTip } from '../../components/ui'
 import { listarSemanas } from '../../api/prenomina'
 import { useResource } from '../../hooks/useResource'
 
@@ -89,7 +89,12 @@ export default function PrenominaList() {
     <>
       <PageHeader
         icon={ReceiptText}
-        title="Generación de Prenómina"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Generación de Prenómina
+            <InfoTip text="Calcula, edita y cierra la nómina semanal a partir de los reportes de horas TERMINADOS. Se procesa por semanas en orden cronológico; al cerrar se aplican préstamos y ajustes Inbursa automáticamente." />
+          </span>
+        }
         description="Calcula el pago de los trabajadores en base a los reportes de horas cerrados."
       />
 

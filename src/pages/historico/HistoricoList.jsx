@@ -6,7 +6,7 @@ import {
   CheckCircle2, CalendarX, X,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Pagination, EmptyState, Skeleton, Badge,
+  PageHeader, Button, Pagination, EmptyState, Skeleton, Badge, InfoTip,
 } from '../../components/ui'
 import { listarHistorico, exportarExcelHistorico } from '../../api/historico'
 import { extractApiError } from '../../utils/apiError'
@@ -137,7 +137,12 @@ export default function HistoricoList() {
     <>
       <PageHeader
         icon={FileText}
-        title="Histórico de pagos de nómina"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Histórico de pagos de nómina
+            <InfoTip text="Nóminas ya cerradas y aprobadas de semanas anteriores. Consulta el detalle por proyecto, reimprime recibos o exporta a Excel. Es el archivo de lo ya pagado." />
+          </span>
+        }
         description="Consulta o imprime las nóminas globales calculadas y aprobadas, separadas por proyecto."
       />
 

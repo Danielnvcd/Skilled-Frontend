@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import { Plus, Search, HandCoins, Eye, Pencil, FileSpreadsheet } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
-  Badge, EmptyState, Pagination, Skeleton, SavedViews,
+  Badge, EmptyState, Pagination, Skeleton, SavedViews, InfoTip,
 } from '../../components/ui'
 import { listarPrestamos, exportarExcelPrestamos } from '../../api/prestamos'
 import { useResource } from '../../hooks/useResource'
@@ -95,7 +95,12 @@ export default function PrestamosList() {
     <>
       <PageHeader
         icon={HandCoins}
-        title="Préstamos"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Préstamos
+            <InfoTip text="Otorga préstamos a trabajadores y registra abonos. El descuento semanal se aplica automáticamente al cerrar la prenómina, hasta liquidar el saldo. El detalle muestra el avance de cada préstamo." />
+          </span>
+        }
         description="Préstamos otorgados a trabajadores y su descuento programado en nómina."
         actions={
           <Button variant="primary" leftIcon={<Plus size={14} />} onClick={openNuevo}>

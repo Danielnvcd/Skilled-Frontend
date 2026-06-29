@@ -14,6 +14,8 @@ import { unidadPermiteDecimales } from '../../utils/unidades'
 import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
+import { useServerPagination } from '../../hooks/useServerPagination'
+import { useSocket } from '../../context/SocketContext'
 
 // ─── Catálogo visual de categorías ────────────────────────────────────────────
 // Paleta unificada en slate/ink. La distinción visual viene del icono, no del
@@ -249,30 +251,56 @@ export default function MisPedidos() {
     { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
 
-  // Productos filtrados server-side por categoría y/o búsqueda. 'Todas' sin
-  // búsqueda trae la primera página (limit 500); el resto se ve filtrando.
+  // Productos y herramientas con PAGINACIÓN server-side acumulativa: con miles
+  // de productos un `limit` fijo dejaba inalcanzables los que sobraran del tope
+  // (p.ej. la categoría 501+). Ahora "Mostrar más" pide la siguiente página al
+  // backend vía `skip`, así se llega a todo el catálogo sin límite práctico.
   const catParam = activeCat === 'Todas' ? '' : activeCat
-  const { data: rawProductos, error: errProd } = useResource(
-    ['productos', { categoria: catParam, q: debouncedSearch }],
-    () => getProductos({ categoria: catParam, q: debouncedSearch, limit: 500 }),
-    { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
+  const PAGE_PROD = 100
+  const {
+    items: productos,
+    loading: prodLoading,
+    loadingMore: prodLoadingMore,
+    hasMore: prodHasMore,
+    loadMore: loadMoreProd,
+    refresh: refreshProd,
+    error: errProd,
+  } = useServerPagination(
+    (skip, limit) => getProductos({ categoria: catParam, q: debouncedSearch, skip, limit }),
+    `${catParam}|${debouncedSearch}`,
+    { pageSize: PAGE_PROD },
   )
-  const { data: rawHerramientas, error: errHerr } = useResource(
-    ['herramientas', 'catalogo', { q: debouncedSearchHerr }],
-    () => getHerramientas({ q: debouncedSearchHerr || undefined, limit: 200 }),
-    { staleMs: 60_000, invalidateOn: ['herramienta:changed'] },
+  const {
+    items: herramientas,
+    loading: herrLoadingBase,
+    loadingMore: herrLoadingMore,
+    hasMore: herrHasMore,
+    loadMore: loadMoreHerr,
+    refresh: refreshHerr,
+    error: errHerr,
+  } = useServerPagination(
+    (skip, limit) => getHerramientas({ q: debouncedSearchHerr || undefined, skip, limit }),
+    `${debouncedSearchHerr}`,
+    { pageSize: PAGE_PROD },
   )
   const { data: rawProyectos, error: errProj } = useResource(
     ['proyectos-inventario'],
     () => getProyectosInventario(),
     { staleMs: 120_000, invalidateOn: ['proyecto:changed'] },
   )
-  const productos = rawProductos ?? []
-  const herramientas = rawHerramientas ?? []
   const proyectos = rawProyectos ?? []
   // Skeleton de materiales mientras carga la página o se asienta el debounce.
-  const matLoading = !rawProductos || search.trim() !== debouncedSearch
-  const herrLoading = !rawHerramientas
+  const matLoading = prodLoading || search.trim() !== debouncedSearch
+  const herrLoading = herrLoadingBase
+
+  // Tiempo real: al cambiar catálogo/herramientas, recargar desde la página 0.
+  const { on: onSocket } = useSocket()
+  useEffect(() => {
+    const offP = onSocket('producto:changed', refreshProd)
+    const offM = onSocket('movimiento:changed', refreshProd)
+    const offH = onSocket('herramienta:changed', refreshHerr)
+    return () => { offP?.(); offM?.(); offH?.() }
+  }, [onSocket, refreshProd, refreshHerr])
 
   useEffect(() => {
     const err = errProd || errHerr || errProj
@@ -339,18 +367,11 @@ export default function MisPedidos() {
     [rawResumen],
   )
 
-  // El filtrado (categoría + búsqueda) ya viene resuelto del servidor.
+  // El catálogo ya viene paginado del servidor (categoría + búsqueda + skip).
+  // Se renderiza tal cual lo cargado; "Mostrar más" pide la siguiente página.
   const filtered = productos
-
-  // Tope de tarjetas renderizadas (DOM ligero con catálogos grandes). "Mostrar
-  // más" agrega de a bloques; se reinicia al cambiar filtro/categoría/pestaña.
-  const CARD_STEP = 60
-  const [matVisible, setMatVisible] = useState(CARD_STEP)
-  const [herrVisible, setHerrVisible] = useState(CARD_STEP)
-  useEffect(() => { setMatVisible(CARD_STEP) }, [catParam, debouncedSearch])
-  useEffect(() => { setHerrVisible(CARD_STEP) }, [debouncedSearchHerr])
-  const filteredVisibles = filtered.slice(0, matVisible)
-  const herramientasVisibles = herramientasFiltradas.slice(0, herrVisible)
+  const filteredVisibles = productos
+  const herramientasVisibles = herramientasFiltradas
 
   const openQtyModal = (producto) => {
     const enCart = cart.find((c) => c.id === producto.id)
@@ -599,13 +620,13 @@ export default function MisPedidos() {
           <div className="flex items-center justify-between px-1">
             <p className="text-xs text-ink-500 dark:text-ink-400">
               <span className="font-bold text-ink-700 dark:text-ink-200">
-                {tab === 'materiales' ? filtered.length : herramientasFiltradas.length}
+                {tab === 'materiales' ? productos.length : herramientas.length}
               </span>{' '}
-              {tab === 'materiales' ? 'materiales' : 'herramientas'} disponibles
+              {tab === 'materiales' ? 'materiales' : 'herramientas'} mostrados
             </p>
-            {tab === 'materiales' && filtered.length >= 500 && (
-              <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                Mostrando 500 — usa la búsqueda o una categoría para acotar.
+            {((tab === 'materiales' && prodHasMore) || (tab === 'herramientas' && herrHasMore)) && (
+              <p className="text-[11px] text-ink-500 dark:text-ink-400">
+                Hay más — usa “Mostrar más” o afina la búsqueda.
               </p>
             )}
           </div>
@@ -636,10 +657,10 @@ export default function MisPedidos() {
                     />
                   ))}
                 </div>
-                {filtered.length > matVisible && (
+                {prodHasMore && (
                   <div className="mt-4 text-center">
-                    <Button variant="secondary" onClick={() => setMatVisible((n) => n + CARD_STEP)}>
-                      Mostrar más ({filtered.length - matVisible} restantes)
+                    <Button variant="secondary" loading={prodLoadingMore} onClick={loadMoreProd}>
+                      Mostrar más
                     </Button>
                   </div>
                 )}
@@ -664,10 +685,10 @@ export default function MisPedidos() {
                     />
                   ))}
                 </div>
-                {herramientasFiltradas.length > herrVisible && (
+                {herrHasMore && (
                   <div className="mt-4 text-center">
-                    <Button variant="secondary" onClick={() => setHerrVisible((n) => n + CARD_STEP)}>
-                      Mostrar más ({herramientasFiltradas.length - herrVisible} restantes)
+                    <Button variant="secondary" loading={herrLoadingMore} onClick={loadMoreHerr}>
+                      Mostrar más
                     </Button>
                   </div>
                 )}

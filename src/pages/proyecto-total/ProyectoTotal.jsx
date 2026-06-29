@@ -6,7 +6,7 @@ import {
   Wallet, FileSpreadsheet, CalendarRange, UserCircle2,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, Pagination, EmptyState, Skeleton, Badge,
+  PageHeader, Button, Input, Pagination, EmptyState, Skeleton, Badge, InfoTip,
 } from '../../components/ui'
 import { listarProyectoTotal, exportarExcelProyecto } from '../../api/proyectoTotal'
 import { extractApiError } from '../../utils/apiError'
@@ -266,7 +266,12 @@ export default function ProyectoTotal() {
     <>
       <PageHeader
         icon={PieChart}
-        title="Proyecto Total"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Proyecto Total
+            <InfoTip text="Resumen acumulado del costo de nómina por proyecto, sumando todas las semanas ya procesadas. Útil para ver cuánto lleva gastado cada proyecto en mano de obra." />
+          </span>
+        }
         description="Resumen acumulado de nómina por proyecto — todas las semanas procesadas."
       />
 

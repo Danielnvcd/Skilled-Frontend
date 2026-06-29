@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Users, Search, Briefcase, Building2, Factory, Phone, Mail, ShieldCheck, IdCard } from 'lucide-react'
-import { Card, PageHeader, Badge, EmptyState, Skeleton } from '../components/ui'
+import { Card, PageHeader, Badge, EmptyState, Skeleton, InfoTip } from '../components/ui'
 import UserAvatar from '../components/UserAvatar'
 import { listarDirectorio } from '../api/auth'
 import { extractApiError } from '../utils/apiError'
@@ -85,7 +85,12 @@ export default function Directorio() {
   return (
     <div>
       <PageHeader
-        title="Directorio del equipo"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Directorio del equipo
+            <InfoTip text="Usuarios del sistema (no empleados de RRHH) con su área, contacto y estado en línea. Útil para ubicar rápido a coordinadores y administradores." />
+          </span>
+        }
         description="Listado de personas registradas en la plataforma."
       />
 

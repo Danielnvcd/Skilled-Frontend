@@ -4,17 +4,17 @@ import toast from 'react-hot-toast'
 import {
   Plus, Search, Upload, Download, Pencil, UserMinus, UserCheck,
   FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard, X,
-  MoreHorizontal, FileDown,
+  MoreHorizontal, FileDown, SlidersHorizontal,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, Table, THead, TH, THSort, TBody, TR, TD,
+  PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
   Badge, Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
   listarTrabajadores, darBajaTrabajador, reactivarTrabajador,
   exportarTodos, bulkAccionTrabajadores, exportarSeleccion,
-  exportarEmpleado,
+  exportarEmpleado, obtenerFiltrosTrabajadores,
 } from '../../api/trabajadores'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 import CredencialPreviewModal from '../../components/empleados/CredencialPreviewModal'
@@ -56,6 +56,37 @@ export default function EmpleadosList({ variante = 'activos' }) {
   // reproduzca la misma vista. sort vacío = default del backend (nombre asc).
   const [sort, setSort] = useState(searchParams.get('sort') || '')
   const [dir, setDir] = useState(searchParams.get('dir') || 'asc')
+
+  // Filtros avanzados (combinables entre sí y con la búsqueda). Se inicializan
+  // desde la URL para que un link compartido o un refresh reproduzcan la misma
+  // vista filtrada. Las opciones de los selects las sirve GET /trabajadores/filtros.
+  const [filtros, setFiltros] = useState({
+    area: searchParams.get('area') || '',
+    puesto: searchParams.get('puesto') || '',
+    tipoNomina: searchParams.get('tipo_nomina') || '',
+    tipoPago: searchParams.get('tipo_pago') || '',
+    sinSalario: searchParams.get('sin_salario') === '1',
+  })
+  const [filtrosAbiertos, setFiltrosAbiertos] = useState(false)
+  const [opcionesFiltro, setOpcionesFiltro] = useState({ areas: [], puestos: [], tipos_nomina: [], tipos_pago: [] })
+  useEffect(() => {
+    obtenerFiltrosTrabajadores().then(setOpcionesFiltro).catch(() => {})
+  }, [])
+  const filtrosActivos =
+    (filtros.area ? 1 : 0) + (filtros.puesto ? 1 : 0) +
+    (filtros.tipoNomina ? 1 : 0) + (filtros.tipoPago ? 1 : 0) +
+    (filtros.sinSalario ? 1 : 0)
+  // Cambiar un filtro vuelve a página 1 (la pág. N de un filtro no equivale a la
+  // de otro). La selección NO se limpia: es acumulativa entre filtros a propósito.
+  const setFiltro = (key, value) => {
+    setPage(1)
+    setFiltros((f) => ({ ...f, [key]: value }))
+  }
+  const limpiarFiltros = () => {
+    setPage(1)
+    setFiltros({ area: '', puesto: '', tipoNomina: '', tipoPago: '', sinSalario: false })
+  }
+
   const [confirmId, setConfirmId] = useState(null)
   const [confirmAction, setConfirmAction] = useState(null) // 'baja' | 'reactivar'
   const [busy, setBusy] = useState(false)
@@ -101,8 +132,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
     error,
     refetch,
   } = useResource(
-    ['empleados', { page, q, variante, sort, dir }],
-    () => listarTrabajadores({ page, q, estado: variante, perPage: PER_PAGE, sort, dir }),
+    ['empleados', { page, q, variante, sort, dir, ...filtros }],
+    () => listarTrabajadores({
+      page, q, estado: variante, perPage: PER_PAGE, sort, dir,
+      area: filtros.area, puesto: filtros.puesto,
+      tipoNomina: filtros.tipoNomina, tipoPago: filtros.tipoPago,
+      sinSalario: filtros.sinSalario,
+    }),
     {
       staleMs: 30_000,
       // El backend emite 'empleado:changed' en cada mutación (crear, editar,
@@ -125,8 +161,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
       next.set('sort', sort)
       next.set('dir', dir)
     }
+    if (filtros.area) next.set('area', filtros.area)
+    if (filtros.puesto) next.set('puesto', filtros.puesto)
+    if (filtros.tipoNomina) next.set('tipo_nomina', filtros.tipoNomina)
+    if (filtros.tipoPago) next.set('tipo_pago', filtros.tipoPago)
+    if (filtros.sinSalario) next.set('sin_salario', '1')
     setSearchParams(next, { replace: true })
-  }, [q, page, sort, dir])
+  }, [q, page, sort, dir, filtros])
 
   // Click en encabezado: asc → desc → quitar orden. Resetea a página 1 porque
   // la página N de un orden no corresponde a la página N de otro.
@@ -148,6 +189,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
     setQInput(params.q || '')
     setSort(params.sort || '')
     setDir(params.dir || 'asc')
+    setFiltros({
+      area: params.area || '',
+      puesto: params.puesto || '',
+      tipoNomina: params.tipo_nomina || '',
+      tipoPago: params.tipo_pago || '',
+      sinSalario: params.sin_salario === '1' || params.sin_salario === true,
+    })
   }
 
   // ── Selección múltiple ─────────────────────────────────────────────────────
@@ -285,7 +333,9 @@ export default function EmpleadosList({ variante = 'activos' }) {
   const onExport = async () => {
     setExporting(true)
     try {
-      await exportarTodos()
+      // Respeta la búsqueda y los filtros activos: "Exportar" baja justo lo que
+      // se está viendo en la lista, no siempre la plantilla completa.
+      await exportarTodos({ q, ...filtros })
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al exportar')
     } finally {
@@ -331,8 +381,15 @@ export default function EmpleadosList({ variante = 'activos' }) {
                   <Button variant="secondary" size="md" leftIcon={<Upload size={14} />} onClick={() => navigate('/empleados/importar')}>
                     Importar
                   </Button>
-                  <Button variant="secondary" size="md" leftIcon={<Download size={14} />} loading={exporting} onClick={onExport}>
-                    Exportar
+                  <Button
+                    variant="secondary"
+                    size="md"
+                    leftIcon={<Download size={14} />}
+                    loading={exporting}
+                    onClick={onExport}
+                    title={(q || filtrosActivos > 0) ? 'Exporta solo los empleados que coinciden con la búsqueda y filtros actuales' : 'Exporta toda la plantilla activa'}
+                  >
+                    {(q || filtrosActivos > 0) ? 'Exportar filtrado' : 'Exportar'}
                   </Button>
                   <Button variant="ghost" size="md" leftIcon={<UserMinus size={14} />} onClick={() => navigate('/empleados/bajas')}>
                     Ver bajas
@@ -366,10 +423,65 @@ export default function EmpleadosList({ variante = 'activos' }) {
         </div>
       </form>
 
+      {/* Filtros avanzados — combinables con la búsqueda y persistibles como vista */}
+      <div className="mb-3">
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            leftIcon={<SlidersHorizontal size={14} />}
+            onClick={() => setFiltrosAbiertos((v) => !v)}
+          >
+            Filtros{filtrosActivos > 0 ? ` (${filtrosActivos})` : ''}
+          </Button>
+          {filtrosActivos > 0 && (
+            <Button type="button" variant="ghost" size="sm" leftIcon={<X size={14} />} onClick={limpiarFiltros}>
+              Limpiar filtros
+            </Button>
+          )}
+        </div>
+
+        {filtrosAbiertos && (
+          <div className="mt-3 p-4 rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Select label="Área" value={filtros.area} onChange={(e) => setFiltro('area', e.target.value)}>
+              <option value="">Todas</option>
+              {opcionesFiltro.areas.map((a) => <option key={a} value={a}>{a}</option>)}
+            </Select>
+            <Select label="Puesto" value={filtros.puesto} onChange={(e) => setFiltro('puesto', e.target.value)}>
+              <option value="">Todos</option>
+              {opcionesFiltro.puestos.map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
+            <Select label="Tipo de nómina" value={filtros.tipoNomina} onChange={(e) => setFiltro('tipoNomina', e.target.value)}>
+              <option value="">Todos</option>
+              {opcionesFiltro.tipos_nomina.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
+            <Select label="Tipo de pago" value={filtros.tipoPago} onChange={(e) => setFiltro('tipoPago', e.target.value)}>
+              <option value="">Todos</option>
+              {opcionesFiltro.tipos_pago.map((t) => <option key={t} value={t}>{t}</option>)}
+            </Select>
+            <label className="inline-flex items-center gap-2 text-sm text-ink-700 dark:text-ink-300 sm:col-span-2 lg:col-span-4">
+              <input
+                type="checkbox"
+                checked={filtros.sinSalario}
+                onChange={(e) => setFiltro('sinSalario', e.target.checked)}
+                className="h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer"
+              />
+              Solo empleados sin salario pactado
+            </label>
+          </div>
+        )}
+      </div>
+
       <SavedViews
         listKey={variante === 'bajas' ? 'empleados-bajas' : 'empleados'}
-        current={{ q, sort, dir: sort ? dir : '' }}
-        defaults={{ q: '', sort: '', dir: '' }}
+        current={{
+          q, sort, dir: sort ? dir : '',
+          area: filtros.area, puesto: filtros.puesto,
+          tipo_nomina: filtros.tipoNomina, tipo_pago: filtros.tipoPago,
+          sin_salario: filtros.sinSalario ? '1' : '',
+        }}
+        defaults={{ q: '', sort: '', dir: '', area: '', puesto: '', tipo_nomina: '', tipo_pago: '', sin_salario: '' }}
         onApply={aplicarVista}
       />
 
@@ -432,9 +544,13 @@ export default function EmpleadosList({ variante = 'activos' }) {
       ) : data.items.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
-          title={q ? 'Sin resultados' : variante === 'bajas' ? 'Sin bajas registradas' : 'Sin empleados'}
-          description={q ? 'Ningún empleado coincide con la búsqueda actual.' : 'Comienza dando de alta un empleado.'}
-          action={!q && variante === 'activos' ? (
+          title={(q || filtrosActivos > 0) ? 'Sin resultados' : variante === 'bajas' ? 'Sin bajas registradas' : 'Sin empleados'}
+          description={(q || filtrosActivos > 0) ? 'Ningún empleado coincide con la búsqueda o los filtros actuales.' : 'Comienza dando de alta un empleado.'}
+          action={(q || filtrosActivos > 0) ? (
+            <Button variant="ghost" leftIcon={<X size={14} />} onClick={() => { setQInput(''); setQ(''); limpiarFiltros() }}>
+              Limpiar búsqueda y filtros
+            </Button>
+          ) : variante === 'activos' ? (
             <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => navigate('/empleados/nuevo')}>
               Nuevo empleado
             </Button>

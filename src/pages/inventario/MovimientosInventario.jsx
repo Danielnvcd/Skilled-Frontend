@@ -6,7 +6,7 @@ import {
   History, ListChecks,
 } from 'lucide-react'
 import {
-  Button, Card, PageHeader,
+  Button, Card, PageHeader, Input,
   Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Select, SavedViews,
 } from '../../components/ui'
 import {
@@ -15,6 +15,11 @@ import {
 import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
+
+// Tope de movimientos por carga = máximo que acepta el backend. Si una consulta
+// lo alcanza, avisamos al usuario para que acote por fechas (server-side) en vez
+// de quedarse con un recorte silencioso.
+const MOV_LIMIT = 1000
 
 export default function MovimientosInventario() {
   const [movimientos, setMovimientos] = useState([])
@@ -30,27 +35,32 @@ export default function MovimientosInventario() {
   const [filtroTipo, setFiltroTipo] = useState('')
   const [filtroProducto, setFiltroProducto] = useState('')   // id (fuente de verdad del filtro + SavedViews)
   const [productoSelFiltro, setProductoSelFiltro] = useState(null)  // objeto, solo para mostrar en el picker
+  // Rango de fechas (server-side): a diferencia de tipo/producto, no se puede
+  // filtrar bien en cliente porque solo tenemos los últimos 300 movimientos.
+  const [desde, setDesde] = useState('')
+  const [hasta, setHasta] = useState('')
   // Orden client-side: el dataset completo (≤300 filas) ya está en memoria,
   // re-ordenar no necesita round-trip. sort vacío = orden del backend (fecha desc).
   const [sort, setSort] = useState('')
   const [dir, setDir] = useState('asc')
 
-  const reload = () => {
+  // Movimientos: se recargan cuando cambia el rango de fechas (filtrado en el
+  // servidor). Cubre también la carga inicial (desde/hasta vacíos = últimos 300).
+  useEffect(() => {
     setLoading(true)
-    Promise.all([
-      getMovimientos({ limit: 300 }),
-      getProductosBajoMinimo().catch(() => []),
-    ])
-      .then(([movs, bajos]) => {
-        setMovimientos(movs)
-        setBajoMin(bajos)
-      })
+    getMovimientos({ limit: MOV_LIMIT, desde: desde || undefined, hasta: hasta || undefined })
+      .then(setMovimientos)
       .catch((err) => toast.error(extractApiError(err, 'Error al cargar movimientos')))
       .finally(() => setLoading(false))
+  }, [desde, hasta])
+
+  // Datos auxiliares (bajo mínimo + total de productos para KPIs): una sola vez.
+  useEffect(() => {
+    getProductosBajoMinimo().then(setBajoMin).catch(() => {})
     getCategoriasResumen()
       .then((r) => setTotalProductos(r.reduce((a, c) => a + (c.total || 0), 0)))
       .catch(() => {})
-  }
+  }, [])
 
   const loadBajoMin = () => {
     setLoadingBajo(true)
@@ -60,19 +70,18 @@ export default function MovimientosInventario() {
       .finally(() => setLoadingBajo(false))
   }
 
-  useEffect(() => { reload() }, [])
-
   // Tiempo real: cuando otro usuario registra un movimiento, el backend emite
   // 'movimiento:changed' a los roles de inventario. Refrescamos historial y
   // bajo-mínimo en silencio (sin skeleton) para no parpadear la vista.
   const { on: onSocket } = useSocket()
   useEffect(() => {
     const off = onSocket('movimiento:changed', () => {
-      getMovimientos({ limit: 300 }).then(setMovimientos).catch(() => {})
+      getMovimientos({ limit: MOV_LIMIT, desde: desde || undefined, hasta: hasta || undefined })
+        .then(setMovimientos).catch(() => {})
       getProductosBajoMinimo().then(setBajoMin).catch(() => {})
     })
     return off
-  }, [onSocket])
+  }, [onSocket, desde, hasta])
 
   const kpis = useMemo(() => {
     const hoy = new Date().toISOString().slice(0, 10)
@@ -135,6 +144,8 @@ export default function MovimientosInventario() {
     setFiltroTipo(params.tipo || '')
     setFiltroProducto(params.producto || '')
     setProductoSelFiltro(null)  // no tenemos el objeto del producto guardado; el filtro por id sigue aplicando
+    setDesde(params.desde || '')
+    setHasta(params.hasta || '')
     setSort(params.sort || '')
     setDir(params.dir || 'asc')
   }
@@ -208,6 +219,22 @@ export default function MovimientosInventario() {
                 <option value="AJUSTE">Ajuste</option>
                 <option value="TRASPASO">Traspaso</option>
               </Select>
+              <Input
+                type="date"
+                label="Desde"
+                wrapperClassName="sm:w-40"
+                value={desde}
+                max={hasta || undefined}
+                onChange={(e) => setDesde(e.target.value)}
+              />
+              <Input
+                type="date"
+                label="Hasta"
+                wrapperClassName="sm:w-40"
+                value={hasta}
+                min={desde || undefined}
+                onChange={(e) => setHasta(e.target.value)}
+              />
               <div className="flex-1">
                 <label className="block text-sm font-medium text-ink-700 dark:text-ink-200 mb-1">Producto</label>
                 <ProductoPicker
@@ -227,16 +254,34 @@ export default function MovimientosInventario() {
                 )}
               </div>
             </div>
+            {(filtroTipo || filtroProducto || desde || hasta) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFiltroTipo(''); setFiltroProducto(''); setProductoSelFiltro(null)
+                  setDesde(''); setHasta('')
+                }}
+                className="text-[11px] text-brand-600 mt-2 hover:underline"
+              >
+                Limpiar todos los filtros
+              </button>
+            )}
           </Card>
 
           <div className="mt-4">
             <SavedViews
               listKey="inventario-movimientos"
-              current={{ tipo: filtroTipo, producto: filtroProducto, sort, dir: sort ? dir : '' }}
-              defaults={{ tipo: '', producto: '', sort: '', dir: '' }}
+              current={{ tipo: filtroTipo, producto: filtroProducto, desde, hasta, sort, dir: sort ? dir : '' }}
+              defaults={{ tipo: '', producto: '', desde: '', hasta: '', sort: '', dir: '' }}
               onApply={aplicarVista}
             />
           </div>
+
+          {!loading && movimientos.length >= MOV_LIMIT && (
+            <div className="mt-4 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+              Mostrando los {MOV_LIMIT} movimientos más recientes del rango. Acota por fechas (Desde / Hasta) para ver el resto.
+            </div>
+          )}
 
           <Card className="mt-4">
             {loading ? (

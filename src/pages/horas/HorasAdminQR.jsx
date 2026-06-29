@@ -5,7 +5,7 @@ import {
   Download, QrCode, RotateCw, Eye,
 } from 'lucide-react'
 import {
-  PageHeader, Input, Button, Badge, EmptyState, Skeleton, ConfirmDialog,
+  PageHeader, Input, Button, Badge, EmptyState, Skeleton, ConfirmDialog, InfoTip,
 } from '../../components/ui'
 import {
   listarTrabajadoresQR, generarQR,
@@ -215,7 +215,12 @@ export default function HorasAdminQR() {
     <>
       <PageHeader
         icon={IdCard}
-        title="Credenciales de asistencia"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Credenciales de asistencia
+            <InfoTip text="Tarjetas con QR para que el trabajador cheque entrada/salida. Genera, previsualiza y descarga en formato CR80. Si una tarjeta se pierde o se compromete, regenera su QR para invalidar la anterior." />
+          </span>
+        }
         description="Genera, previsualiza y descarga credenciales corporativas formato CR80 (85.6 × 54 mm) como imagen PNG."
       />
 

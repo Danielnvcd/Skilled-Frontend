@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
-  Badge, EmptyState, Pagination, Skeleton,
+  Badge, EmptyState, Pagination, Skeleton, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { listarProyectos } from '../../api/proyectos'
@@ -89,7 +89,12 @@ export default function ProyectosList() {
     <>
       <PageHeader
         icon={FolderKanban}
-        title="Gestión de Proyectos"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Gestión de Proyectos
+            <InfoTip text="Crea y administra proyectos, asigna coordinador y participantes. El estado (activo/cerrado) controla dónde aparece el proyecto en horas, prenómina e inventario." />
+          </span>
+        }
         description="Administra los proyectos de la empresa, coordinadores y personal asignado."
         actions={
           isAdmin ? (

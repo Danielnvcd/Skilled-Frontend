@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { Hammer, Plus, Search } from 'lucide-react'
 import {
   Button, Card, PageHeader, Modal, EmptyState,
-  Input, Select, Skeleton, Badge, AuthImage, InfoTip,
+  Input, Select, Skeleton, Badge, AuthImage, InfoTip, Pagination,
 } from '../../components/ui'
 import {
   getUnidades, createUnidad, getHerramientas, authFotoPath,
@@ -95,6 +95,17 @@ export default function HerramientasUnidades() {
       u.complementos?.toLowerCase().includes(s)
     ))
   }, [unidades, search])
+
+  // Paginación del render: con muchas unidades, pintar todas las tarjetas cuelga
+  // el navegador. Mostramos de a UNID_PAGE; se reinicia al cambiar búsqueda/filtros.
+  const UNID_PAGE = 36
+  const [pageUnid, setPageUnid] = useState(0)
+  useEffect(() => { setPageUnid(0) }, [search, herramientaFiltro, estadoFiltro])
+  const totalPagesUnid = Math.max(1, Math.ceil(filtered.length / UNID_PAGE))
+  const filteredPage = useMemo(
+    () => filtered.slice(pageUnid * UNID_PAGE, pageUnid * UNID_PAGE + UNID_PAGE),
+    [filtered, pageUnid],
+  )
 
   const handleHerramientaChange = (e) => {
     const id = e.target.value
@@ -205,7 +216,7 @@ export default function HerramientasUnidades() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((u) => (
+          {filteredPage.map((u) => (
             <Link key={u.id} to={`/inventario/herramientas/unidades/${u.id}`} className="block">
               <Card className="!p-4 h-full flex flex-col gap-3 hover:shadow-md hover:border-brand-300 dark:hover:border-brand-700 transition-all">
                 <div className="flex items-start gap-3">
@@ -261,6 +272,16 @@ export default function HerramientasUnidades() {
             </Link>
           ))}
         </div>
+      )}
+
+      {!loading && filtered.length > UNID_PAGE && (
+        <Pagination
+          page={pageUnid}
+          totalPages={totalPagesUnid}
+          totalElements={filtered.length}
+          size={UNID_PAGE}
+          onChange={setPageUnid}
+        />
       )}
 
       <Modal open={openForm} onClose={() => setOpenForm(false)} title="Nueva unidad física" size="lg">

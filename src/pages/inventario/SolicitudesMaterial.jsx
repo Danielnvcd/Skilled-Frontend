@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, ConfirmDialog,
-  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Badge, Modal, Select, SavedViews, InfoTip,
+  Skeleton, Table, THead, TH, THSort, TBody, TR, TD, Badge, Modal, Select, SavedViews, InfoTip, Pagination,
 } from '../../components/ui'
 import {
   getSolicitudes, updateSolicitudEstado, imprimirSolicitud,
@@ -143,6 +143,18 @@ export default function SolicitudesMaterial() {
       return 0
     })
   }, [filtered, sort, dir])
+
+  // Paginación del render: renderizar cientos/miles de filas de golpe cuelga el
+  // navegador. Mostramos de a PAGE_SIZE; los stats/contadores siguen calculándose
+  // sobre la lista completa (no sobre la página visible).
+  const PAGE_SIZE = 30
+  const [pageRows, setPageRows] = useState(0)
+  useEffect(() => { setPageRows(0) }, [search, activeTab, sort, dir])
+  const totalPagesRows = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const pagedSorted = useMemo(
+    () => sorted.slice(pageRows * PAGE_SIZE, pageRows * PAGE_SIZE + PAGE_SIZE),
+    [sorted, pageRows],
+  )
 
   const onSort = (field, nextDir) => {
     if (!nextDir) {
@@ -410,7 +422,7 @@ export default function SolicitudesMaterial() {
                 <TH align="right">Acciones</TH>
               </THead>
               <TBody>
-                {sorted.map((s) => {
+                {pagedSorted.map((s) => {
                   const tienePendiente = isAprobadaConPendiente(s)
                   return (
                   <TR key={s.id}>
@@ -487,7 +499,7 @@ export default function SolicitudesMaterial() {
         {/* Móvil: tarjetas */}
         {!loading && sorted.length > 0 && (
           <div className="md:hidden space-y-2 p-3">
-            {sorted.map((s) => {
+            {pagedSorted.map((s) => {
               const tienePendiente = isAprobadaConPendiente(s)
               return (
                 <div key={s.id} className="rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3">
@@ -538,6 +550,16 @@ export default function SolicitudesMaterial() {
               )
             })}
           </div>
+        )}
+
+        {!loading && sorted.length > PAGE_SIZE && (
+          <Pagination
+            page={pageRows}
+            totalPages={totalPagesRows}
+            totalElements={sorted.length}
+            size={PAGE_SIZE}
+            onChange={setPageRows}
+          />
         )}
       </Card>
       )}

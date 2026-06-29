@@ -10,11 +10,21 @@ export async function getProductoPorCodigo(codigo) {
 
 // Listado de productos con filtros server-side. Con miles de productos el
 // catálogo NO baja todo: filtra por `categoria` y/o `q` (búsqueda) en la DB.
-export async function getProductos({ skip = 0, limit = 200, categoria, q } = {}) {
+export async function getProductos({ skip = 0, limit = 200, categoria, q, stock, imagen, unidad, compra } = {}) {
   const params = { skip, limit }
   if (categoria) params.categoria = categoria
   if (q) params.q = q
+  if (stock) params.stock = stock        // 'bajo' | 'sin'
+  if (imagen) params.imagen = imagen      // 'con' | 'sin'
+  if (unidad) params.unidad = unidad
+  if (compra) params.compra = 'activa'    // solo productos con compra en curso
   const { data } = await api.get(`${BASE}/productos/`, { params })
+  return data
+}
+
+// Unidades distintas en uso, para el select de filtro del catálogo.
+export async function getUnidadesProductos() {
+  const { data } = await api.get(`${BASE}/productos/unidades/`)
   return data
 }
 
@@ -142,10 +152,12 @@ export async function setProductosDeEstante(estanteId, producto_ids) {
 }
 
 // --- Movimientos ---
-export async function getMovimientos({ producto_id, tipo, limit = 200 } = {}) {
+export async function getMovimientos({ producto_id, tipo, desde, hasta, limit = 200 } = {}) {
   const params = { limit }
   if (producto_id) params.producto_id = producto_id
   if (tipo) params.tipo = tipo
+  if (desde) params.desde = desde
+  if (hasta) params.hasta = hasta
   const { data } = await api.get(`${BASE}/movimientos/`, { params })
   return data
 }
