@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Table, THead, TH, THSort, TBody, TR, TD,
-  Badge, Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews,
+  Badge, Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -299,7 +299,18 @@ export default function EmpleadosList({ variante = 'activos' }) {
     <>
       <PageHeader
         icon={UsersIcon}
-        title={titulo}
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            {titulo}
+            <InfoTip
+              text={
+                variante === 'bajas'
+                  ? 'Empleados inactivos. Puedes reactivarlos de forma individual o en lote para devolverlos a las operaciones activas.'
+                  : 'Plantilla activa. Busca por nombre, número o RFC; ordena por cualquier columna; selecciona varias filas para acciones en lote; e importa o exporta a Excel.'
+              }
+            />
+          </span>
+        }
         description={
           variante === 'bajas'
             ? 'Empleados inactivos o con fecha de baja registrada.'
@@ -364,13 +375,14 @@ export default function EmpleadosList({ variante = 'activos' }) {
 
       {isAdmin && selectedIds.size > 0 && (
         <div className="mb-3 px-3 py-2 rounded-lg bg-brand-50 dark:bg-brand-900/30 border border-brand-200 dark:border-brand-800 flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-brand-900 dark:text-brand-100">
+          <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-900 dark:text-brand-100">
             {selectedIds.size} seleccionado{selectedIds.size === 1 ? '' : 's'}
             {selectedIds.size > visibleSelectedCount && (
               <span className="ml-1 text-xs font-normal text-brand-700 dark:text-brand-300">
                 ({visibleSelectedCount} en esta vista)
               </span>
             )}
+            <InfoTip text="La selección se acumula entre páginas y búsquedas: puedes armar el lote navegando varias vistas sin perder lo ya marcado. Usa Limpiar para reiniciarla." />
           </span>
           <div className="flex-1" />
           {variante === 'activos' && (

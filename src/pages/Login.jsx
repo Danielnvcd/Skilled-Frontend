@@ -43,37 +43,70 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-6 dark overflow-hidden font-['Inter'] bg-ink-950 login-enter">
-      {/* Video de fondo */}
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        poster=""
-        className="absolute inset-0 w-full h-full object-cover z-0"
-        aria-hidden="true"
-      >
-        <source src="/login-bg.mp4" type="video/mp4" />
-      </video>
+    <div className="min-h-screen grid lg:grid-cols-2 dark font-['Inter'] bg-ink-950 login-enter">
+      {/* ───────────────────────── Panel de marca (izquierda) ─────────────────────────
+          Solo visible en desktop. Muestra el video institucional con un degradado
+          corporativo encima y un mensaje de valor + indicadores de confianza. */}
+      <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-12 xl:p-16">
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover z-0"
+          aria-hidden="true"
+        >
+          <source src="/login-bg.mp4" type="video/mp4" />
+        </video>
+        {/* Degradado corporativo: del azul de marca al slate profundo, en diagonal. */}
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-brand-950/85 via-ink-950/80 to-ink-950/95" />
 
-      {/* Overlay sobrio: oscurece el video sin tintes vibrantes. */}
-      <div className="absolute inset-0 z-0 bg-ink-950/70" />
+        {/* Logo arriba */}
+        <div className="relative z-10">
+          <img
+            src="/logo1.png"
+            alt="Skilled"
+            className="h-12 max-w-[200px] object-contain"
+            draggable={false}
+          />
+        </div>
 
-      <div className="relative z-10 w-full max-w-md">
-        {/* Card sobria: panel slate semi-opaco, mismo lenguaje que las cards del
-            dashboard (border-ink-800 + rounded-xl). Suficiente blur para
-            legibilidad sin look glassy excesivo. */}
-        <div className="rounded-xl border border-ink-800 bg-ink-900/90 backdrop-blur-md p-8 sm:p-10">
-          <div className="flex flex-col items-center text-center mb-8">
-            <img
-              src="/logo1.png"
-              alt="Skilled"
-              className="h-14 max-w-[220px] object-contain mb-6"
-              draggable={false}
-            />
-            <h1 className="text-2xl font-semibold text-ink-100 tracking-tight">Bienvenido de vuelta</h1>
+        {/* Pie de panel */}
+        <div className="relative z-10 flex items-center gap-2 text-[11px] uppercase tracking-widest text-ink-400 font-semibold">
+          <ShieldCheck size={14} className="text-brand-400" />
+          Conexión segura
+        </div>
+      </div>
+
+      {/* ───────────────────────── Panel de formulario (derecha) ───────────────────────── */}
+      <div className="relative flex items-center justify-center p-6 sm:p-10">
+        {/* En móvil reutilizamos el video como fondo sutil ya que el panel de
+            marca queda oculto. */}
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          className="absolute inset-0 w-full h-full object-cover z-0 lg:hidden"
+          aria-hidden="true"
+        >
+          <source src="/login-bg.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 z-0 bg-ink-950/85 lg:hidden" />
+
+        <div className="relative z-10 w-full max-w-sm">
+          {/* Logo solo en móvil (en desktop ya está en el panel de marca). */}
+          <img
+            src="/logo1.png"
+            alt="Skilled"
+            className="h-12 max-w-[200px] object-contain mb-8 lg:hidden"
+            draggable={false}
+          />
+
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-ink-100 tracking-tight">Iniciar sesión</h1>
             <p className="mt-1.5 text-sm text-ink-400">
               Ingresa tus credenciales para acceder a la plataforma.
             </p>
@@ -149,15 +182,10 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-8 flex items-center justify-center gap-2 text-[10px] uppercase tracking-widest text-ink-500 font-semibold border-t border-ink-800 pt-6">
-            <ShieldCheck size={14} className="text-brand-400" />
-            Conexión segura
-          </div>
+          <p className="mt-10 text-center text-xs text-ink-500">
+            ¿Problemas para acceder? Contacta a soporte técnico.
+          </p>
         </div>
-
-        <p className="mt-6 text-center text-xs text-ink-500">
-          ¿Problemas para acceder? Contacta a soporte técnico.
-        </p>
       </div>
     </div>
   )

@@ -7,7 +7,7 @@ import {
   UserRoundPlus, UsersRound, FolderKanban, FolderCheck, LayoutGrid, CalendarClock,
   ReceiptText, HandCoins, ClipboardList,
 } from 'lucide-react'
-import { Card, PageHeader, Skeleton } from '../components/ui'
+import { Card, PageHeader, Skeleton, InfoTip } from '../components/ui'
 import { DonutCorporativo, BarrasCorporativas } from '../components/charts/CorporateCharts'
 import { useAuth } from '../context/AuthContext'
 import { useSocket } from '../context/SocketContext'
@@ -100,7 +100,7 @@ function QuickAccessCard({ to, Icon, label, hint }) {
   )
 }
 
-function Panel({ title, subtitle, Icon, action, children, className = '', bodyClassName = '' }) {
+function Panel({ title, subtitle, Icon, action, info, children, className = '', bodyClassName = '' }) {
   return (
     <div className={`bg-white dark:bg-ink-900 rounded-xl border border-ink-200 dark:border-ink-800 p-4 flex flex-col ${className}`}>
       <div className="flex items-center justify-between gap-2 pb-3 mb-3 border-b border-ink-100 dark:border-ink-800/80 flex-shrink-0">
@@ -108,6 +108,7 @@ function Panel({ title, subtitle, Icon, action, children, className = '', bodyCl
           <div className="flex items-center gap-2 text-ink-800 dark:text-ink-200 font-semibold text-sm">
             {Icon && <Icon size={15} className="text-ink-400 dark:text-ink-500" strokeWidth={2} />}
             {title}
+            {info && <InfoTip text={info} />}
           </div>
           {subtitle && (
             <div className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 ml-[22px]">{subtitle}</div>
@@ -228,8 +229,9 @@ export default function Dashboard() {
       {/* Accesos rápidos */}
       <div>
         <div className="flex items-center justify-between mb-3 px-0.5">
-          <p className="text-xs uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">
+          <p className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">
             Accesos rápidos
+            <InfoTip text="Atajos a las tareas más frecuentes. Un clic te lleva directo a la pantalla para crear o gestionar cada módulo." />
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -243,12 +245,20 @@ export default function Dashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div>
+        <div className="flex items-center justify-between mb-3 px-0.5">
+          <p className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold text-ink-500 dark:text-ink-400">
+            Indicadores
+            <InfoTip text="Cifras clave de la operación en tiempo real. Cada tarjeta es un enlace: haz clic para ver el detalle que explica el número." />
+          </p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Trab. activos" value={stats?.total_trabajadores ?? 0} Icon={UsersRound} to="/empleados" />
         {/* Nuevos este mes → la lista ordenada por ingreso desc deja arriba justo a esos. */}
         <StatCard label="Nuevos este mes" value={stats?.nuevos_ingresos ?? 0} Icon={UserRoundPlus} to="/empleados?sort=ingreso&dir=desc" />
         <StatCard label="Total proyectos" value={stats?.total_proyectos ?? 0} Icon={FolderKanban} to="/proyectos" />
         <StatCard label="Proy. activos" value={stats?.proyectos_activos ?? 0} Icon={FolderCheck} to="/proyectos" />
+        </div>
       </div>
 
       {/* Charts */}
@@ -257,6 +267,7 @@ export default function Dashboard() {
           title="Empleados por proyecto / área"
           subtitle={`${proyectosData.length} ${proyectosData.length === 1 ? 'asignación' : 'asignaciones'}`}
           Icon={FolderOpen}
+          info="Distribución de asignaciones por proyecto. Un trabajador en dos proyectos cuenta en ambas rebanadas, por eso el total son asignaciones, no personas únicas."
           bodyClassName="flex items-center justify-center"
         >
           {/* El total del centro son ASIGNACIONES, no empleados únicos: un
@@ -272,6 +283,7 @@ export default function Dashboard() {
           title="Empleados por puesto principal"
           subtitle={`Top ${puestosData.length} de la plantilla`}
           Icon={Briefcase}
+          info="Cantidad de empleados agrupados por su puesto principal. Muestra los 10 puestos con más personal."
         >
           <BarrasCorporativas data={puestosData} isDark={isDark} emptyText="Sin puestos asignados" />
         </Panel>
@@ -282,6 +294,7 @@ export default function Dashboard() {
         <Panel
           title="Actividad reciente"
           Icon={History}
+          info="Últimos movimientos registrados en el sistema en tiempo real. Las acciones marcadas como SOSPECHOSO (intentos fallidos, eliminaciones o cambios de contraseña) se resaltan en rojo."
           action={
             <Link
               to="/bitacora"
@@ -338,6 +351,7 @@ export default function Dashboard() {
         <Panel
           title="Cumpleaños del mes"
           Icon={Cake}
+          info="Empleados que cumplen años este mes, ordenados por día. El festejado de hoy se marca con la etiqueta HOY."
           action={
             <Link
               to="/empleados"
@@ -396,6 +410,7 @@ export default function Dashboard() {
             <AlertTriangle size={14} className="text-amber-500" />
             Documentos por vencer
           </span>}
+          info="Credenciales y documentos próximos a caducar o ya vencidos. En ámbar los que están por vencer y en rojo los vencidos. Haz clic para ir al expediente del empleado."
         >
           <ul className="space-y-1 max-h-80 overflow-y-auto scrollbar-thin">
             {data?.docs_por_vencer?.length ? data.docs_por_vencer.map((item, idx) => {

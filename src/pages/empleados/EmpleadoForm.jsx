@@ -6,7 +6,7 @@ import {
   Files, AlertCircle,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Input, Textarea, Select, Card, CardHeader, Skeleton, Badge,
+  PageHeader, Button, Input, Textarea, Select, Card, CardHeader, Skeleton, Badge, InfoTip,
 } from '../../components/ui'
 import {
   crearTrabajador, actualizarTrabajador, obtenerTrabajador, exportarEmpleado,
@@ -66,10 +66,15 @@ function TabButton({ active, onClick, icon: Icon, label }) {
   )
 }
 
-function Section({ title, children }) {
+function Section({ title, info, children }) {
   return (
     <div className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-5">
-      {title && <h3 className="text-sm font-semibold text-ink-700 dark:text-ink-300 mb-4">{title}</h3>}
+      {title && (
+        <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-700 dark:text-ink-300 mb-4">
+          {title}
+          {info && <InfoTip text={info} />}
+        </h3>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </div>
   )
@@ -243,7 +248,7 @@ export default function EmpleadoForm({ modo }) {
             />
           </div>
           <div className="space-y-4">
-            <Section title="Identidad">
+            <Section title="Identidad" info="No. empleado y Nombre(s) son obligatorios; el resto del expediente puede completarse después. El número de empleado es el folio interno único de la persona.">
               <Input label="No. empleado" required value={form.no_empleado} onChange={onField('no_empleado')} error={errors.no_empleado} />
               <Input label="Nombre(s)" required value={form.nombre} onChange={onField('nombre')} error={errors.nombre} />
               <Input label="Apellidos" value={form.nombre_apellidos} onChange={onField('nombre_apellidos')} />
@@ -333,8 +338,10 @@ export default function EmpleadoForm({ modo }) {
       {/* ── FINANZAS ───────────────────────────────────────────────────── */}
       {activeTab === 'finanzas' && (
         <div className="space-y-4">
-          <Section title="Sueldo">
-            <Input label="Salario real pactado por semana" type="number" min={0} step="0.01"
+          <Section title="Sueldo" info="Lo que el empleado recibe realmente por semana es el salario pactado. Los campos SB, SDI y folio IDSE son los valores oficiales que reporta el IMSS y pueden diferir del pago real.">
+            <Input
+              label={<span className="inline-flex items-center gap-1">Salario real pactado por semana <InfoTip text="Monto neto que el empleado cobra cada semana. Es la base de la prenómina, independiente del salario que se reporta al IMSS." /></span>}
+              type="number" min={0} step="0.01"
               value={form.salario_real_pactado_x_sem} onChange={onField('salario_real_pactado_x_sem')} />
             <Select label="Tipo de pago" value={form.tipo_pago} onChange={onField('tipo_pago')}>
               <option value="">—</option>
@@ -342,13 +349,21 @@ export default function EmpleadoForm({ modo }) {
               <option>TRANSFERENCIA</option>
               <option>MIXTO</option>
             </Select>
-            <Select label="Tipo de nómina" value={form.tipo_nomina} onChange={onField('tipo_nomina')}>
+            <Select
+              label={<span className="inline-flex items-center gap-1">Tipo de nómina <InfoTip text="Define cómo se calcula el pago: Semanal (sueldo fijo), Por hora (según horas reportadas) o Cuadrado (monto cerrado por proyecto)." /></span>}
+              value={form.tipo_nomina} onChange={onField('tipo_nomina')}>
               <option value="">—</option><option>Semanal</option><option>Por hora</option><option>Cuadrado</option>
             </Select>
-            <Input label="Sueldo base (SB)" type="number" step="0.01" value={form.sb} onChange={onField('sb')} />
-            <Input label="SDI" type="number" step="0.01" value={form.sdi} onChange={onField('sdi')} />
+            <Input
+              label={<span className="inline-flex items-center gap-1">Sueldo base (SB) <InfoTip text="Salario base de cotización registrado ante el IMSS. Suele ser menor al salario real pactado." /></span>}
+              type="number" step="0.01" value={form.sb} onChange={onField('sb')} />
+            <Input
+              label={<span className="inline-flex items-center gap-1">SDI <InfoTip text="Salario Diario Integrado: base diaria que usa el IMSS para cuotas e indemnizaciones (incluye prestaciones)." /></span>}
+              type="number" step="0.01" value={form.sdi} onChange={onField('sdi')} />
             <Input label="Letra/Categoría" value={form.letra} onChange={onField('letra')} maxLength={100} />
-            <Input label="Folio Mov IDSE" value={form.folio_mov_idse} onChange={onField('folio_mov_idse')} maxLength={100} />
+            <Input
+              label={<span className="inline-flex items-center gap-1">Folio Mov IDSE <InfoTip text="Folio del movimiento de alta/baja/modificación presentado en el sistema IDSE del IMSS." /></span>}
+              value={form.folio_mov_idse} onChange={onField('folio_mov_idse')} maxLength={100} />
           </Section>
           <Section title="Adicionales y descuentos">
             <Input label="Horas extra (monto)" type="number" step="0.01" value={form.hr_extra} onChange={onField('hr_extra')} />

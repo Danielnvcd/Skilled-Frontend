@@ -212,6 +212,14 @@ export default function FichaTecnica() {
     )
   }, [trabajadores, q])
 
+  // Cada ficha es una tarjeta pesada (imagen autenticada + documentos), así que
+  // para admins con cientos de empleados renderizar todas de golpe traba la UI.
+  // Limitamos lo que se pinta y guiamos a buscar para acotar; la búsqueda sigue
+  // operando sobre la lista completa, no sobre el recorte.
+  const LIMITE_VISIBLE = 60
+  const visibles = useMemo(() => filtrados.slice(0, LIMITE_VISIBLE), [filtrados])
+  const truncado = filtrados.length > LIMITE_VISIBLE
+
   return (
     <>
       <PageHeader
@@ -254,16 +262,22 @@ export default function FichaTecnica() {
             />
           ) : isMobile ? (
             <div>
-              {filtrados.map((t) => (
+              {visibles.map((t) => (
                 <FichaAccordion key={t.id} trabajador={t} onPreview={setViewerDoc} />
               ))}
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filtrados.map((t) => (
+              {visibles.map((t) => (
                 <FichaGridCard key={t.id} trabajador={t} onPreview={setViewerDoc} />
               ))}
             </div>
+          )}
+
+          {truncado && (
+            <p className="mt-5 text-center text-xs text-ink-500 dark:text-ink-400">
+              Mostrando {LIMITE_VISIBLE} de {filtrados.length}. Usa el buscador para acotar y ver al trabajador que necesitas.
+            </p>
           )}
         </>
       )}

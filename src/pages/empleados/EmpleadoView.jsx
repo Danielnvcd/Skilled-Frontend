@@ -8,7 +8,7 @@ import {
   ChevronLeft,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog, ImageViewer,
+  PageHeader, Button, Card, CardHeader, Skeleton, Badge, EmptyState, ConfirmDialog, ImageViewer, InfoTip,
 } from '../../components/ui'
 import AvatarFoto from '../../components/empleados/AvatarFoto'
 import EmpleadoTimeline from '../../components/empleados/EmpleadoTimeline'
@@ -238,10 +238,11 @@ function DataRow({ label, value, mono = false, tone, className = '' }) {
   )
 }
 
-function SectionTitle({ children }) {
+function SectionTitle({ children, info }) {
   return (
-    <h3 className="text-sm font-semibold text-ink-800 dark:text-ink-200 mb-3 pb-2 border-b border-ink-200 dark:border-ink-800">
+    <h3 className="inline-flex items-center gap-1.5 w-full text-sm font-semibold text-ink-800 dark:text-ink-200 mb-3 pb-2 border-b border-ink-200 dark:border-ink-800">
       {children}
+      {info && <InfoTip text={info} />}
     </h3>
   )
 }
@@ -329,7 +330,12 @@ export default function EmpleadoView() {
   return (
     <>
       <PageHeader
-        title="Ficha del empleado"
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            Ficha del empleado
+            <InfoTip text="Vista de solo lectura del expediente. Revisa el porcentaje de completitud, las alertas próximas (cumpleaños, vencimientos), credenciales y documentos. Usa Editar para modificar datos." />
+          </span>
+        }
         description={`#${data.no_empleado} · ${data.area || 'Sin área'}`}
         breadcrumb={
           <Link to="/empleados" className="hover:underline inline-flex items-center gap-1">
@@ -511,7 +517,7 @@ export default function EmpleadoView() {
         </Card>
 
         <Card>
-          <SectionTitle>IMSS · Inbursa</SectionTitle>
+          <SectionTitle info="Valores oficiales reportados al IMSS. SB = sueldo base de cotización; SDI = salario diario integrado; Folio IDSE = folio del movimiento ante el seguro social.">IMSS · Inbursa</SectionTitle>
           <dl>
             <DataRow label="SB" value={fmtMoney(data.sb)} mono />
             <DataRow label="SDI" value={fmtMoney(data.sdi)} mono />
