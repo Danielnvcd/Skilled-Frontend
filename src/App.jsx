@@ -51,6 +51,7 @@ const TomaDetalle = lazy(() => import('./pages/inventario/TomaDetalle'))
 const MovimientosInventario = lazy(() => import('./pages/inventario/MovimientosInventario'))
 const RegistrarMovimiento = lazy(() => import('./pages/inventario/RegistrarMovimiento'))
 const SolicitudesMaterial = lazy(() => import('./pages/inventario/SolicitudesMaterial'))
+const EntregaDirecta = lazy(() => import('./pages/inventario/EntregaDirecta'))
 const SolicitudesCompra = lazy(() => import('./pages/inventario/SolicitudesCompra'))
 const MisPedidos = lazy(() => import('./pages/inventario/MisPedidos'))
 const ScannerMovil = lazy(() => import('./pages/inventario/ScannerMovil'))
@@ -181,6 +182,7 @@ export default function App() {
         <Route path="inventario/movimientos" element={<RoleRoute allow={isInventario}><MovimientosInventario /></RoleRoute>} />
         <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={isInventario}><RegistrarMovimiento /></RoleRoute>} />
         <Route path="inventario/solicitudes" element={<RoleRoute allow={canSolicit}><SolicitudesMaterial /></RoleRoute>} />
+        <Route path="inventario/entrega-directa" element={<RoleRoute allow={isInventario}><EntregaDirecta /></RoleRoute>} />
         <Route path="inventario/solicitudes-compra" element={<RoleRoute allow={inventarioSolo}><SolicitudesCompra /></RoleRoute>} />
         <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
         <Route path="inventario/tomas"       element={<RoleRoute allow={isInventario}><Tomas /></RoleRoute>} />

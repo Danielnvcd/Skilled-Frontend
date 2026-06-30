@@ -151,6 +151,17 @@ export async function setProductosDeEstante(estanteId, producto_ids) {
   return data
 }
 
+// --- Rejilla visual + stock por celda (Pausa 11) ---
+export async function getEstanteLayout(estanteId) {
+  const { data } = await api.get(`${BASE}/estantes/${estanteId}/layout`)
+  return data
+}
+
+export async function saveEstanteLayout(estanteId, posiciones) {
+  const { data } = await api.put(`${BASE}/estantes/${estanteId}/layout`, { posiciones })
+  return data
+}
+
 // --- Movimientos ---
 export async function getMovimientos({ producto_id, tipo, desde, hasta, limit = 200 } = {}) {
   const params = { limit }
@@ -248,6 +259,27 @@ export async function patchSolicitudDetalle(solId, detId, { cantidad_aprobada })
 // payload: { almacen_origen_id?, motivo?, entregas: [{detalle_id, cantidad_entregada}] }
 export async function entregarSolicitud(solId, payload) {
   const { data } = await api.post(`${BASE}/solicitudes/${solId}/entregar`, payload)
+  return data
+}
+
+// Ubicaciones (estante/celda) de cada material de la solicitud, para surtir rápido.
+export async function getSolicitudUbicaciones(solId) {
+  const { data } = await api.get(`${BASE}/solicitudes/${solId}/ubicaciones`)
+  return data
+}
+
+// Entrega directa de mostrador: el de inventario surte material en el acto.
+// payload: { proyecto, proyecto_id?, solicitante_trabajador_id?,
+//            solicitante_nombre?, almacen_origen_id?, notas?, motivo?,
+//            detalles: [{producto_id, cantidad, estante_id?}] }
+export async function createEntregaDirecta(payload) {
+  const { data } = await api.post(`${BASE}/solicitudes/entrega-directa`, payload)
+  return data
+}
+
+// Typeahead de trabajadores activos para elegir solicitante en la entrega directa.
+export async function buscarTrabajadores({ q = '', limit = 20 } = {}) {
+  const { data } = await api.get(`${BASE}/trabajadores-busqueda`, { params: { q, limit } })
   return data
 }
 

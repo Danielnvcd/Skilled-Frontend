@@ -3,7 +3,7 @@ import toast from 'react-hot-toast'
 import {
   ClipboardList, CheckCircle2, XCircle, PackageCheck, Search, Clock,
   ListTodo, ThumbsUp, ThumbsDown, PackageOpen, Printer, Pencil, AlertTriangle,
-  List, LayoutGrid,
+  List, LayoutGrid, MapPin,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, ConfirmDialog,
@@ -11,7 +11,7 @@ import {
 } from '../../components/ui'
 import {
   getSolicitudes, updateSolicitudEstado, imprimirSolicitud,
-  patchSolicitudDetalle, entregarSolicitud, getAlmacenes,
+  patchSolicitudDetalle, entregarSolicitud, getAlmacenes, getSolicitudUbicaciones,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
@@ -28,6 +28,12 @@ const TABS = [
 ]
 
 const num = (v) => Number(v ?? 0)
+
+// Texto corto de una ubicación: "Bodega A · R1 · C2·F3 · 40 aquí".
+const fmtUbic = (u) => {
+  const pos = (u.fila != null && u.columna != null) ? ` · C${u.columna}·F${u.fila}` : ''
+  return `${u.almacen_nombre} · ${u.estante_nombre}${pos} · ${num(u.cantidad)} aquí`
+}
 
 // Estados en palabras claras para el usuario final (el badge mostraba el código
 // crudo en mayúsculas).
@@ -430,7 +436,17 @@ export default function SolicitudesMaterial() {
                     <TD className="text-sm">
                       {new Date(s.fecha_creacion).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}
                     </TD>
-                    <TD className="font-medium">{s.solicitante_nombre}</TD>
+                    <TD className="font-medium">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          {s.solicitante_nombre}
+                          {s.entrega_directa && <Badge tone="neutral">Directa</Badge>}
+                        </span>
+                        {s.entrega_directa && s.capturado_por && (
+                          <span className="text-[10px] text-ink-400">Surtió: {s.capturado_por}</span>
+                        )}
+                      </div>
+                    </TD>
                     <TD>{s.proyecto || '—'}</TD>
                     <TD className="text-sm text-ink-500">{s.detalles?.length || 0}</TD>
                     <TD>
@@ -505,12 +521,16 @@ export default function SolicitudesMaterial() {
                 <div key={s.id} className="rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="font-medium text-sm text-ink-900 dark:text-ink-100 truncate">
+                      <p className="font-medium text-sm text-ink-900 dark:text-ink-100 truncate inline-flex items-center gap-1.5">
                         <span className="font-mono text-ink-500">#{s.id}</span> · {s.solicitante_nombre}
+                        {s.entrega_directa && <Badge tone="neutral">Directa</Badge>}
                       </p>
                       <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">
                         {s.proyecto || 'Sin proyecto'} · {s.detalles?.length || 0} ítem{(s.detalles?.length || 0) === 1 ? '' : 's'}
                       </p>
+                      {s.entrega_directa && s.capturado_por && (
+                        <p className="text-[10px] text-ink-400">Surtió: {s.capturado_por}</p>
+                      )}
                       <p className="text-[11px] text-ink-400">
                         {new Date(s.fecha_creacion).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })}
                       </p>
@@ -671,6 +691,30 @@ function DetallesModal({ solicitud, onClose, onChanged, isAdmin, getStatusTone }
             <span className="text-ink-500 block">Estado actual</span>
             <Badge tone={getStatusTone(solicitud.estatus)}>{ESTATUS_LABEL[solicitud.estatus] || solicitud.estatus}</Badge>
           </div>
+          <div>
+            <span className="text-ink-500 block">Tipo</span>
+            <span className="font-medium text-ink-900 dark:text-ink-100">
+              {solicitud.entrega_directa ? 'Entrega directa (mostrador)' : 'Solicitud'}
+            </span>
+          </div>
+          {solicitud.entrega_directa && solicitud.capturado_por && (
+            <div>
+              <span className="text-ink-500 block">Surtió (capturó)</span>
+              <span className="font-medium text-ink-900 dark:text-ink-100">{solicitud.capturado_por}</span>
+            </div>
+          )}
+          {!solicitud.entrega_directa && solicitud.aprobada_por && (
+            <div>
+              <span className="text-ink-500 block">Aprobó</span>
+              <span className="font-medium text-ink-900 dark:text-ink-100">{solicitud.aprobada_por}</span>
+            </div>
+          )}
+          {!solicitud.entrega_directa && solicitud.entregada_por && (
+            <div>
+              <span className="text-ink-500 block">Entregó</span>
+              <span className="font-medium text-ink-900 dark:text-ink-100">{solicitud.entregada_por}</span>
+            </div>
+          )}
         </div>
 
         {isAprobadaConPendiente(solicitud) && (
@@ -807,6 +851,8 @@ function EntregaModal({ solicitud, onClose, onDone }) {
   const [motivo, setMotivo] = useState('')
   const [fechaDevolucionPrevista, setFechaDevolucionPrevista] = useState('')
   const [cantidades, setCantidades] = useState({}) // detalle_id → string (aplica a material Y herramienta)
+  const [ubicaciones, setUbicaciones] = useState({}) // producto_id → { ubicaciones: [...] }
+  const [estantePick, setEstantePick] = useState({}) // detalle_id → estante_id (de qué celda surtir)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -818,6 +864,22 @@ function EntregaModal({ solicitud, onClose, onDone }) {
         if (activos.length === 1) setAlmacenId(String(activos[0].id))
       })
       .catch(() => toast.error('No se pudieron cargar almacenes'))
+    // Ubicaciones (estante/celda) por producto, para surtir más rápido.
+    setUbicaciones({}); setEstantePick({})
+    getSolicitudUbicaciones(solicitud.id)
+      .then((res) => {
+        const porProd = res?.por_producto || {}
+        setUbicaciones(porProd)
+        // Si un producto está en una sola ubicación, preseleccionarla para
+        // descontar esa celda al entregar.
+        const picks = {}
+        ;(solicitud.detalles || []).forEach((d) => {
+          const ubic = porProd[String(d.producto_id)]?.ubicaciones || []
+          if (ubic.length === 1) picks[d.id] = String(ubic[0].estante_id)
+        })
+        setEstantePick(picks)
+      })
+      .catch(() => setUbicaciones({}))
     // Precargar cantidades = pendiente por línea (material y herramienta).
     const init = {}
     ;(solicitud.detalles || []).forEach((d) => {
@@ -876,10 +938,16 @@ function EntregaModal({ solicitud, onClose, onDone }) {
       return
     }
     const entregas = todasLasLineas
-      .map((d) => ({
-        detalle_id: d.id,
-        cantidad_entregada: Number(cantidades[d.id] || 0),
-      }))
+      .map((d) => {
+        const e = {
+          detalle_id: d.id,
+          cantidad_entregada: Number(cantidades[d.id] || 0),
+        }
+        // De qué celda descontar (solo material; el backend lo ignora en herramientas).
+        const est = estantePick[d.id]
+        if (est) e.estante_id = Number(est)
+        return e
+      })
       .filter((e) => e.cantidad_entregada > 0)
 
     if (entregas.length === 0) {
@@ -1000,11 +1068,37 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                   const excede = numVal > pendiente
                   const permiteDec = unidadPermiteDecimales(d.producto_unidad)
                   const decimalInvalido = !permiteDec && numVal !== Math.floor(numVal)
+                  const ubic = ubicaciones[String(d.producto_id)]?.ubicaciones || []
                   return (
                     <tr key={d.id}>
                       <td className="px-3 py-2">
                         <p className="font-medium text-ink-900 dark:text-ink-100">{d.producto_descripcion}</p>
                         <p className="text-xs text-ink-500">{d.producto_codigo} · {d.producto_unidad}</p>
+                        {ubic.length === 0 ? (
+                          <p className="text-[11px] text-ink-400 mt-1 flex items-center gap-1">
+                            <MapPin size={11} /> Sin ubicación registrada
+                          </p>
+                        ) : ubic.length === 1 ? (
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-1 flex items-center gap-1 font-medium">
+                            <MapPin size={11} />
+                            {fmtUbic(ubic[0])}
+                          </p>
+                        ) : (
+                          <div className="mt-1 flex items-center gap-1">
+                            <MapPin size={11} className="text-emerald-600 flex-shrink-0" />
+                            <select
+                              value={estantePick[d.id] || ''}
+                              onChange={(e) => setEstantePick((s) => ({ ...s, [d.id]: e.target.value }))}
+                              className="text-[11px] px-1 py-0.5 rounded border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 max-w-[220px]"
+                              title="De qué estante surtir"
+                            >
+                              <option value="">Elige estante… ({ubic.length} ubicaciones)</option>
+                              {ubic.map((u) => (
+                                <option key={u.estante_id} value={u.estante_id}>{fmtUbic(u)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2 text-right font-semibold">{baseline}</td>
                       <td className="px-2 py-2 text-right text-emerald-700 dark:text-emerald-300">{yaEnt}</td>

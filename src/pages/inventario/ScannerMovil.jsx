@@ -9,7 +9,7 @@ import {
   Button, Card, Select, Input
 } from '../../components/ui'
 import {
-  getProductos, createMovimiento, getInventarioEstante,
+  createMovimiento, getInventarioEstante,
   getProductoPorCodigo, createMovimientoRapido,
 } from '../../api/inventario'
 import { validarUnidadQR } from '../../api/herramientas'
@@ -34,27 +34,19 @@ export default function ScannerMovil() {
   const [accionSaving, setAccionSaving] = useState(false)
 
   const [estante, setEstante] = useState(null)
-  // Productos de la "categoría local" del estante, traídos del servidor cuando
-  // no hay asignación explícita. Antes se precargaba TODO el catálogo (no
-  // escala a miles); ahora solo la categoría del estante.
-  const [productosCategoria, setProductosCategoria] = useState([])
-  // Productos asignados al estante via ProductoEstante (Pausa 4). Si está vacío
-  // caemos al fallback de la categoría local.
+  // Productos colocados en el estante via ProductoEstante (Pausa 4 + 11). Al
+  // escanear el QR se muestran exactamente los del rack, con su ubicación.
   const [productosEstanteApi, setProductosEstanteApi] = useState(null)
   const [searchText, setSearchText] = useState('')
 
   const [form, setForm] = useState({ tipo: 'ENTRADA', producto_id: '', cantidad: '' })
   const [saving, setSaving] = useState(false)
 
-  // Lista de productos del estante. Prioridad:
-  //   1. lo que devolvió /estantes/<qr>/inventario (asignación explícita).
-  //   2. fallback: productos cuya categoría coincide con la descripción del estante.
-  //   3. último recurso: catálogo completo.
-  const productosEstante = useMemo(() => {
-    if (!estante) return []
-    if (productosEstanteApi && productosEstanteApi.length > 0) return productosEstanteApi
-    return productosCategoria
-  }, [estante, productosCategoria, productosEstanteApi])
+  // Lista de productos del estante: lo que devolvió /estantes/<qr>/inventario.
+  const productosEstante = useMemo(
+    () => (estante ? (productosEstanteApi || []) : []),
+    [estante, productosEstanteApi],
+  )
 
   const filteredProducts = useMemo(() => {
     const q = searchText.trim().toLowerCase()
@@ -71,22 +63,6 @@ export default function ScannerMovil() {
   const [scanVisible, setScanVisible] = useState(SCAN_STEP)
   useEffect(() => { setScanVisible(SCAN_STEP) }, [searchText, estante])
   const productosVisibles = filteredProducts.slice(0, scanVisible)
-
-  // Estante sin productos asignados pero con "categoría local": traemos esa
-  // categoría del servidor (no el catálogo completo).
-  useEffect(() => {
-    if (!estante || (productosEstanteApi && productosEstanteApi.length > 0)) {
-      setProductosCategoria([])
-      return
-    }
-    const cat = estante.descripcion
-    if (!cat) { setProductosCategoria([]); return }
-    let cancel = false
-    getProductos({ categoria: cat, limit: 1000 })
-      .then((res) => { if (!cancel) setProductosCategoria(res) })
-      .catch(() => { if (!cancel) setProductosCategoria([]) })
-    return () => { cancel = true }
-  }, [estante, productosEstanteApi])
 
   // Lifecycle del scanner: se monta cuando isScanning=true (el div #reader ya está en DOM).
   useEffect(() => {
@@ -282,7 +258,7 @@ export default function ScannerMovil() {
             </span>
             <h2 className="text-xl font-bold text-ink-900 dark:text-ink-100">{estante.nombre}</h2>
             <p className="text-xs text-ink-500 mt-1">
-              {estante.descripcion ? `Categoría: ${estante.descripcion}` : 'Catálogo general'}
+              {estante.descripcion || `Rack ${estante.columnas || 1}×${estante.filas || 1}`}
             </p>
           </div>
 
@@ -347,7 +323,7 @@ export default function ScannerMovil() {
             </Button>
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-ink-900 dark:text-ink-100 truncate">{estante.nombre}</h3>
-              <p className="text-xs text-ink-500">{estante.descripcion || 'Catálogo general'}</p>
+              <p className="text-xs text-ink-500">{estante.descripcion || 'Productos del rack'}</p>
             </div>
           </div>
 
@@ -367,7 +343,9 @@ export default function ScannerMovil() {
           <div className="max-h-[60vh] overflow-y-auto divide-y divide-ink-100 dark:divide-ink-800">
             {filteredProducts.length === 0 ? (
               <p className="p-6 text-center text-sm italic text-ink-500">
-                {productosEstante.length === 0 ? 'No hay productos en esta categoría.' : 'Sin resultados.'}
+                {productosEstante.length === 0
+                  ? 'Este rack no tiene productos asignados. Agrégalos en Almacenes → Acomodar.'
+                  : 'Sin resultados.'}
               </p>
             ) : (
               productosVisibles.map(p => {
@@ -391,10 +369,20 @@ export default function ScannerMovil() {
                       />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-ink-500 font-mono">{p.codigo || '—'}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs text-ink-500 font-mono">{p.codigo || '—'}</p>
+                        {p.ubicacion?.fila != null && p.ubicacion?.columna != null && (
+                          <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300">
+                            C{p.ubicacion.columna}·F{p.ubicacion.fila}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-sm text-ink-900 dark:text-ink-100 truncate">{p.descripcion || '—'}</p>
                       <p className={`text-xs font-medium mt-0.5 ${isLow ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                         {stockActual.toFixed(1)} {p.unidad || ''}
+                        {p.ubicacion?.cantidad > 0 && (
+                          <span className="ml-1 text-ink-400">· {Number(p.ubicacion.cantidad) % 1 === 0 ? Number(p.ubicacion.cantidad) : Number(p.ubicacion.cantidad).toFixed(2)} aquí</span>
+                        )}
                         {isLow && <span className="ml-1 px-1.5 py-0.5 text-[9px] bg-red-500 text-white rounded font-bold">BAJO</span>}
                       </p>
                     </div>

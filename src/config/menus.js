@@ -3,7 +3,7 @@ import {
   Settings2, IdCard, PieChart, FileClock, History,
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
-  Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart,
+  Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -123,6 +123,7 @@ export const MENUS = {
     {
       label: 'Compras y solicitudes',
       items: [
+        { path: '/inventario/entrega-directa', label: 'Entrega directa', icon: PackageCheck },
         { path: '/inventario/solicitudes', label: 'Solicitudes de material', icon: ClipboardList },
         { path: '/inventario/solicitudes-compra', label: 'Solicitudes de compra', icon: ShoppingCart },
       ],
