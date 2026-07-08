@@ -1,5 +1,6 @@
 import {
-  Home, User, Users, UserCog, FolderOpen, Clock, DollarSign, HandCoins,
+  Home, User, Users, UserCog, FolderOpen, FolderKanban, Clock, CalendarClock,
+  DollarSign, HandCoins,
   Settings2, IdCard, PieChart, FileClock, History,
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
@@ -61,18 +62,20 @@ export const MENUS = {
     {
       label: 'Operación',
       items: [
-        { path: '/mis-proyectos', label: 'Mis Proyectos', icon: FolderOpen },
+        { path: '/mis-proyectos', label: 'Mis Proyectos', icon: FolderKanban },
         { path: '/credenciales', label: 'Credenciales', icon: IdCard },
-        { path: '/horas', label: 'Reporte de Horas', icon: Clock, end: true },
-        { path: '/horas/movil', label: 'Asistencia QR', icon: ScanLine },
+        { path: '/horas', label: 'Reporte de Horas', icon: CalendarClock, end: true },
+        { path: '/horas/movil', label: 'Asistencia QR', icon: QrCode },
         { path: '/ficha', label: 'Ficha Técnica', icon: HardHat },
       ],
     },
     {
-      // Coordinador puede armar y consultar SUS propios pedidos de material.
+      // Coordinador planea los materiales de sus proyectos y arma/consulta SUS
+      // propios pedidos de material.
       label: 'Inventario',
       items: [
-        { path: '/inventario/mis-pedidos', label: 'Pedir material', icon: Send },
+        { path: '/inventario/proyectos', label: 'Materiales por proyecto', icon: Boxes },
+        { path: '/inventario/mis-pedidos', label: 'Pedir material', icon: ShoppingCart },
         { path: '/inventario/solicitudes', label: 'Mis solicitudes', icon: ClipboardList },
       ],
     },
@@ -210,9 +213,9 @@ export const BOTTOM_NAV = {
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],
   coordinador: [
-    { path: '/horas', label: 'Horas', icon: Clock, end: true },
-    { path: '/horas/movil', label: 'Escanear', icon: ScanLine },
-    { path: '/inventario/mis-pedidos', label: 'Pedidos', icon: Send },
+    { path: '/horas', label: 'Horas', icon: CalendarClock, end: true },
+    { path: '/horas/movil', label: 'Escanear', icon: QrCode },
+    { path: '/inventario/mis-pedidos', label: 'Pedidos', icon: ShoppingCart },
     { path: '/inventario/solicitudes', label: 'Mis sols.', icon: ClipboardList },
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],

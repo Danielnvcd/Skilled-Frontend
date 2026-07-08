@@ -9,13 +9,14 @@ import {
 import {
   Button, Card, PageHeader, Modal, Input, Select, InfoTip,
 } from '../../components/ui'
-import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, previewSolicitudPdf } from '../../api/inventario'
+import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, getProyectosPlanificables, previewSolicitudPdf } from '../../api/inventario'
 import { unidadPermiteDecimales } from '../../utils/unidades'
 import { getHerramientas } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
 import { useServerPagination } from '../../hooks/useServerPagination'
 import { useSocket } from '../../context/SocketContext'
+import { useAuth } from '../../context/AuthContext'
 
 // ─── Catálogo visual de categorías ────────────────────────────────────────────
 // Paleta unificada en slate/ink. La distinción visual viene del icono, no del
@@ -109,7 +110,7 @@ function ProductoCard({ producto, enCart, onClick }) {
           alt={producto.descripcion}
           fallback={
             <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
-              <Icon size={44} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
+              <Icon size={34} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
             </div>
           }
           className="w-full h-full"
@@ -126,7 +127,7 @@ function ProductoCard({ producto, enCart, onClick }) {
         )}
       </div>
       {/* Info */}
-      <div className="p-3 flex flex-col gap-1.5">
+      <div className="p-2.5 flex flex-col gap-1">
         <p className="text-[13px] font-semibold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
           {producto.descripcion}
         </p>
@@ -164,7 +165,7 @@ function HerramientaCard({ herramienta, enCart, onClick }) {
           alt={herramienta.descripcion}
           fallback={
             <div className="w-full h-full flex items-center justify-center bg-ink-100 dark:bg-ink-800">
-              <Hammer size={44} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
+              <Hammer size={34} strokeWidth={1.5} className="text-ink-500 dark:text-ink-400" />
             </div>
           }
           className="w-full h-full"
@@ -178,7 +179,7 @@ function HerramientaCard({ herramienta, enCart, onClick }) {
           </div>
         )}
       </div>
-      <div className="p-3 flex flex-col gap-1.5">
+      <div className="p-2.5 flex flex-col gap-1">
         <p className="text-[13px] font-semibold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
           {herramienta.descripcion}
         </p>
@@ -202,6 +203,11 @@ function HerramientaCard({ herramienta, enCart, onClick }) {
 
 // ─── Componente principal ──────────────────────────────────────────────────
 export default function MisPedidos() {
+  // El coordinador solo puede pedir material para SUS proyectos: usamos el
+  // endpoint con scoping por dueño. El resto de roles (inventario, admin,
+  // solicitante) ve el catálogo completo de proyectos.
+  const { isCoordinador } = useAuth()
+
   const [tab, setTab] = useState('materiales')   // 'materiales' | 'herramientas'
 
   const [saving, setSaving] = useState(false)
@@ -284,8 +290,8 @@ export default function MisPedidos() {
     { pageSize: PAGE_PROD },
   )
   const { data: rawProyectos, error: errProj } = useResource(
-    ['proyectos-inventario'],
-    () => getProyectosInventario(),
+    isCoordinador ? ['proyectos-planificables'] : ['proyectos-inventario'],
+    () => (isCoordinador ? getProyectosPlanificables() : getProyectosInventario()),
     { staleMs: 120_000, invalidateOn: ['proyecto:changed'] },
   )
   const proyectos = rawProyectos ?? []
@@ -633,7 +639,7 @@ export default function MisPedidos() {
 
           {/* Grid */}
           {(tab === 'materiales' ? matLoading : herrLoading) ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
               {[...Array(8)].map((_, i) => (
                 <div key={i} className="aspect-[3/4] bg-ink-100 dark:bg-ink-800 rounded-2xl animate-pulse" />
               ))}
@@ -647,7 +653,7 @@ export default function MisPedidos() {
               </Card>
             ) : (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
                   {filteredVisibles.map((p) => (
                     <ProductoCard
                       key={p.id}
@@ -675,7 +681,7 @@ export default function MisPedidos() {
               </Card>
             ) : (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
                   {herramientasVisibles.map((h) => (
                     <HerramientaCard
                       key={h.id}

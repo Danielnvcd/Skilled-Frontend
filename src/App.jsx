@@ -112,6 +112,10 @@ export default function App() {
 
   const role = user?.role
   const isInventario = role === 'inventario' || isAdmin
+  // Plan de materiales por proyecto: además del rol inventario/admin, el
+  // coordinador planea los materiales de sus proyectos (crea/abre el plan y
+  // selecciona materiales). Solo abre ESAS pantallas, no el resto de inventario.
+  const canPlanMateriales = isInventario || isCoordinador
   // Coordinador también puede crear y ver SUS solicitudes/pedidos (cambio 2026-05-25).
   const canSolicit   = role === 'solicitante_material' || role === 'inventario' || role === 'coordinador' || isAdmin
   const canOperar    = isAdmin || isCoordinador
@@ -170,8 +174,8 @@ export default function App() {
         {/* Inventario: admin + rol inventario */}
         <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
         <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
-        <Route path="inventario/proyectos"   element={<RoleRoute allow={isInventario}><ProyectosInventario /></RoleRoute>} />
-        <Route path="inventario/proyectos/:id" element={<RoleRoute allow={isInventario}><ProyectoInventarioDetalle /></RoleRoute>} />
+        <Route path="inventario/proyectos"   element={<RoleRoute allow={canPlanMateriales}><ProyectosInventario /></RoleRoute>} />
+        <Route path="inventario/proyectos/:id" element={<RoleRoute allow={canPlanMateriales}><ProyectoInventarioDetalle /></RoleRoute>} />
         <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={isInventario}><ProductoKardex /></RoleRoute>} />
         <Route path="inventario/bajo-minimo" element={<RoleRoute allow={isInventario}><BajoMinimo /></RoleRoute>} />
         <Route path="inventario/reportes"    element={<RoleRoute allow={isInventario}><Reportes /></RoleRoute>} />

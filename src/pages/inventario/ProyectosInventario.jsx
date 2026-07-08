@@ -9,7 +9,7 @@ import {
   PageHeader, Button, Card, Select, Input, Skeleton, EmptyState, InfoTip,
   Table, THead, TH, TBody, TR, TD, Badge,
 } from '../../components/ui'
-import { getProyectosMateriales, getProyectosInventario } from '../../api/inventario'
+import { getProyectosMateriales, getProyectosPlanificables } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
 
@@ -71,11 +71,12 @@ export default function ProyectosInventario() {
   const [search, setSearch] = useState('')
   const [nuevoProyectoId, setNuevoProyectoId] = useState('')
 
-  // Todos los proyectos activos: necesario para poder ARRANCAR el plan de uno
-  // que aún no tiene plan ni consumo (esos no salen en la lista de abajo).
+  // Proyectos que el usuario puede planear: necesario para poder ARRANCAR el
+  // plan de uno que aún no tiene plan ni consumo (esos no salen en la lista de
+  // abajo). Con scoping por dueño: el coordinador solo ve los suyos.
   const { data: rawTodos } = useResource(
-    ['proyectos-inventario'],
-    () => getProyectosInventario(),
+    ['proyectos-planificables'],
+    () => getProyectosPlanificables(),
     { staleMs: 120_000, invalidateOn: ['proyecto:changed'] },
   )
   const todosProyectos = rawTodos ?? []

@@ -380,6 +380,14 @@ export async function getProyectosInventario() {
 }
 
 // --- Inventario → Proyectos: plan de materiales, consumo y costos ---
+// Proyectos activos que el usuario puede planear (selector "crear/abrir plan").
+// Con scoping por dueño: el coordinador solo recibe SUS proyectos; inventario y
+// admin, todos. Distinto de getProyectosInventario() (catálogo genérico).
+export async function getProyectosPlanificables() {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/proyectos`)
+  return data
+}
+
 // Resumen por proyecto (planeado vs. consumido, %, costos).
 export async function getProyectosMateriales() {
   const { data } = await api.get(`${BASE}/proyectos-materiales/`)
