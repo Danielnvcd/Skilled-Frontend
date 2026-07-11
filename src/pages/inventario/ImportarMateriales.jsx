@@ -49,6 +49,9 @@ export default function ImportarMateriales() {
       if (res.encolados > 0) {
         setImgProgress({ total: res.encolados, hechas: 0, ok: 0, error: 0, estado: 'running', actual: null })
         toast.success(`Sincronizando ${res.encolados} imagen(es) a R2…`)
+        if (res.restantes > 0) {
+          toast(`Quedan ${res.restantes} para la próxima corrida (vuelve a sincronizar al terminar).`, { icon: 'ℹ️', duration: 6000 })
+        }
       } else {
         toast.success('Todas las imágenes ya están en R2')
       }

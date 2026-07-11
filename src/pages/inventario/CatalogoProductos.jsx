@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -18,6 +18,7 @@ import { unidadPermiteDecimales } from '../../utils/unidades'
 import { esCategoriaCable, CABLE_UNIDAD } from '../../utils/cable'
 import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
+import { useSocket } from '../../context/SocketContext'
 import { Upload } from 'lucide-react'
 
 export default function CatalogoProductos() {
@@ -85,6 +86,10 @@ export default function CatalogoProductos() {
     const t = setTimeout(() => setCatPreview(url), 500)
     return () => clearTimeout(t)
   }, [catModal?.imagen_url])
+
+  // Modal para ver la imagen del producto en grande.
+  const [imgModal, setImgModal] = useState(null)  // { url, titulo, codigo }
+  const verImagen = (p) => { if (p?.imagen_url) setImgModal({ url: p.imagen_url, titulo: p.descripcion, codigo: p.codigo }) }
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -223,6 +228,16 @@ export default function CatalogoProductos() {
   useEffect(() => {
     loadCategorias()
   }, [])
+
+  // Cuando termina la sincronización de imágenes a R2, refresca las imágenes de
+  // categoría (imagen_url pasó a apuntar a R2). Websockets-first.
+  const { on } = useSocket()
+  useEffect(() => {
+    const off = on('producto:changed', (p) => {
+      if (p?.action === 'imagenes_sync') loadCategorias()
+    })
+    return off
+  }, [on])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -628,13 +643,23 @@ export default function CatalogoProductos() {
                   <Card key={p.id} className="group overflow-hidden flex flex-col">
                     <div className="relative aspect-square bg-ink-50 dark:bg-ink-800/50 border-b border-ink-200 dark:border-ink-800 overflow-hidden">
                       {p.imagen_url ? (
-                        <img
-                          src={p.imagen_url}
-                          alt={p.descripcion}
-                          loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => { e.currentTarget.style.display = 'none' }}
-                        />
+                        <>
+                          <img
+                            src={p.imagen_url}
+                            alt={p.descripcion}
+                            loading="lazy"
+                            onClick={() => verImagen(p)}
+                            title="Ver imagen a tamaño completo"
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 cursor-zoom-in"
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                          {/* Pista visual de que la imagen se puede ampliar (no bloquea el clic) */}
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="w-9 h-9 rounded-full bg-black/45 backdrop-blur flex items-center justify-center">
+                              <ZoomIn size={18} className="text-white" />
+                            </span>
+                          </div>
+                        </>
                       ) : (
                         <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
                           <Package size={40} strokeWidth={1.5} />
@@ -703,7 +728,7 @@ export default function CatalogoProductos() {
                 <TR key={p.id}>
                   <TD>
                     {p.imagen_url ? (
-                      <img src={p.imagen_url} alt={p.descripcion} className="w-10 h-10 rounded-md object-cover bg-ink-100" />
+                      <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-10 h-10 rounded-md object-cover bg-ink-100 cursor-zoom-in hover:ring-2 hover:ring-brand-400 transition-all" />
                     ) : (
                       <div className="w-10 h-10 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400">
                         <Package size={20} />
@@ -794,7 +819,7 @@ export default function CatalogoProductos() {
                 <Card key={p.id} className="!p-3">
                   <div className="flex gap-3">
                     {p.imagen_url ? (
-                      <img src={p.imagen_url} alt={p.descripcion} className="w-12 h-12 rounded-md object-cover bg-ink-100 flex-shrink-0" />
+                      <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-12 h-12 rounded-md object-cover bg-ink-100 flex-shrink-0 cursor-zoom-in" />
                     ) : (
                       <div className="w-12 h-12 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 flex-shrink-0">
                         <Package size={22} />
@@ -1068,6 +1093,24 @@ export default function CatalogoProductos() {
         confirmLabel={confirmDelCat?.total > 0 ? `Eliminar categoría y ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}` : 'Eliminar categoría'}
         tone="danger"
       />
+
+      {/* Modal para ver la imagen del producto en grande */}
+      <Modal
+        open={!!imgModal}
+        onClose={() => setImgModal(null)}
+        title={imgModal ? `${imgModal.codigo} — ${imgModal.titulo}` : ''}
+        size="lg"
+      >
+        {imgModal && (
+          <div className="flex items-center justify-center bg-ink-50 dark:bg-ink-900/40 rounded-lg p-2">
+            <img
+              src={imgModal.url}
+              alt={imgModal.titulo}
+              className="max-h-[70vh] max-w-full object-contain rounded"
+            />
+          </div>
+        )}
+      </Modal>
 
       {/* Modal de desglose por bodega (Pausa 2) */}
       <Modal
