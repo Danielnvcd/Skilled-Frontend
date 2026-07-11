@@ -15,6 +15,7 @@ import {
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
+import { cableResumen } from '../../utils/cable'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
 import SolicitudesKanban from './SolicitudesKanban'
@@ -765,6 +766,11 @@ function DetallesModal({ solicitud, onClose, onChanged, isAdmin, getStatusTone }
                       <p className="font-semibold text-ink-900 dark:text-ink-100">{d.producto_descripcion}</p>
                     </div>
                     <p className="text-xs text-ink-500 font-mono mt-0.5">{d.producto_codigo} · {d.producto_unidad}</p>
+                    {!isTool && cableResumen(d) && (
+                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">
+                        Cable: {cableResumen(d)} mm²/AWG
+                      </p>
+                    )}
                     {isTool && (
                       <div className="mt-1.5 text-xs text-ink-500 space-y-0.5">
                         {(d.fecha_uso_inicio || d.fecha_uso_fin) && (
@@ -1074,6 +1080,9 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                       <td className="px-3 py-2">
                         <p className="font-medium text-ink-900 dark:text-ink-100">{d.producto_descripcion}</p>
                         <p className="text-xs text-ink-500">{d.producto_codigo} · {d.producto_unidad}</p>
+                        {cableResumen(d) && (
+                          <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Cable: {cableResumen(d)} mm²/AWG</p>
+                        )}
                         {ubic.length === 0 ? (
                           <p className="text-[11px] text-ink-400 mt-1 flex items-center gap-1">
                             <MapPin size={11} /> Sin ubicación registrada

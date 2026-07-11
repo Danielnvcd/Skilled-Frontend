@@ -8,6 +8,18 @@ export async function getHerramientas(params = {}) {
   return data
 }
 
+// Listado paginado por páginas: devuelve { items, total, page, per_page, pages }
+// para pintar un paginador numérico sin bajar todo el catálogo de herramientas.
+export async function getHerramientasPaginado({ page = 1, perPage = 50, q, clasificacion, serializada, incluir_inactivas } = {}) {
+  const params = { page, per_page: perPage }
+  if (q) params.q = q
+  if (clasificacion) params.clasificacion = clasificacion
+  if (serializada != null) params.serializada = serializada
+  if (incluir_inactivas) params.incluir_inactivas = 1
+  const { data } = await api.get(`${BASE}/herramientas/paginado`, { params })
+  return data
+}
+
 export async function getHerramienta(id) {
   const { data } = await api.get(`${BASE}/herramientas/${id}`)
   return data

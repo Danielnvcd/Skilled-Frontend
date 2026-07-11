@@ -4,14 +4,15 @@ import { Boxes, Plus, Edit2, Trash2, QrCode, Printer, Package, Search, Check, Lo
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  Input, Skeleton, Table, THead, TH, TBody, TR, TD, Select
+  Input, Skeleton, Table, THead, TH, TBody, TR, TD, Select, Pagination
 } from '../../components/ui'
 import {
   getAlmacenes, createAlmacen, updateAlmacen, deleteAlmacen,
   getEstantesPorAlmacen, createEstante, updateEstante, deleteEstante,
-  getCategorias, getProductos,
+  getCategorias,
   getEstanteLayout, saveEstanteLayout,
 } from '../../api/inventario'
+import { useProductoSearch } from '../../hooks/useProductoSearch'
 import EstanteGrid from '../../components/inventario/EstanteGrid'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
@@ -519,13 +520,20 @@ function LayoutEstanteModal({ estante, categorias, onClose }) {
   // catálogo
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
-  const [resultados, setResultados] = useState([])
-  const [buscando, setBuscando] = useState(false)
+  const [qDeb, setQDeb] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setQDeb(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
+  // Catálogo paginado por páginas: el paginador navega el resto (nada inalcanzable).
+  const { opciones: resultados, loading: buscando, page, setPage, total, totalPages, size } = useProductoSearch({
+    q: qDeb, categoria: cat, enabled: open, pageSize: 50,
+  })
 
   // Carga el layout al abrir.
   useEffect(() => {
     if (!estante) return
-    setSelectedCell(null); setQ(''); setCat(''); setResultados([])
+    setSelectedCell(null); setQ(''); setCat('')
     setLoading(true)
     getEstanteLayout(estante.id)
       .then((data) => {
@@ -547,20 +555,6 @@ function LayoutEstanteModal({ estante, categorias, onClose }) {
       .finally(() => setLoading(false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estante])
-
-  // Búsqueda server-side (debounce) del catálogo, filtrable por categoría.
-  useEffect(() => {
-    if (!open) return
-    let cancel = false
-    setBuscando(true)
-    const t = setTimeout(() => {
-      getProductos({ q: q.trim(), categoria: cat || undefined, limit: 50 })
-        .then((res) => { if (!cancel) setResultados(res || []) })
-        .catch(() => { if (!cancel) setResultados([]) })
-        .finally(() => { if (!cancel) setBuscando(false) })
-    }, 250)
-    return () => { cancel = true; clearTimeout(t) }
-  }, [q, cat, open])
 
   const placedIds = useMemo(() => new Set(placements.map((p) => p.producto_id)), [placements])
   const enCeldaSeleccionada = useMemo(() => {
@@ -779,6 +773,11 @@ function LayoutEstanteModal({ estante, categorias, onClose }) {
                     </button>
                   )
                 })
+              )}
+              {!buscando && totalPages > 1 && (
+                <div className="px-3 pb-1">
+                  <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={setPage} />
+                </div>
               )}
             </div>
           </div>

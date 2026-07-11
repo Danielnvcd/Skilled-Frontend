@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
-  Input, Skeleton, Select, Badge, Pagination,
+  Input, Skeleton, Select, Badge, CableTag, Pagination,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import {
-  getProductos, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
+  getProductosPaginado, getCategoriasResumen, createProducto, updateProducto, deleteProducto,
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   deleteCategoriaConProductos,
   getProductoStocks, getProductosConCompraActiva, getUnidadesProductos,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
+import { esCategoriaCable, CABLE_UNIDAD } from '../../utils/cable'
 import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
 import { Upload } from 'lucide-react'
@@ -23,6 +24,17 @@ export default function CatalogoProductos() {
   const [search, setSearch] = useState('')
   const [categoriaFiltro, setCategoriaFiltro] = useState('')
   const [categorias, setCategorias] = useState([])
+
+  // "Ver todos los materiales": lista el catálogo completo (todas las categorías)
+  // sin entrar a una. La cuadrícula de categorías es la vista por defecto.
+  const [verTodos, setVerTodos] = useState(false)
+  // Modo de vista de la lista: 'galeria' (fotos grandes) o 'tabla'. Se recuerda.
+  const [vista, setVista] = useState(() => {
+    try { return localStorage.getItem('catalogo_vista') || 'galeria' } catch { return 'galeria' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('catalogo_vista', vista) } catch { /* ignore */ }
+  }, [vista])
 
   // Filtros avanzados del catálogo (server-side, combinables con categoría/búsqueda).
   const [stockFiltro, setStockFiltro] = useState('')   // '' | 'bajo' | 'sin'
@@ -41,8 +53,10 @@ export default function CatalogoProductos() {
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: ''
+    codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', cable_tipo: '', cable_calibre: ''
   })
+  // ¿La categoría elegida es de cable? Activa los campos Tipo/Tamaño y fuerza unidad M.
+  const esCable = esCategoriaCable(form.categoria)
 
   // Preview de imagen con debounce 500ms: evita disparar requests por cada tecla
   const [imagePreview, setImagePreview] = useState('')
@@ -102,10 +116,20 @@ export default function CatalogoProductos() {
     return () => clearTimeout(t)
   }, [search])
 
-  // Vista de lista cuando hay categoría, texto de búsqueda o algún filtro avanzado.
-  const mostrarLista = !!(categoriaFiltro || search.trim() || nFiltros > 0)
+  // Vista de lista cuando se pide "ver todos", hay categoría, texto de búsqueda o
+  // algún filtro avanzado. Si no, se muestra la cuadrícula de categorías.
+  const mostrarLista = !!(verTodos || categoriaFiltro || search.trim() || nFiltros > 0)
   // El fetch se habilita con el término ya "asentado" (debounced) o filtros activos.
-  const fetchHabilitado = !!(categoriaFiltro || debouncedSearch || nFiltros > 0)
+  const fetchHabilitado = !!(verTodos || categoriaFiltro || debouncedSearch || nFiltros > 0)
+
+  // Volver a la cuadrícula de categorías: limpia todo lo que fuerza la lista.
+  const volverACategorias = () => {
+    setVerTodos(false)
+    setCategoriaFiltro('')
+    setSearch('')
+    setDebouncedSearch('')
+    limpiarFiltros()
+  }
 
   // Resumen de categorías (conteos) para las tarjetas — server-side.
   const {
@@ -118,33 +142,39 @@ export default function CatalogoProductos() {
   )
   const categoriasResumen = resumen ?? []
 
-  // Productos filtrados server-side. Solo se piden cuando hay filtro/búsqueda.
+  // Productos filtrados + paginados por páginas (server-side): con miles de
+  // productos un `limit` fijo dejaba inalcanzables los que sobraran del tope.
+  // Ahora se pide una página a la vez a /productos/paginado (con total y nº de
+  // páginas) y el paginador numérico navega TODO el catálogo sin bajarlo entero.
+  // Solo pide cuando hay filtro/búsqueda activa (la vista por defecto son las
+  // tarjetas de categoría). Sigue por useResource → cache + tiempo real.
+  const PROD_PAGE_SIZE = 50
+  const [pageProd, setPageProd] = useState(0)  // 0-based (para <Pagination>)
+  // Cambiar cualquier filtro/búsqueda vuelve a la primera página.
+  useEffect(() => { setPageProd(0) }, [verTodos, categoriaFiltro, debouncedSearch, stockFiltro, imagenFiltro, unidadFiltro, compraFiltro])
+
   const {
     data: rawProductos,
     loading: loadingProductos,
     error,
     refetch,
   } = useResource(
-    ['productos', { categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro }],
-    () => getProductos({ categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro, limit: 1000 }),
+    ['productos', { page: pageProd, categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro }],
+    () => getProductosPaginado({ page: pageProd + 1, perPage: PROD_PAGE_SIZE, categoria: categoriaFiltro, q: debouncedSearch, stock: stockFiltro, imagen: imagenFiltro, unidad: unidadFiltro, compra: compraFiltro }),
     {
       enabled: fetchHabilitado,
       staleMs: 30_000,
       invalidateOn: ['producto:changed', 'movimiento:changed'],
     },
   )
-  const filtered = fetchHabilitado ? (rawProductos ?? []) : []
-
-  // Paginación en cliente del listado: con categorías grandes (cientos/miles de
-  // productos) renderizar todas las filas a la vez vuelve lento el repintado.
-  const PROD_PAGE_SIZE = 50
-  const [pageProd, setPageProd] = useState(0)
-  useEffect(() => { setPageProd(0) }, [categoriaFiltro, debouncedSearch, stockFiltro, imagenFiltro, unidadFiltro, compraFiltro])
-  const totalPagesProd = Math.max(1, Math.ceil(filtered.length / PROD_PAGE_SIZE))
-  useEffect(() => { if (pageProd > 0 && pageProd >= totalPagesProd) setPageProd(0) }, [pageProd, totalPagesProd])
-  const pagedFiltered = useMemo(
-    () => filtered.slice(pageProd * PROD_PAGE_SIZE, pageProd * PROD_PAGE_SIZE + PROD_PAGE_SIZE),
-    [filtered, pageProd],
+  const pageData = rawProductos ?? { items: [], total: 0, pages: 1 }
+  const filtered = fetchHabilitado ? pageData.items : []
+  const totalProductos = pageData.total || 0
+  const totalPagesProd = pageData.pages || 1
+  // Las columnas Tipo/Tamaño (cable) solo se muestran si en la vista hay algún
+  // producto de cable — en categorías normales no aparecen (sin "—" de relleno).
+  const hayCableEnLista = filtered.some(
+    (p) => esCategoriaCable(p.categoria) || p.cable_tipo || p.cable_calibre,
   )
 
   // Productos con solicitud de compra activa (PENDIENTE/ORDENADA) → badge "En compra".
@@ -196,12 +226,19 @@ export default function CatalogoProductos() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // Cable: la unidad efectiva es siempre M (metros), aunque el campo esté bloqueado.
+    const unidadEfectiva = esCable ? CABLE_UNIDAD : form.unidad
+    // Cable: Tipo y Tamaño son obligatorios (espeja la validación del backend).
+    if (esCable && (!form.cable_tipo.trim() || !form.cable_calibre.trim())) {
+      toast.error('Los productos de cable requieren Tipo y Tamaño (mm²/AWG)')
+      return
+    }
     // Decimales según unidad: pieza/caja → enteros; kg/m/litro → admiten decimales.
-    if (!unidadPermiteDecimales(form.unidad)) {
+    if (!unidadPermiteDecimales(unidadEfectiva)) {
       const sa = Number(form.stock_actual)
       const sm = Number(form.stock_minimo)
       if (!Number.isInteger(sa) || !Number.isInteger(sm)) {
-        toast.error(`La unidad "${form.unidad || 'pza'}" maneja cantidades enteras (sin decimales en el stock)`)
+        toast.error(`La unidad "${unidadEfectiva || 'pza'}" maneja cantidades enteras (sin decimales en el stock)`)
         return
       }
     }
@@ -209,14 +246,19 @@ export default function CatalogoProductos() {
     try {
       const payload = {
         ...form,
+        unidad: unidadEfectiva,
         stock_actual: Number(form.stock_actual),
         stock_minimo: Number(form.stock_minimo),
         precio_unitario: Number(form.precio_unitario),
         // Imagen opcional: '' es "sin imagen". Mandar null (no '') para no chocar
         // con la validación de URL del backend.
         imagen_url: form.imagen_url?.trim() || null,
+        // Atributos de cable: valores para cable, null para no-cable (el backend
+        // también los limpia, pero lo mandamos explícito para no arrastrar datos).
+        cable_tipo: esCable ? form.cable_tipo.trim() : null,
+        cable_calibre: esCable ? form.cable_calibre.trim() : null,
       }
-      
+
       if (editingId) {
         await updateProducto(editingId, payload)
         toast.success('Producto actualizado')
@@ -238,7 +280,7 @@ export default function CatalogoProductos() {
     setDeleting(true)
     try {
       await deleteProducto(confirmDel.id)
-      await refetch()
+      refetch()
       toast.success('Producto eliminado')
       setConfirmDel(null)
     } catch (err) {
@@ -281,7 +323,7 @@ export default function CatalogoProductos() {
 
   const openNew = () => {
     setEditingId(null)
-    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '' })
+    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '', cable_tipo: '', cable_calibre: '' })
     setOpenForm(true)
   }
 
@@ -298,6 +340,8 @@ export default function CatalogoProductos() {
       imagen_url: p.imagen_url || '',
       proveedor_default_nombre: p.proveedor_default_nombre || '',
       proveedor_default_contacto: p.proveedor_default_contacto || '',
+      cable_tipo: p.cable_tipo || '',
+      cable_calibre: p.cable_calibre || '',
     })
     setOpenForm(true)
   }
@@ -435,69 +479,88 @@ export default function CatalogoProductos() {
           {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
         </div>
       ) : !mostrarLista ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-          {categoriasResumen.map((c) => {
-            const cat = c.nombre
-            const bajos = c.bajo_minimo
-            const img = catImages[cat]
-            return (
-              <Card
-                key={cat}
-                className="overflow-hidden cursor-pointer hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all group"
-                onClick={() => setCategoriaFiltro(cat)}
-              >
-                {/* Hero imagen o placeholder neutro */}
-                <div className="relative h-32 bg-ink-50 dark:bg-ink-800/50 overflow-hidden border-b border-ink-200 dark:border-ink-800">
-                  {img ? (
-                    <img
-                      src={img}
-                      alt={cat}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { e.currentTarget.style.display = 'none' }}
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
-                      <Package size={44} strokeWidth={1.5} />
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-100">Categorías</h2>
+              <p className="text-xs text-ink-500 dark:text-ink-400">Explora por categoría o revisa el catálogo completo.</p>
+            </div>
+            <Button variant="secondary" size="sm" leftIcon={<LayoutGrid size={15} />} onClick={() => setVerTodos(true)}>
+              Ver todos los materiales
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+            {categoriasResumen.map((c) => {
+              const cat = c.nombre
+              const bajos = c.bajo_minimo
+              const img = catImages[cat]
+              return (
+                <Card
+                  key={cat}
+                  className="group relative overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                  onClick={() => setCategoriaFiltro(cat)}
+                >
+                  {/* Hero imagen o placeholder con degradado corporativo */}
+                  <div className="relative h-36 overflow-hidden bg-gradient-to-br from-ink-100 to-ink-200 dark:from-ink-800 dark:to-ink-900">
+                    {img ? (
+                      <img
+                        src={img}
+                        alt={cat}
+                        loading="lazy"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        onError={(e) => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                        <Package size={40} strokeWidth={1.5} />
+                      </div>
+                    )}
+                    {/* Scrim inferior para legibilidad y acabado premium */}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/45 to-transparent" />
+                    <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setCatModal({ mode: 'edit', nombre: cat, imagen_url: img || '', original: cat })
+                        }}
+                        title="Editar imagen"
+                        className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-white dark:hover:bg-ink-900"
+                      >
+                        <ImageIcon size={15} strokeWidth={1.8} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setConfirmDelCat({ nombre: cat, total: c.total })
+                        }}
+                        title="Eliminar categoría y sus productos"
+                        className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-red-600 dark:text-red-400 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30"
+                      >
+                        <Trash2 size={15} strokeWidth={1.8} />
+                      </button>
                     </div>
-                  )}
-                  <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setCatModal({ mode: 'edit', nombre: cat, imagen_url: img || '', original: cat })
-                      }}
-                      title="Editar imagen"
-                      className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-ink-700 dark:text-ink-200 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-white dark:hover:bg-ink-900"
-                    >
-                      <ImageIcon size={15} strokeWidth={1.8} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setConfirmDelCat({ nombre: cat, total: c.total })
-                      }}
-                      title="Eliminar categoría y sus productos"
-                      className="w-8 h-8 rounded-md bg-white/90 dark:bg-ink-900/90 backdrop-blur text-red-600 dark:text-red-400 border border-ink-200 dark:border-ink-700 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-900/30"
-                    >
-                      <Trash2 size={15} strokeWidth={1.8} />
-                    </button>
+                    {bajos > 0 && (
+                      <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[10px] font-semibold backdrop-blur ring-1 ring-white/15">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                        {bajos} stock bajo
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
-                  <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{c.total} ítem{c.total === 1 ? '' : 's'}</p>
-                  {bajos > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-[11px] font-semibold rounded-full ring-1 ring-inset ring-red-200 dark:ring-red-800/60">
-                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-                      {bajos} stock bajo
+                  <div className="p-3.5 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
+                      <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{c.total} ítem{c.total === 1 ? '' : 's'}</p>
                     </div>
-                  )}
-                </div>
-              </Card>
-            )
-          })}
+                    <div className="shrink-0 w-7 h-7 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                      <ChevronRight size={15} />
+                    </div>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
         </div>
       ) : filtered.length === 0 ? (
         <Card>
@@ -505,8 +568,8 @@ export default function CatalogoProductos() {
             <Package size={48} className="text-ink-300 mb-4" />
             <h3 className="text-lg font-semibold text-ink-900 dark:text-ink-100">Sin productos</h3>
             <p className="text-ink-500 max-w-md mt-2">No hay productos que coincidan con la búsqueda. Puedes registrar uno nuevo con el botón superior.</p>
-            {categoriaFiltro && (
-              <Button variant="secondary" className="mt-4" onClick={() => setCategoriaFiltro('')}>
+            {(categoriaFiltro || verTodos) && (
+              <Button variant="secondary" className="mt-4" onClick={volverACategorias}>
                 Ver todas las categorías
               </Button>
             )}
@@ -514,36 +577,129 @@ export default function CatalogoProductos() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {categoriaFiltro && (
-            <div className="flex items-center gap-3">
-              <Button variant="secondary" size="sm" onClick={() => setCategoriaFiltro('')}>
-                ← Volver a categorías
-              </Button>
-              <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">{categoriaFiltro}</h2>
+          {/* Volver: enlace discreto arriba, para no estorbar con el título */}
+          {(categoriaFiltro || verTodos) && (
+            <button
+              type="button"
+              onClick={volverACategorias}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-700 dark:text-ink-200 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20 transition-colors"
+            >
+              <ChevronLeft size={15} /> Volver a categorías
+            </button>
+          )}
+          {/* Barra: título + conteo + toggle de vista */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100 truncate">
+                {categoriaFiltro || (verTodos ? 'Todos los materiales' : 'Resultados')}
+              </h2>
               <span className="text-xs text-ink-500 dark:text-ink-400 tabular-nums">
-                {filtered.length} producto{filtered.length === 1 ? '' : 's'}
+                {totalProductos} producto{totalProductos === 1 ? '' : 's'}
               </span>
             </div>
-          )}
-          {filtered.length >= 1000 && (
-            <div className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
-              Mostrando los primeros 1000 resultados. Afina la búsqueda para ver el resto.
+            {/* Toggle Galería / Tabla */}
+            <div className="inline-flex rounded-md border border-ink-200 dark:border-ink-700 overflow-hidden shrink-0">
+              <button
+                type="button"
+                onClick={() => setVista('galeria')}
+                title="Vista de galería (fotos)"
+                className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium transition-colors ${vista === 'galeria' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
+              >
+                <LayoutGrid size={14} /> <span className="hidden sm:inline">Galería</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setVista('tabla')}
+                title="Vista de tabla"
+                className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium border-l border-ink-200 dark:border-ink-700 transition-colors ${vista === 'tabla' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
+              >
+                <List size={14} /> <span className="hidden sm:inline">Tabla</span>
+              </button>
             </div>
-          )}
+          </div>
+
+          {vista === 'galeria' ? (
+            /* Galería: cuadrícula con fotos grandes en todos los tamaños */
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+              {filtered.map((p) => {
+                const bajoStock = p.stock_actual <= p.stock_minimo
+                const compra = compraPorProducto.get(p.id)
+                return (
+                  <Card key={p.id} className="group overflow-hidden flex flex-col">
+                    <div className="relative aspect-square bg-ink-50 dark:bg-ink-800/50 border-b border-ink-200 dark:border-ink-800 overflow-hidden">
+                      {p.imagen_url ? (
+                        <img
+                          src={p.imagen_url}
+                          alt={p.descripcion}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => { e.currentTarget.style.display = 'none' }}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                          <Package size={40} strokeWidth={1.5} />
+                        </div>
+                      )}
+                      {compra && (
+                        <div className="absolute top-2 left-2">
+                          <Badge tone={compra.estatus === 'ORDENADA' ? 'info' : 'warning'}>
+                            {compra.estatus === 'ORDENADA' ? 'Ordenada' : 'En compra'}
+                          </Badge>
+                        </div>
+                      )}
+                      {bajoStock && (
+                        <div className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[10px] font-semibold backdrop-blur">
+                          Stock bajo
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-3 flex flex-col gap-0.5 flex-1">
+                      <p className="font-mono text-[11px] text-brand-700 dark:text-brand-300 truncate">{p.codigo}</p>
+                      <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-snug line-clamp-2">{p.descripcion}</p>
+                      <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
+                      <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} size="xs" className="mt-0.5" />
+                      <div className="mt-auto pt-2 flex items-end justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-semibold tabular-nums ${bajoStock ? 'text-red-600 dark:text-red-400' : 'text-ink-800 dark:text-ink-100'}`}>
+                            {p.stock_disponible ?? p.stock_actual} {p.unidad}
+                          </p>
+                          <p className="text-[10px] text-ink-500 tabular-nums">Mín {p.stock_minimo}</p>
+                        </div>
+                        <p className="font-mono tabular-nums text-xs text-ink-700 dark:text-ink-200">
+                          {(Number(p.precio_unitario) || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-0.5 px-1.5 py-1 border-t border-ink-100 dark:border-ink-800 bg-ink-50/50 dark:bg-ink-900/30">
+                      <Link to={`/inventario/productos/${p.id}/kardex`}>
+                        <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={14} /></Button>
+                      </Link>
+                      <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={14} /></Button>
+                      <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={14} /></Button>
+                      <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={14} /></Button>
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          ) : (
+          <>
           {/* Escritorio: tabla completa */}
-          <div className="hidden md:block">
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <THead>
               <TH>Foto</TH>
               <TH>Código</TH>
               <TH>Descripción</TH>
               <TH>Categoría</TH>
+              {hayCableEnLista && <TH align="center">Tipo</TH>}
+              {hayCableEnLista && <TH align="center">Tamaño (mm²/AWG)</TH>}
               <TH>Stock</TH>
               <TH align="right">Precio</TH>
               <TH align="right">Acciones</TH>
             </THead>
             <TBody>
-              {pagedFiltered.map((p) => (
+              {filtered.map((p) => (
                 <TR key={p.id}>
                   <TD>
                     {p.imagen_url ? (
@@ -572,6 +728,16 @@ export default function CatalogoProductos() {
                     </div>
                   </TD>
                   <TD className="text-sm text-ink-600 dark:text-ink-300">{p.categoria}</TD>
+                  {hayCableEnLista && (
+                    <TD align="center" className="text-sm text-ink-600 dark:text-ink-300">
+                      {p.cable_tipo || <span className="text-ink-300 dark:text-ink-600">—</span>}
+                    </TD>
+                  )}
+                  {hayCableEnLista && (
+                    <TD align="center" className="text-sm text-ink-600 dark:text-ink-300 tabular-nums">
+                      {p.cable_calibre || <span className="text-ink-300 dark:text-ink-600">—</span>}
+                    </TD>
+                  )}
                   <TD>
                     <div className="flex flex-col">
                       <span
@@ -621,7 +787,7 @@ export default function CatalogoProductos() {
 
           {/* Móvil: tarjetas */}
           <div className="md:hidden space-y-2">
-            {pagedFiltered.map((p) => {
+            {filtered.map((p) => {
               const bajoStock = p.stock_actual <= p.stock_minimo
               const compra = compraPorProducto.get(p.id)
               return (
@@ -640,6 +806,7 @@ export default function CatalogoProductos() {
                           <p className="font-medium text-sm text-ink-900 dark:text-ink-100 leading-tight truncate">{p.descripcion}</p>
                           <p className="font-mono text-[11px] text-brand-700 dark:text-brand-300">{p.codigo}</p>
                           <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
+                          <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} size="xs" className="mt-1" />
                         </div>
                         {compra && (
                           <Badge tone={compra.estatus === 'ORDENADA' ? 'info' : 'warning'}>
@@ -670,15 +837,15 @@ export default function CatalogoProductos() {
               )
             })}
           </div>
-          {filtered.length > PROD_PAGE_SIZE && (
-            <Pagination
-              page={pageProd}
-              totalPages={totalPagesProd}
-              totalElements={filtered.length}
-              size={PROD_PAGE_SIZE}
-              onChange={setPageProd}
-            />
+          </>
           )}
+          <Pagination
+            page={pageProd}
+            totalPages={totalPagesProd}
+            totalElements={totalProductos}
+            size={PROD_PAGE_SIZE}
+            onChange={setPageProd}
+          />
         </div>
       )}
 
@@ -698,12 +865,63 @@ export default function CatalogoProductos() {
           <Input label="Descripción" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} required placeholder="Ej. Resistencia 10kΩ 1/4W" />
           
           <div className="grid grid-cols-2 gap-4">
-            <Select label="Categoría" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })} required>
+            <Select
+              label="Categoría"
+              value={form.categoria}
+              onChange={(e) => {
+                const categoria = e.target.value
+                const eraCable = esCategoriaCable(form.categoria)
+                const seraCable = esCategoriaCable(categoria)
+                // Al pasar a cable forzamos unidad M; al salir de cable (donde
+                // estaba bloqueada en M) volvemos a un default editable.
+                setForm((f) => ({
+                  ...f,
+                  categoria,
+                  unidad: seraCable ? CABLE_UNIDAD : (eraCable ? 'pza' : f.unidad),
+                }))
+              }}
+              required
+            >
               <option value="">Seleccione Categoría</option>
               {categorias.map(c => <option key={c} value={c}>{c}</option>)}
             </Select>
-            <Input label="Unidad (ej. pza, m, rollo)" value={form.unidad} onChange={(e) => setForm({ ...form, unidad: e.target.value })} required placeholder="pza" />
+            <Input
+              label="Unidad (ej. pza, m, rollo)"
+              value={esCable ? CABLE_UNIDAD : form.unidad}
+              onChange={(e) => setForm({ ...form, unidad: e.target.value })}
+              required
+              placeholder="pza"
+              disabled={esCable}
+              hint={esCable ? 'Cable: se mide en metros (M)' : undefined}
+            />
           </div>
+
+          {/* Cable: apartados extra resaltados en ámbar para no confundir con lo demás */}
+          {esCable && (
+            <div className="rounded-lg border border-amber-300 dark:border-amber-700/70 bg-amber-50 dark:bg-amber-900/20 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-2 flex items-center gap-1.5">
+                <Cable size={13} /> Datos del cable
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Tipo"
+                  value={form.cable_tipo}
+                  onChange={(e) => setForm({ ...form, cable_tipo: e.target.value })}
+                  required
+                  placeholder="THHN, THW, desnudo…"
+                  maxLength={60}
+                />
+                <Input
+                  label="Tamaño (mm²/AWG)"
+                  value={form.cable_calibre}
+                  onChange={(e) => setForm({ ...form, cable_calibre: e.target.value })}
+                  required
+                  placeholder="12, 2/0, 500 kcmil"
+                  maxLength={40}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <Input label="Stock Actual" type="number" min="0"

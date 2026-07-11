@@ -16,10 +16,10 @@ import {
   recibirSolicitudCompra,
   cancelarSolicitudCompra,
   imprimirSolicitudCompra,
-  getProductos,
   getProyectosInventario,
   getAlmacenes,
 } from '../../api/inventario'
+import { useProductoSearch } from '../../hooks/useProductoSearch'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
 import { useResource } from '../../hooks/useResource'
@@ -344,13 +344,20 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
 
   // Buscador de productos
   const [busq, setBusq] = useState('')
-  const [resultados, setResultados] = useState([])
-  const [buscando, setBuscando] = useState(false)
+  const [busqDeb, setBusqDeb] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setBusqDeb(busq.trim()), 250)
+    return () => clearTimeout(t)
+  }, [busq])
+  // Buscador paginado por páginas: el paginador navega el resto de coincidencias.
+  const { opciones: resultados, loading: buscando, page, setPage, total, totalPages, size } = useProductoSearch({
+    q: busqDeb, enabled: open, pageSize: 20, minChars: 2,
+  })
 
   useEffect(() => {
     if (!open) return
     setProveedor(''); setContacto(''); setProyectoId(''); setPrioridad('MEDIA'); setNotas('')
-    setBusq(''); setResultados([])
+    setBusq('')
     setLineas(seed && seed.length ? seed.map((s, i) => ({
       key: `seed-${i}`,
       producto_id: s.producto_id,
@@ -364,21 +371,6 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
     getProyectosInventario().then(setProyectos).catch(() => setProyectos([]))
   }, [open, seed])
 
-  useEffect(() => {
-    if (!open) return
-    const q = busq.trim()
-    if (q.length < 2) { setResultados([]); return }
-    let cancel = false
-    setBuscando(true)
-    const t = setTimeout(() => {
-      getProductos({ q, limit: 20 })
-        .then((data) => { if (!cancel) setResultados(data || []) })
-        .catch(() => { if (!cancel) setResultados([]) })
-        .finally(() => { if (!cancel) setBuscando(false) })
-    }, 250)
-    return () => { cancel = true; clearTimeout(t) }
-  }, [busq, open])
-
   const agregarProducto = (p) => {
     setLineas((prev) => {
       if (prev.some((l) => l.producto_id === p.id)) {
@@ -390,7 +382,7 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
         unidad: p.unidad || '', cantidad: '1', precio: p.precio_unitario != null ? String(p.precio_unitario) : '', es_libre: false,
       }]
     })
-    setBusq(''); setResultados([])
+    setBusq('')
   }
 
   const agregarLibre = () => {
@@ -551,6 +543,11 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
                     </button>
                   )
                 })
+              )}
+              {!buscando && totalPages > 1 && (
+                <div className="px-3 pb-1">
+                  <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={setPage} />
+                </div>
               )}
             </div>
           )}

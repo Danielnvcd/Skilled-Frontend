@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * - `hasMore` es true mientras la última página vino llena (== pageSize).
  * - `refresh()` recarga desde la página 0 (útil para eventos de websocket).
  */
-export function useServerPagination(fetchPage, depKey, { pageSize = 100 } = {}) {
+export function useServerPagination(fetchPage, depKey, { pageSize = 100, enabled = true } = {}) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -33,6 +33,16 @@ export function useServerPagination(fetchPage, depKey, { pageSize = 100 } = {}) 
 
   // Carga / reinicio: al cambiar depKey (filtros) o al refrescar (tick).
   useEffect(() => {
+    // Deshabilitado (p.ej. el catálogo sin filtro activo): no pedimos nada y
+    // dejamos la lista vacía. Así el hook se puede montar siempre sin fetchear.
+    if (!enabled) {
+      skipRef.current = 0
+      setItems([])
+      setHasMore(false)
+      setError(null)
+      setLoading(false)
+      return
+    }
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -48,7 +58,7 @@ export function useServerPagination(fetchPage, depKey, { pageSize = 100 } = {}) 
       .catch((e) => { if (!cancelled) setError(e) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [depKey, tick, pageSize])
+  }, [depKey, tick, pageSize, enabled])
 
   const loadMore = useCallback(() => {
     if (loadingMore) return

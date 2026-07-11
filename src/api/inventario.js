@@ -22,6 +22,21 @@ export async function getProductos({ skip = 0, limit = 200, categoria, q, stock,
   return data
 }
 
+// Listado paginado por páginas: mismos filtros que getProductos pero devuelve
+// { items, total, page, per_page, pages } para pintar un paginador numérico
+// (Anterior/Siguiente + Página X de Y) sin bajar todo el catálogo.
+export async function getProductosPaginado({ page = 1, perPage = 50, categoria, q, stock, imagen, unidad, compra } = {}) {
+  const params = { page, per_page: perPage }
+  if (categoria) params.categoria = categoria
+  if (q) params.q = q
+  if (stock) params.stock = stock        // 'bajo' | 'sin'
+  if (imagen) params.imagen = imagen      // 'con' | 'sin'
+  if (unidad) params.unidad = unidad
+  if (compra) params.compra = 'activa'    // solo productos con compra en curso
+  const { data } = await api.get(`${BASE}/productos/paginado`, { params })
+  return data
+}
+
 // Unidades distintas en uso, para el select de filtro del catálogo.
 export async function getUnidadesProductos() {
   const { data } = await api.get(`${BASE}/productos/unidades/`)
@@ -540,13 +555,49 @@ export async function descargarPlantillaMateriales() {
   URL.revokeObjectURL(url)
 }
 
-export async function importarMateriales(file) {
+export async function importarMateriales(file, categoriaMapeo) {
   const fd = new FormData()
   fd.append('archivo', file)
+  // Mapa {nombreEnArchivo: categoriaExistente} para categorías ambiguas. Vacío
+  // en la primera subida; el backend responde necesita_confirmacion si aplica.
+  if (categoriaMapeo && Object.keys(categoriaMapeo).length > 0) {
+    fd.append('categoria_mapeo', JSON.stringify(categoriaMapeo))
+  }
   const { data } = await api.post(`${BASE}/productos/importar`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   return data
+}
+
+// --- Imágenes de productos → Cloudflare R2 (WebP) ---
+// Conteos por estado del pipeline: { enabled, ok, pendientes, procesando, error, total }.
+// `enabled` es false en entornos sin R2 configurado (ej. local) → el SPA oculta la UI.
+export async function getEstadoImagenes() {
+  const { data } = await api.get(`${BASE}/productos/imagenes/estado`)
+  return data
+}
+
+// Backfill: encola TODO el catálogo con imagen externa aún no migrada a R2.
+// Devuelve { job_id, encolados }. El progreso llega por el evento de socket
+// 'producto:imagen_progreso'.
+export async function sincronizarImagenes() {
+  const { data } = await api.post(`${BASE}/productos/imagenes/sincronizar`, {})
+  return data
+}
+
+// Exporta TODO el catálogo activo en el mismo formato de la plantilla, ya
+// lleno. Sirve para editar en Excel y reimportar (el import detecta cambios).
+export async function exportarProductos() {
+  const res = await api.get(`${BASE}/productos/exportar`, { responseType: 'blob' })
+  const blob = new Blob([res.data], { type: res.headers['content-type'] })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'catalogo_materiales.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // --- Compras express (Pausa 9) ---

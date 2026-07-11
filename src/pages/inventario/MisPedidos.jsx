@@ -5,17 +5,17 @@ import {
   Wrench, Hexagon, Circle, ArrowDown, GitBranch, Boxes as BoxesIcon,
   Pipette, Printer, Package, Hammer, ImageOff, FolderKanban,
   CalendarRange, FileText, Settings2, Sparkles, X,
+  ChevronRight, ChevronLeft, LayoutGrid,
 } from 'lucide-react'
 import {
-  Button, Card, PageHeader, Modal, Input, Select, InfoTip,
+  Button, Card, PageHeader, Modal, Input, Select, InfoTip, Pagination,
 } from '../../components/ui'
-import { getProductos, getCategoriasResumen, createSolicitud, getProyectosInventario, getProyectosPlanificables, previewSolicitudPdf } from '../../api/inventario'
+import { getProductosPaginado, getCategoriasResumen, getCategoriasConfig, createSolicitud, getProyectosInventario, getProyectosPlanificables, previewSolicitudPdf } from '../../api/inventario'
 import { unidadPermiteDecimales } from '../../utils/unidades'
-import { getHerramientas } from '../../api/herramientas'
+import { cableResumen } from '../../utils/cable'
+import { getHerramientasPaginado } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
-import { useServerPagination } from '../../hooks/useServerPagination'
-import { useSocket } from '../../context/SocketContext'
 import { useAuth } from '../../context/AuthContext'
 
 // ─── Catálogo visual de categorías ────────────────────────────────────────────
@@ -131,6 +131,11 @@ function ProductoCard({ producto, enCart, onClick }) {
         <p className="text-[13px] font-semibold text-ink-900 dark:text-ink-100 line-clamp-2 leading-tight">
           {producto.descripcion}
         </p>
+        {cableResumen(producto) && (
+          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 truncate">
+            {cableResumen(producto)} mm²/AWG
+          </span>
+        )}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[10px] font-mono font-semibold bg-ink-100 dark:bg-ink-800 text-ink-600 dark:text-ink-300 px-1.5 py-0.5 rounded">
             {producto.codigo}
@@ -225,6 +230,7 @@ export default function MisPedidos() {
   const [search, setSearch] = useState('')
   const [searchHerr, setSearchHerr] = useState('')
   const [activeCat, setActiveCat] = useState('Todas')
+  const [verTodos, setVerTodos] = useState(false)  // "ver todos los materiales" sin entrar a una categoría
   const [proyecto, setProyecto] = useState('')      // texto (para PDF y campo requerido)
   const [proyectoId, setProyectoId] = useState('')  // FK real, se manda al backend
   const [notas, setNotas] = useState('')
@@ -257,38 +263,57 @@ export default function MisPedidos() {
     { staleMs: 60_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
 
-  // Productos y herramientas con PAGINACIÓN server-side acumulativa: con miles
-  // de productos un `limit` fijo dejaba inalcanzables los que sobraran del tope
-  // (p.ej. la categoría 501+). Ahora "Mostrar más" pide la siguiente página al
-  // backend vía `skip`, así se llega a todo el catálogo sin límite práctico.
+  // Imágenes de categoría (mismas que el catálogo) para el landing de tarjetas.
+  const [catImages, setCatImages] = useState({})
+  useEffect(() => {
+    getCategoriasConfig()
+      .then((cfgs) => {
+        const m = {}
+        ;(cfgs || []).forEach((c) => { if (c.imagen_url) m[c.nombre] = c.imagen_url })
+        setCatImages(m)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Materiales y herramientas con PAGINACIÓN por páginas server-side: con miles
+  // de ítems un `limit` fijo dejaba inalcanzables los que sobraran del tope.
+  // Ahora se pide una página a la vez a los endpoints /paginado (con total y nº
+  // de páginas) y el paginador numérico navega todo el catálogo. Va por
+  // useResource → cache + refresco en tiempo real (invalidateOn).
   const catParam = activeCat === 'Todas' ? '' : activeCat
-  const PAGE_PROD = 100
+  const PAGE_PROD = 50
+  const [pageProd, setPageProd] = useState(0)  // 0-based (para <Pagination>)
+  useEffect(() => { setPageProd(0) }, [catParam, debouncedSearch])
   const {
-    items: productos,
+    data: rawProd,
     loading: prodLoading,
-    loadingMore: prodLoadingMore,
-    hasMore: prodHasMore,
-    loadMore: loadMoreProd,
-    refresh: refreshProd,
     error: errProd,
-  } = useServerPagination(
-    (skip, limit) => getProductos({ categoria: catParam, q: debouncedSearch, skip, limit }),
-    `${catParam}|${debouncedSearch}`,
-    { pageSize: PAGE_PROD },
+  } = useResource(
+    ['productos', { page: pageProd, categoria: catParam, q: debouncedSearch }],
+    () => getProductosPaginado({ page: pageProd + 1, perPage: PAGE_PROD, categoria: catParam, q: debouncedSearch }),
+    { staleMs: 30_000, invalidateOn: ['producto:changed', 'movimiento:changed'] },
   )
+  const prodData = rawProd ?? { items: [], total: 0, pages: 1 }
+  const productos = prodData.items
+  const prodTotal = prodData.total || 0
+  const prodPages = prodData.pages || 1
+
+  const [pageHerr, setPageHerr] = useState(0)
+  useEffect(() => { setPageHerr(0) }, [debouncedSearchHerr])
   const {
-    items: herramientas,
+    data: rawHerr,
     loading: herrLoadingBase,
-    loadingMore: herrLoadingMore,
-    hasMore: herrHasMore,
-    loadMore: loadMoreHerr,
-    refresh: refreshHerr,
     error: errHerr,
-  } = useServerPagination(
-    (skip, limit) => getHerramientas({ q: debouncedSearchHerr || undefined, skip, limit }),
-    `${debouncedSearchHerr}`,
-    { pageSize: PAGE_PROD },
+  } = useResource(
+    ['herramientas', { page: pageHerr, q: debouncedSearchHerr }],
+    () => getHerramientasPaginado({ page: pageHerr + 1, perPage: PAGE_PROD, q: debouncedSearchHerr || undefined }),
+    { staleMs: 30_000, invalidateOn: ['herramienta:changed'] },
   )
+  const herrData = rawHerr ?? { items: [], total: 0, pages: 1 }
+  const herramientas = herrData.items
+  const herrTotal = herrData.total || 0
+  const herrPages = herrData.pages || 1
+
   const { data: rawProyectos, error: errProj } = useResource(
     isCoordinador ? ['proyectos-planificables'] : ['proyectos-inventario'],
     () => (isCoordinador ? getProyectosPlanificables() : getProyectosInventario()),
@@ -298,15 +323,6 @@ export default function MisPedidos() {
   // Skeleton de materiales mientras carga la página o se asienta el debounce.
   const matLoading = prodLoading || search.trim() !== debouncedSearch
   const herrLoading = herrLoadingBase
-
-  // Tiempo real: al cambiar catálogo/herramientas, recargar desde la página 0.
-  const { on: onSocket } = useSocket()
-  useEffect(() => {
-    const offP = onSocket('producto:changed', refreshProd)
-    const offM = onSocket('movimiento:changed', refreshProd)
-    const offH = onSocket('herramienta:changed', refreshHerr)
-    return () => { offP?.(); offM?.(); offH?.() }
-  }, [onSocket, refreshProd, refreshHerr])
 
   useEffect(() => {
     const err = errProd || errHerr || errProj
@@ -379,6 +395,16 @@ export default function MisPedidos() {
   const filteredVisibles = productos
   const herramientasVisibles = herramientasFiltradas
 
+  // Landing de categorías (mismo patrón que el catálogo): en materiales, sin
+  // categoría elegida, sin "ver todos" y sin búsqueda → se muestran las tarjetas.
+  const enLanding = tab === 'materiales' && activeCat === 'Todas' && !verTodos && !search.trim()
+  const volverACategorias = () => {
+    setActiveCat('Todas')
+    setVerTodos(false)
+    setSearch('')
+    setDebouncedSearch('')
+  }
+
   const openQtyModal = (producto) => {
     const enCart = cart.find((c) => c.id === producto.id)
     setQtyModal({
@@ -411,6 +437,7 @@ export default function MisPedidos() {
       return [...prev, {
         id: p.id, codigo: p.codigo, descripcion: p.descripcion,
         unidad: p.unidad, categoria: p.categoria, imagen_url: p.imagen_url || null,
+        cable_tipo: p.cable_tipo || null, cable_calibre: p.cable_calibre || null,
         cantidad: qty, justificacion,
       }]
     })
@@ -500,6 +527,8 @@ export default function MisPedidos() {
           codigo: item.codigo,
           categoria: item.categoria,
           unidad: item.unidad,
+          cable_tipo: item.cable_tipo || null,
+          cable_calibre: item.cable_calibre || null,
           cantidad: item.cantidad,
           justificacion: item.justificacion || null,
         })),
@@ -597,7 +626,7 @@ export default function MisPedidos() {
               />
             </div>
 
-            {tab === 'materiales' && (
+            {tab === 'materiales' && !enLanding && (
               <div className="flex flex-wrap gap-1.5">
                 {categorias.map((cat) => {
                   const cfg = cat === 'Todas' ? null : getCatCfg(cat)
@@ -622,19 +651,80 @@ export default function MisPedidos() {
             )}
           </Card>
 
+          {enLanding ? (
+            <div className="space-y-4">
+              {/* Landing de categorías (mismo diseño corporativo que el catálogo) */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-100">Categorías</h2>
+                  <p className="text-xs text-ink-500 dark:text-ink-400">Elige una categoría o revisa todo el catálogo.</p>
+                </div>
+                <Button variant="secondary" size="sm" leftIcon={<LayoutGrid size={15} />} onClick={() => setVerTodos(true)}>
+                  Ver todos los materiales
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                {(rawResumen ?? []).map((c) => {
+                  const cat = c.nombre
+                  const bajos = c.bajo_minimo
+                  const img = catImages[cat]
+                  const Icon = getCatCfg(cat).Icon
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setActiveCat(cat)}
+                      className="group relative overflow-hidden rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 text-left hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+                    >
+                      <div className="relative h-32 overflow-hidden bg-gradient-to-br from-ink-100 to-ink-200 dark:from-ink-800 dark:to-ink-900">
+                        {img ? (
+                          <img src={img} alt={cat} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                            <Icon size={36} strokeWidth={1.5} />
+                          </div>
+                        )}
+                        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/45 to-transparent" />
+                        {bajos > 0 && (
+                          <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[10px] font-semibold backdrop-blur ring-1 ring-white/15">
+                            <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                            {bajos} stock bajo
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{cat}</h3>
+                          <p className="text-xs text-ink-500 dark:text-ink-400 mt-0.5 tabular-nums">{c.total} ítem{c.total === 1 ? '' : 's'}</p>
+                        </div>
+                        <div className="shrink-0 w-7 h-7 rounded-full bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 group-hover:bg-brand-600 group-hover:text-white transition-colors">
+                          <ChevronRight size={15} />
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ) : (
+          <>
+          {tab === 'materiales' && (activeCat !== 'Todas' || verTodos || search.trim()) && (
+            <button
+              type="button"
+              onClick={volverACategorias}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-700 dark:text-ink-200 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50/50 dark:hover:bg-brand-900/20 transition-colors"
+            >
+              <ChevronLeft size={15} /> Volver a categorías
+            </button>
+          )}
           {/* Conteo */}
           <div className="flex items-center justify-between px-1">
             <p className="text-xs text-ink-500 dark:text-ink-400">
               <span className="font-bold text-ink-700 dark:text-ink-200">
-                {tab === 'materiales' ? productos.length : herramientas.length}
+                {tab === 'materiales' ? prodTotal : herrTotal}
               </span>{' '}
-              {tab === 'materiales' ? 'materiales' : 'herramientas'} mostrados
+              {tab === 'materiales' ? 'materiales' : 'herramientas'}
             </p>
-            {((tab === 'materiales' && prodHasMore) || (tab === 'herramientas' && herrHasMore)) && (
-              <p className="text-[11px] text-ink-500 dark:text-ink-400">
-                Hay más — usa “Mostrar más” o afina la búsqueda.
-              </p>
-            )}
           </div>
 
           {/* Grid */}
@@ -663,13 +753,13 @@ export default function MisPedidos() {
                     />
                   ))}
                 </div>
-                {prodHasMore && (
-                  <div className="mt-4 text-center">
-                    <Button variant="secondary" loading={prodLoadingMore} onClick={loadMoreProd}>
-                      Mostrar más
-                    </Button>
-                  </div>
-                )}
+                <Pagination
+                  page={pageProd}
+                  totalPages={prodPages}
+                  totalElements={prodTotal}
+                  size={PAGE_PROD}
+                  onChange={setPageProd}
+                />
               </>
             )
           ) : (
@@ -691,15 +781,17 @@ export default function MisPedidos() {
                     />
                   ))}
                 </div>
-                {herrHasMore && (
-                  <div className="mt-4 text-center">
-                    <Button variant="secondary" loading={herrLoadingMore} onClick={loadMoreHerr}>
-                      Mostrar más
-                    </Button>
-                  </div>
-                )}
+                <Pagination
+                  page={pageHerr}
+                  totalPages={herrPages}
+                  totalElements={herrTotal}
+                  size={PAGE_PROD}
+                  onChange={setPageHerr}
+                />
               </>
             )
+          )}
+          </>
           )}
         </div>
 
@@ -823,6 +915,9 @@ export default function MisPedidos() {
                                   {item.descripcion}
                                 </p>
                                 <p className="text-[9px] font-mono text-ink-500 dark:text-ink-400">{item.codigo}</p>
+                                {cableResumen(item) && (
+                                  <p className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 truncate">{cableResumen(item)} mm²/AWG</p>
+                                )}
                               </div>
                               <div className="inline-flex items-center gap-0.5 bg-white dark:bg-ink-900 rounded-md border border-ink-200 dark:border-ink-700 px-0.5">
                                 <button
@@ -987,6 +1082,11 @@ export default function MisPedidos() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-tight">{qtyModal.producto.descripcion}</p>
                 <p className="text-xs text-ink-500 font-mono mt-1">{qtyModal.producto.codigo}</p>
+                {cableResumen(qtyModal.producto) && (
+                  <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mt-1">
+                    Cable: {cableResumen(qtyModal.producto)} mm²/AWG
+                  </p>
+                )}
                 <p className="text-[11px] text-ink-500 mt-1">
                   Stock disponible:{' '}
                   <strong className="text-emerald-700 dark:text-emerald-400 tabular-nums">

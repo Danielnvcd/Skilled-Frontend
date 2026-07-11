@@ -5,14 +5,16 @@ import {
   Warehouse, FolderOpen, Printer, AlertTriangle, X, Pencil, PackagePlus, Check,
 } from 'lucide-react'
 import {
-  Button, Card, PageHeader, Modal, Select, Skeleton,
+  Button, Card, PageHeader, Modal, Select, Skeleton, Pagination,
 } from '../../components/ui'
 import {
   getAlmacenes, getProyectosInventario, buscarTrabajadores,
-  getProductos, createEntregaDirecta, imprimirSolicitud,
+  createEntregaDirecta, imprimirSolicitud,
 } from '../../api/inventario'
+import { useProductoSearch } from '../../hooks/useProductoSearch'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
+import { cableResumen } from '../../utils/cable'
 
 // ── Typeahead de trabajadores (busca server-side en inventario_api) ──────────
 function TrabajadorPicker({ value, onSelect }) {
@@ -93,8 +95,6 @@ function TrabajadorPicker({ value, onSelect }) {
 function ModalAgregarProducto({ open, onClose, enCarrito, onToggle }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [opciones, setOpciones] = useState([])
-  const [loading, setLoading] = useState(false)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -110,16 +110,10 @@ function ModalAgregarProducto({ open, onClose, enCarrito, onToggle }) {
     }
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    let cancel = false
-    setLoading(true)
-    getProductos({ q: debounced, limit: 50 })
-      .then((res) => { if (!cancel) setOpciones(res) })
-      .catch(() => { if (!cancel) setOpciones([]) })
-      .finally(() => { if (!cancel) setLoading(false) })
-    return () => { cancel = true }
-  }, [debounced, open])
+  // Búsqueda paginada por páginas: el paginador navega el resto del catálogo.
+  const { opciones, loading, page, setPage, total, totalPages, size } = useProductoSearch({
+    q: debounced, enabled: open, pageSize: 50,
+  })
 
   return (
     <Modal
@@ -157,6 +151,9 @@ function ModalAgregarProducto({ open, onClose, enCarrito, onToggle }) {
                     <p className="text-[11px] text-ink-500 font-mono">
                       {p.codigo} · disp: <span className={disp <= 0 ? 'text-rose-500' : ''}>{disp} {p.unidad}</span>
                     </p>
+                    {cableResumen(p) && (
+                      <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">{cableResumen(p)} mm²/AWG</p>
+                    )}
                   </div>
                   <Button
                     type="button"
@@ -170,6 +167,9 @@ function ModalAgregarProducto({ open, onClose, enCarrito, onToggle }) {
                 </div>
               )
             })
+          )}
+          {!loading && totalPages > 1 && (
+            <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={setPage} />
           )}
         </div>
       </div>
@@ -339,6 +339,9 @@ export default function EntregaDirecta() {
                       <p className="text-xs text-ink-500 font-mono mt-0.5">
                         {it.producto.codigo} · disp: {disp} {it.producto.unidad}
                       </p>
+                      {cableResumen(it.producto) && (
+                        <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Cable: {cableResumen(it.producto)} mm²/AWG</p>
+                      )}
                       {error && (
                         <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">
                           {decimalMal ? `“${it.producto.unidad}” no admite decimales.` : 'Excede el stock disponible.'}

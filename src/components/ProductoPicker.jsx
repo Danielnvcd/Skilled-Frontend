@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
-import { getProductos } from '../api/inventario'
+import { useProductoSearch } from '../hooks/useProductoSearch'
+import { Pagination } from './ui'
+import { cableResumen } from '../utils/cable'
 
 /**
  * Buscador de productos con búsqueda server-side (typeahead).
@@ -30,9 +32,7 @@ export default function ProductoPicker({
 }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
-  const [opciones, setOpciones] = useState([])
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
   const boxRef = useRef(null)
 
   const excluded = excludeIds instanceof Set ? excludeIds : new Set(excludeIds || [])
@@ -42,16 +42,11 @@ export default function ProductoPicker({
     return () => clearTimeout(t)
   }, [query])
 
-  useEffect(() => {
-    if (!open) return
-    let cancel = false
-    setLoading(true)
-    getProductos({ q: debounced, categoria, limit: 50 })
-      .then((res) => { if (!cancel) setOpciones(res) })
-      .catch(() => { if (!cancel) setOpciones([]) })
-      .finally(() => { if (!cancel) setLoading(false) })
-    return () => { cancel = true }
-  }, [debounced, open, categoria])
+  // Búsqueda paginada por páginas: cada página trae 50 y el paginador navega el
+  // resto, así ningún resultado queda inalcanzable por el tope.
+  const { opciones, loading, page, setPage, total, totalPages, size } = useProductoSearch({
+    q: debounced, categoria, enabled: open, pageSize: 50,
+  })
 
   useEffect(() => {
     const onDoc = (e) => {
@@ -70,7 +65,7 @@ export default function ProductoPicker({
 
   const displayValue = open
     ? query
-    : (value ? `${value.codigo} — ${value.descripcion}` : '')
+    : (value ? `${value.codigo} — ${value.descripcion}${cableResumen(value) ? ` · ${cableResumen(value)}` : ''}` : '')
 
   return (
     <div ref={boxRef} className="relative">
@@ -111,6 +106,9 @@ export default function ProductoPicker({
                   <span className="min-w-0 truncate">
                     <span className="font-mono text-xs text-brand-700 dark:text-brand-300">{p.codigo}</span>{' '}
                     <span className="text-ink-800 dark:text-ink-100">{p.descripcion}</span>
+                    {cableResumen(p) && (
+                      <span className="ml-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300">· {cableResumen(p)}</span>
+                    )}
                   </span>
                   <span className="text-[11px] text-ink-500 tabular-nums flex-shrink-0">
                     {p.stock_actual} {p.unidad}
@@ -118,6 +116,11 @@ export default function ProductoPicker({
                 </button>
               )
             })
+          )}
+          {!loading && totalPages > 1 && (
+            <div className="px-3 pb-2">
+              <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={setPage} />
+            </div>
           )}
         </div>
       )}

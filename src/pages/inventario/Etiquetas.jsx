@@ -5,9 +5,10 @@ import {
   Search, Loader2, Check, Plus, ListChecks, X, Package,
 } from 'lucide-react'
 import {
-  PageHeader, Button, Card, Select, Modal, InfoTip,
+  PageHeader, Button, Card, Select, Modal, InfoTip, Pagination,
 } from '../../components/ui'
 import { generarEtiquetasPdf, getProductos, getCategorias } from '../../api/inventario'
+import { useProductoSearch } from '../../hooks/useProductoSearch'
 import { extractApiError } from '../../utils/apiError'
 
 const FORMATOS = [
@@ -284,14 +285,21 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
 
   const [q, setQ] = useState('')
   const [cat, setCat] = useState('')
-  const [resultados, setResultados] = useState([])
-  const [buscando, setBuscando] = useState(false)
+  const [qDeb, setQDeb] = useState('')
   const [seleccionandoTodos, setSeleccionandoTodos] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setQDeb(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
+  // Catálogo paginado por páginas: el paginador navega el resto (nada inalcanzable).
+  const { opciones: resultados, loading: buscando, page, setPage, total, totalPages, size } = useProductoSearch({
+    q: qDeb, categoria: cat, enabled: open, pageSize: 50,
+  })
 
   // Al abrir: precarga seleccionados desde los items actuales y resetea filtros.
   useEffect(() => {
     if (!open) return
-    setQ(''); setCat(''); setResultados([])
+    setQ(''); setCat('')
     setAsignados(seleccionInicial.map((i) => ({
       id: i.producto_id,
       codigo: i.codigo,
@@ -305,20 +313,6 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
   useEffect(() => {
     getCategorias().then(setCategorias).catch(() => setCategorias([]))
   }, [])
-
-  // Búsqueda server-side (debounce) del catálogo, filtrable por categoría.
-  useEffect(() => {
-    if (!open) return
-    let cancel = false
-    setBuscando(true)
-    const t = setTimeout(() => {
-      getProductos({ q: q.trim(), categoria: cat || undefined, limit: 50 })
-        .then((res) => { if (!cancel) setResultados(res || []) })
-        .catch(() => { if (!cancel) setResultados([]) })
-        .finally(() => { if (!cancel) setBuscando(false) })
-    }, 250)
-    return () => { cancel = true; clearTimeout(t) }
-  }, [q, cat, open])
 
   const asignadosIds = useMemo(() => new Set(asignados.map((p) => p.id)), [asignados])
 
@@ -453,6 +447,11 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
                   </button>
                 )
               })
+            )}
+            {!buscando && totalPages > 1 && (
+              <div className="px-3 pb-1">
+                <Pagination page={page} totalPages={totalPages} totalElements={total} size={size} onChange={setPage} />
+              </div>
             )}
           </div>
         </div>
