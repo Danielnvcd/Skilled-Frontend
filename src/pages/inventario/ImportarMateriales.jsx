@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, MinusCircle, ListChecks, Plus, FolderInput, Cloud, RefreshCw } from 'lucide-react'
+import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, MinusCircle, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Button, Card, PageHeader, Modal, Select } from '../../components/ui'
+import { Button, Card, PageHeader, Modal, Select, InfoTip } from '../../components/ui'
 import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes } from '../../api/inventario'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
@@ -24,6 +24,10 @@ export default function ImportarMateriales() {
   const [imgEstado, setImgEstado] = useState(null)      // { enabled, ok, pendientes, error, ... }
   const [imgProgress, setImgProgress] = useState(null)  // { total, hechas, ok, error, estado, actual }
   const [syncing, setSyncing] = useState(false)
+  // Job que lanzó ESTA página. La barra solo sigue este job_id, así no parpadea
+  // si corren varios trabajos a la vez para el mismo usuario. En ref (no estado)
+  // para que el listener lea siempre el valor actual sin re-suscribirse.
+  const jobIdRef = useRef(null)
 
   const cargarEstadoImagenes = () => {
     getEstadoImagenes().then(setImgEstado).catch(() => setImgEstado(null))
@@ -31,12 +35,16 @@ export default function ImportarMateriales() {
   useEffect(() => { cargarEstadoImagenes() }, [])
 
   // Progreso en vivo del pipeline (lo emite el backend al usuario que lo lanzó).
+  // Solo mostramos el job que lanzamos desde aquí (jobIdRef); ignoramos eventos
+  // de otros trabajos del mismo usuario para que la barra no salte entre ellos.
   useEffect(() => {
     const off = on('producto:imagen_progreso', (p) => {
+      if (!jobIdRef.current || p?.job_id !== jobIdRef.current) return
       setImgProgress(p)
       if (p?.estado === 'done') {
-        invalidate('productos')       // el catálogo mostrará las imágenes de R2
-        cargarEstadoImagenes()        // refresca los conteos
+        jobIdRef.current = null        // el job terminó: dejamos de seguirlo
+        invalidate('productos')        // el catálogo mostrará las imágenes de R2
+        cargarEstadoImagenes()         // refresca los conteos
       }
     })
     return off
@@ -47,6 +55,7 @@ export default function ImportarMateriales() {
     try {
       const res = await sincronizarImagenes()
       if (res.encolados > 0) {
+        jobIdRef.current = res.job_id || null
         setImgProgress({ total: res.encolados, hechas: 0, ok: 0, error: 0, estado: 'running', actual: null })
         toast.success(`Sincronizando ${res.encolados} imagen(es) a R2…`)
         if (res.restantes > 0) {
@@ -68,6 +77,7 @@ export default function ImportarMateriales() {
     setExporting(true)
     try {
       await exportarProductos()
+      toast.success('Catálogo exportado. Edítalo en Excel y súbelo aquí para aplicar los cambios.', { duration: 6000 })
     } catch {
       toast.error('No se pudo exportar el catálogo')
     } finally {
@@ -109,6 +119,7 @@ export default function ImportarMateriales() {
     if (res.errores.length > 0) toast.error(`${res.errores.length} filas con error`)
     // Si la importación dejó imágenes externas por subir a R2, arranca la barra.
     if (res.imagenes?.pendientes > 0) {
+      jobIdRef.current = res.imagenes.job_id || null
       setImgProgress({ total: res.imagenes.pendientes, hechas: 0, ok: 0, error: 0, estado: 'running', actual: null })
     }
   }
@@ -165,6 +176,25 @@ export default function ImportarMateriales() {
         }
       />
 
+      {/* Explicación rápida del flujo completo */}
+      <Card className="p-4 bg-brand-50/60 dark:bg-brand-900/10 border-brand-200 dark:border-brand-800">
+        <div className="flex items-start gap-3">
+          <Info size={18} className="text-brand-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-ink-700 dark:text-ink-200 space-y-1">
+            <p className="font-semibold text-ink-900 dark:text-ink-100">¿Cómo funciona la importación?</p>
+            <p>
+              <strong>1)</strong> Descarga el archivo Excel · <strong>2)</strong> llénalo con tus materiales ·
+              <strong> 3)</strong> súbelo aquí. Los productos <strong>nuevos</strong> se crean y los que
+              <strong> ya existen</strong> (mismo código/SKU) se <strong>actualizan solo en lo que cambiaste</strong>.
+            </p>
+            <p className="text-xs text-ink-500 dark:text-ink-400">
+              El <strong>stock actual no se modifica</strong> al importar productos existentes — para mover
+              existencias usa <strong>Movimientos</strong>. Las filas con error se omiten una por una; las demás sí se guardan.
+            </p>
+          </div>
+        </div>
+      </Card>
+
       {/* Pasos */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Paso 1 */}
@@ -172,11 +202,18 @@ export default function ImportarMateriales() {
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
             <h3 className="font-semibold text-ink-900 dark:text-ink-100">Descarga el archivo</h3>
+            <InfoTip text="«Plantilla vacía» = para dar de alta productos nuevos. «Exportar catálogo actual» = baja todo lo que ya existe, lo editas en Excel y lo vuelves a subir." />
           </div>
-          <p className="text-sm text-ink-500 dark:text-ink-400 flex-1">
-            <strong>Plantilla vacía</strong> para dar de alta productos nuevos, o
-            <strong> exporta el catálogo actual</strong> para editar los que ya existen y reimportar.
-          </p>
+          <div className="text-sm text-ink-500 dark:text-ink-400 flex-1 space-y-2">
+            <p>
+              <strong className="text-ink-700 dark:text-ink-200">Plantilla vacía</strong>: para dar de alta productos nuevos desde cero.
+              <InfoTip text="Un Excel en blanco, solo con los encabezados y sus notas de ayuda en cada columna." />
+            </p>
+            <p>
+              <strong className="text-ink-700 dark:text-ink-200">Exportar catálogo actual</strong>: baja TODOS tus productos ya llenos (agrupados por categoría) para editarlos y reimportar.
+              <InfoTip text="Ideal para actualizar en masa precios, descripciones, mínimos o imágenes de productos que YA existen. Editas las celdas, guardas y subes el mismo archivo en «Procesar e Importar»: el sistema aplica SOLO lo que cambiaste (las filas iguales se ignoran) y el stock actual no se toca. No borres la columna del código (SKU) ni las filas grises de categoría." />
+            </p>
+          </div>
           <Button
             variant="secondary"
             size="sm"
@@ -203,14 +240,24 @@ export default function ImportarMateriales() {
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
             <h3 className="font-semibold text-ink-900 dark:text-ink-100">Llena con cuidado</h3>
+            <InfoTip text="La plantilla ya trae una nota de ayuda en cada columna: en Excel, pasa el mouse por el encabezado (esquina roja) para verla." />
           </div>
-          <ul className="text-sm text-ink-500 dark:text-ink-400 space-y-1 list-disc list-inside flex-1">
-            <li>No alteres los encabezados</li>
-            <li>SKU único (A-Z 0-9 - _ . /)</li>
+          <ul className="text-sm text-ink-500 dark:text-ink-400 space-y-1.5 list-disc list-inside flex-1">
+            <li>No alteres los encabezados de las columnas</li>
+            <li>
+              SKU único (A-Z 0-9 - _ . /)
+              <InfoTip text="El SKU/código identifica al producto. Si subes uno que ya existe, se ACTUALIZA en vez de duplicarse." />
+            </li>
             <li>Stock y Precio: solo números &ge; 0</li>
-            <li>Precio y URL Imagen son opcionales</li>
-            <li>Cable: llena <strong>Tipo</strong> y <strong>Tamaño mm²/AWG</strong> (la unidad se pone en M sola)</li>
-            <li>Si el SKU ya existe, se <strong>actualiza solo lo que cambiaste</strong> (el stock no se toca)</li>
+            <li>Precio y URL Imagen son opcionales (puedes dejarlos vacíos)</li>
+            <li>
+              Cable: llena <strong>Tipo</strong> y <strong>Tamaño mm²/AWG</strong>
+              <InfoTip text="Solo si la categoría contiene la palabra «cable». La unidad se pone en metros (M) sola. En otras categorías, deja esas columnas vacías." />
+            </li>
+            <li>
+              Si el SKU ya existe, se <strong>actualiza solo lo que cambiaste</strong>
+              <InfoTip text="El stock actual NO se toca al reimportar (para eso usa Movimientos). Solo cambian descripción, categoría, precio, mínimo, imagen, etc." />
+            </li>
           </ul>
         </Card>
 
@@ -219,9 +266,11 @@ export default function ImportarMateriales() {
           <div className="flex items-center gap-2">
             <span className="w-6 h-6 rounded-full bg-brand-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
             <h3 className="font-semibold text-ink-900 dark:text-ink-100">Sube el archivo</h3>
+            <InfoTip text="Puedes arrastrar el Excel a la zona de abajo o hacer clic para elegirlo. Máximo 5 MB, formato .xlsx o .xls." />
           </div>
           <p className="text-sm text-ink-500 dark:text-ink-400 flex-1">
-            Los productos válidos se guardarán aunque haya filas con errores.
+            Los productos válidos se guardarán aunque haya filas con errores. Al terminar verás un resumen
+            con cuántos se crearon, actualizaron y cuáles tuvieron problemas.
           </p>
         </Card>
       </div>
@@ -233,7 +282,10 @@ export default function ImportarMateriales() {
             <div className="flex items-start gap-2.5">
               <Cloud size={20} className="text-brand-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="font-semibold text-ink-900 dark:text-ink-100">Imágenes en la nube (Cloudflare R2)</h3>
+                <h3 className="font-semibold text-ink-900 dark:text-ink-100 flex items-center gap-1.5">
+                  Imágenes en la nube (Cloudflare R2)
+                  <InfoTip text="Cuando pones el enlace (URL) de una foto en el Excel o al editar un producto, el sistema la descarga, la optimiza y la guarda en la nube. Así carga rápido y no depende de la página original." />
+                </h3>
                 <p className="text-xs text-ink-500 dark:text-ink-400">
                   Las imágenes con URL externa se convierten a WebP y se suben a R2 automáticamente al importar o editar.
                   {imgEstado && (
@@ -411,22 +463,22 @@ export default function ImportarMateriales() {
             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
               <CheckCircle2 size={28} className="mx-auto text-emerald-600 mb-1" />
               <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{resultado.exitosos}</p>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">Nuevos</p>
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">Nuevos <InfoTip text="Productos que no existían y se crearon por primera vez." placement="bottom" /></p>
             </div>
             <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl p-4 text-center">
               <CheckCircle2 size={28} className="mx-auto text-sky-600 mb-1" />
               <p className="text-2xl font-bold text-sky-700 dark:text-sky-400">{resultado.actualizados ?? 0}</p>
-              <p className="text-sm text-sky-600 dark:text-sky-400">Actualizados</p>
+              <p className="text-sm text-sky-600 dark:text-sky-400">Actualizados <InfoTip text="Productos que ya existían (mismo SKU) y cambió al menos un dato." placement="bottom" /></p>
             </div>
             <div className="bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-xl p-4 text-center">
               <MinusCircle size={28} className="mx-auto text-ink-400 mb-1" />
               <p className="text-2xl font-bold text-ink-500 dark:text-ink-400">{resultado.sin_cambios ?? 0}</p>
-              <p className="text-sm text-ink-500 dark:text-ink-400">Sin cambios</p>
+              <p className="text-sm text-ink-500 dark:text-ink-400">Sin cambios <InfoTip text="Productos que ya existían y venían idénticos en el archivo: se ignoraron (no se tocaron)." placement="bottom" /></p>
             </div>
             <div className={`border rounded-xl p-4 text-center ${resultado.errores.length > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-ink-50 dark:bg-ink-800 border-ink-200 dark:border-ink-700'}`}>
               <XCircle size={28} className={`mx-auto mb-1 ${resultado.errores.length > 0 ? 'text-red-600' : 'text-ink-400'}`} />
               <p className={`text-2xl font-bold ${resultado.errores.length > 0 ? 'text-red-700 dark:text-red-400' : 'text-ink-500'}`}>{resultado.errores.length}</p>
-              <p className={`text-sm ${resultado.errores.length > 0 ? 'text-red-600 dark:text-red-400' : 'text-ink-500'}`}>Filas con error</p>
+              <p className={`text-sm ${resultado.errores.length > 0 ? 'text-red-600 dark:text-red-400' : 'text-ink-500'}`}>Filas con error <InfoTip text="Filas que no se pudieron guardar (falta un dato, SKU inválido, número mal escrito…). El detalle aparece abajo para corregirlas." placement="bottom" /></p>
             </div>
           </div>
 
