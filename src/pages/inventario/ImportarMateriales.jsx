@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, MinusCircle, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info } from 'lucide-react'
+import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, MinusCircle, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Button, Card, PageHeader, Modal, Select, InfoTip } from '../../components/ui'
-import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes } from '../../api/inventario'
+import { Button, Card, PageHeader, Modal, Select, InfoTip, Badge } from '../../components/ui'
+import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes, getImagenesErrores, updateProducto, upsertCategoriaConfig } from '../../api/inventario'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
 
@@ -45,6 +45,9 @@ export default function ImportarMateriales() {
         jobIdRef.current = null        // el job terminó: dejamos de seguirlo
         invalidate('productos')        // el catálogo mostrará las imágenes de R2
         cargarEstadoImagenes()         // refresca los conteos
+        if (p.error > 0) {
+          toast(`${p.error} imagen(es) no se pudieron subir. Corrige sus URLs en «${p.error} con error».`, { icon: '⚠️', duration: 7000 })
+        }
       }
     })
     return off
@@ -72,6 +75,50 @@ export default function ImportarMateriales() {
   }
 
   const imgPct = imgProgress?.total ? Math.round((imgProgress.hechas / imgProgress.total) * 100) : 0
+
+  // ── Corregir imágenes que fallaron (URL rota) ────────────────────────────
+  const [errOpen, setErrOpen] = useState(false)
+  const [errItems, setErrItems] = useState([])
+  const [errLoading, setErrLoading] = useState(false)
+  const [errUrls, setErrUrls] = useState({})          // key -> nueva url
+  const [errSavingKey, setErrSavingKey] = useState(null)
+  const keyOf = (it) => `${it.tipo}:${it.id}`
+
+  const abrirErrores = async () => {
+    setErrOpen(true)
+    setErrLoading(true)
+    setErrUrls({})
+    try {
+      const res = await getImagenesErrores()
+      setErrItems(res.items || [])
+    } catch {
+      toast.error('No se pudo cargar la lista de imágenes con error')
+    } finally {
+      setErrLoading(false)
+    }
+  }
+
+  const guardarUrlError = async (it) => {
+    const k = keyOf(it)
+    const nuevaUrl = (errUrls[k] || '').trim()
+    if (!nuevaUrl) { toast.error('Escribe la URL corregida'); return }
+    setErrSavingKey(k)
+    try {
+      if (it.tipo === 'producto') {
+        await updateProducto(it.id, { imagen_url: nuevaUrl })
+      } else {
+        await upsertCategoriaConfig(it.codigo, nuevaUrl)  // codigo = nombre en categorías
+      }
+      toast.success(`Reintentando la imagen de ${it.codigo}…`)
+      // La quitamos de la lista: ya se re-encoló y saldrá de ERROR.
+      setErrItems((list) => list.filter((x) => keyOf(x) !== k))
+      cargarEstadoImagenes()
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'No se pudo guardar la URL (¿es HTTPS y termina en imagen?)')
+    } finally {
+      setErrSavingKey(null)
+    }
+  }
 
   const handleExport = async () => {
     setExporting(true)
@@ -290,23 +337,38 @@ export default function ImportarMateriales() {
                   Las imágenes con URL externa se convierten a WebP y se suben a R2 automáticamente al importar o editar.
                   {imgEstado && (
                     <> {' '}<span className="font-semibold text-emerald-600 dark:text-emerald-400">{imgEstado.ok} en R2</span>
-                    {(imgEstado.pendientes + imgEstado.error) > 0 && (
-                      <> · <span className="font-semibold text-amber-600 dark:text-amber-400">{imgEstado.pendientes + imgEstado.error} por subir</span></>
+                    {imgEstado.pendientes > 0 && (
+                      <> · <span className="font-semibold text-amber-600 dark:text-amber-400">{imgEstado.pendientes} por subir</span></>
+                    )}
+                    {imgEstado.error > 0 && (
+                      <> · <span className="font-semibold text-red-600 dark:text-red-400">{imgEstado.error} con error</span></>
                     )}</>
                   )}
                 </p>
               </div>
             </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={<RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />}
-              loading={syncing}
-              onClick={handleSyncImagenes}
-              disabled={imgProgress?.estado === 'running'}
-            >
-              Sincronizar imágenes
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {imgEstado?.error > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<AlertTriangle size={15} className="text-red-500" />}
+                  onClick={abrirErrores}
+                >
+                  Corregir {imgEstado.error} con error
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<RefreshCw size={15} className={syncing ? 'animate-spin' : ''} />}
+                loading={syncing}
+                onClick={handleSyncImagenes}
+                disabled={imgProgress?.estado === 'running'}
+              >
+                Sincronizar imágenes
+              </Button>
+            </div>
           </div>
 
           {imgProgress && (
@@ -445,6 +507,63 @@ export default function ImportarMateriales() {
                 )
               })}
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: corregir imágenes que fallaron (URL rota) */}
+      <Modal
+        open={errOpen}
+        onClose={() => setErrOpen(false)}
+        title="Corregir imágenes que fallaron"
+        size="lg"
+        footer={<Button variant="secondary" onClick={() => setErrOpen(false)}>Cerrar</Button>}
+      >
+        {errLoading ? (
+          <p className="text-sm text-ink-500 dark:text-ink-400 py-6 text-center">Cargando…</p>
+        ) : errItems.length === 0 ? (
+          <div className="py-8 text-center">
+            <CheckCircle2 size={36} className="mx-auto text-emerald-500 mb-2" />
+            <p className="text-sm text-ink-600 dark:text-ink-300">No hay imágenes con error. ¡Todo en orden!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-ink-500 dark:text-ink-400">
+              Estas imágenes no se pudieron descargar (URL rota o no era una imagen). Pega la URL corregida
+              (HTTPS, que apunte directo a la imagen) y guarda: se reintentará subir a R2 automáticamente.
+            </p>
+            {errItems.map((it) => {
+              const k = keyOf(it)
+              return (
+                <div key={k} className="rounded-lg border border-ink-200 dark:border-ink-800 p-3 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge tone={it.tipo === 'producto' ? 'info' : 'warning'}>
+                      {it.tipo === 'producto' ? 'Producto' : 'Categoría'}
+                    </Badge>
+                    <span className="font-mono text-xs text-brand-700 dark:text-brand-300">{it.codigo}</span>
+                    {it.tipo === 'producto' && it.nombre && (
+                      <span className="text-sm text-ink-700 dark:text-ink-200 truncate">{it.nombre}</span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-red-600 dark:text-red-400 break-all">
+                    <span className="font-semibold">Falló:</span> {it.url_fallida || '—'}
+                    {it.error && <> — {it.error}</>}
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={errUrls[k] || ''}
+                      onChange={(e) => setErrUrls((s) => ({ ...s, [k]: e.target.value }))}
+                      placeholder="https://…/imagen.jpg"
+                      className="flex-1 h-9 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+                    />
+                    <Button size="sm" loading={errSavingKey === k} onClick={() => guardarUrlError(it)}>
+                      Guardar
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </Modal>

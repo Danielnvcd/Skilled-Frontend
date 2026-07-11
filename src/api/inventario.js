@@ -585,6 +585,14 @@ export async function sincronizarImagenes() {
   return data
 }
 
+// Lista productos y categorías cuya imagen falló al subir a R2 (estado ERROR),
+// con la URL que falló y el motivo, para que el usuario la corrija.
+// Devuelve { total, items: [{ tipo, id, codigo, nombre, url_fallida, error }] }.
+export async function getImagenesErrores() {
+  const { data } = await api.get(`${BASE}/productos/imagenes/errores`)
+  return data
+}
+
 // Exporta TODO el catálogo activo en el mismo formato de la plantilla, ya
 // lleno. Sirve para editar en Excel y reimportar (el import detecta cambios).
 export async function exportarProductos() {
