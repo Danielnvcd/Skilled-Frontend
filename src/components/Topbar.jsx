@@ -8,7 +8,7 @@ import AlertasBell from './AlertasBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
 import { ConfirmDialog } from './ui'
-import { forceReload } from '../utils/forceReload'
+import { reloadToLatest } from '../utils/forceReload'
 
 export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobileDevice = false }) {
   const { user, isAdmin, logout } = useAuth()
@@ -21,12 +21,14 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
   const usaLogoAlterno = ['inventario', 'coordinador'].includes(user?.role)
   const mobileLogo = (usaLogoAlterno && !isDark) ? '/logo1.png' : '/logo.png'
 
-  // Fuerza traer la última versión desplegada (limpia service worker + cachés).
+  // Trae la última versión desplegada. Le pide al service worker que busque
+  // actualización, espera a que se active y recarga — sin vaciar el caché, que
+  // era lo que hacía este botón lento y errático en producción.
   const [reloading, setReloading] = useState(false)
   const handleForceReload = () => {
     if (reloading) return
     setReloading(true)
-    forceReload()  // desregistra SW, borra cachés y recarga; la página se va.
+    reloadToLatest()  // la página se va al terminar.
   }
 
   return (

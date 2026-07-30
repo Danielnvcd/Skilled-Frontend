@@ -5,8 +5,8 @@
  * Quien deja la app abierta todo el día nunca se entera de un deploy nuevo.
  *
  * Aquí forzamos una revisión periódica y, cuando detectamos que se instaló una
- * versión nueva, mostramos un toast con un botón que llama a `forceReload()`
- * (que desregistra el SW, limpia el Cache Storage y recarga sin tocar la sesión).
+ * versión nueva, mostramos un toast con un botón que llama a `reloadToLatest()`
+ * (espera a que el SW nuevo se active y recarga, conservando el precache).
  *
  * El usuario decide cuándo actualizar: NO recargamos solos, porque en este
  * sistema alguien puede estar a media captura y perdería lo no guardado.
@@ -16,7 +16,7 @@
  * dispararía nunca.
  */
 import toast from 'react-hot-toast'
-import { forceReload } from './forceReload'
+import { reloadToLatest } from './forceReload'
 
 // Cada cuánto le preguntamos al servidor si hay versión nueva.
 const INTERVALO_MS = 5 * 60 * 1000 // 5 min
@@ -35,7 +35,7 @@ function avisarVersionNueva() {
           type="button"
           onClick={() => {
             toast.dismiss(t.id)
-            forceReload()
+            reloadToLatest()
           }}
           className="shrink-0 rounded-md bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-brand-500"
         >
