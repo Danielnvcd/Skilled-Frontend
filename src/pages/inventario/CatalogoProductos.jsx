@@ -841,9 +841,20 @@ export default function CatalogoProductos() {
                           </div>
                         </>
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                        /* Sin foto también se abre la ficha: el modal muestra
+                           categoría, marca, tipo/tamaño de cable, unidad y
+                           precio. Antes el clic vivía solo en el <img>, así que
+                           un producto sin imagen no tenía forma de consultarse
+                           desde la galería. */
+                        <button
+                          type="button"
+                          onClick={() => verImagen(p)}
+                          title="Ver detalle del producto"
+                          aria-label={`Ver detalle de ${p.descripcion}`}
+                          className="absolute inset-0 flex items-center justify-center text-ink-300 dark:text-ink-600 hover:text-ink-400 dark:hover:text-ink-500 hover:bg-ink-100/60 dark:hover:bg-ink-800/60 transition-colors cursor-pointer focus-ring"
+                        >
                           <Package size={40} strokeWidth={1.5} />
-                        </div>
+                        </button>
                       )}
                       {compra && (
                         <div className="absolute top-2 left-2">
@@ -863,7 +874,7 @@ export default function CatalogoProductos() {
                       <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-snug line-clamp-2">{p.descripcion}</p>
                       <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
                       {p.marca && <p className="text-[11px] font-medium text-ink-700 dark:text-ink-300 truncate">{p.marca}</p>}
-                      <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} size="xs" className="mt-0.5" />
+                      <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} variant="inline" />
                       <div className="mt-auto pt-2 flex items-end justify-between gap-2">
                         <div className="min-w-0">
                           <p className={`text-sm font-semibold tabular-nums ${bajoStock ? 'text-red-600 dark:text-red-400' : 'text-ink-800 dark:text-ink-100'}`}>
@@ -912,9 +923,15 @@ export default function CatalogoProductos() {
                     {p.imagen_url ? (
                       <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-10 h-10 rounded-md object-cover bg-ink-100 cursor-zoom-in hover:ring-2 hover:ring-brand-400 transition-all" />
                     ) : (
-                      <div className="w-10 h-10 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400">
+                      <button
+                        type="button"
+                        onClick={() => verImagen(p)}
+                        title="Ver detalle del producto"
+                        aria-label={`Ver detalle de ${p.descripcion}`}
+                        className="w-10 h-10 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 hover:ring-2 hover:ring-brand-400 transition-all focus-ring"
+                      >
                         <Package size={20} />
-                      </div>
+                      </button>
                     )}
                   </TD>
                   <TD className="font-mono text-sm text-brand-700 dark:text-brand-300">{p.codigo}</TD>
@@ -1004,9 +1021,15 @@ export default function CatalogoProductos() {
                     {p.imagen_url ? (
                       <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-12 h-12 rounded-md object-cover bg-ink-100 flex-shrink-0 cursor-zoom-in" />
                     ) : (
-                      <div className="w-12 h-12 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => verImagen(p)}
+                        title="Ver detalle del producto"
+                        aria-label={`Ver detalle de ${p.descripcion}`}
+                        className="w-12 h-12 rounded-md bg-ink-100 dark:bg-ink-800 flex items-center justify-center text-ink-400 flex-shrink-0 hover:ring-2 hover:ring-brand-400 transition-all focus-ring"
+                      >
                         <Package size={22} />
-                      </div>
+                      </button>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
@@ -1373,7 +1396,7 @@ export default function CatalogoProductos() {
                 <p className="font-semibold text-ink-900 dark:text-ink-100 leading-snug">{imgModal.descripcion}</p>
               </div>
               {(imgModal.cable_tipo || imgModal.cable_calibre) && (
-                <CableTag tipo={imgModal.cable_tipo} calibre={imgModal.cable_calibre} />
+                <CableTag tipo={imgModal.cable_tipo} calibre={imgModal.cable_calibre} variant="inline" />
               )}
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <DetalleCampo label="Categoría" value={imgModal.categoria || '—'} />
