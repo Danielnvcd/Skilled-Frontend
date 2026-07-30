@@ -35,14 +35,6 @@ function fmtMoney(s) {
   return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n)
 }
 
-function nominaTone(t) {
-  const v = (t || '').toLowerCase()
-  if (v === 'semanal') return 'brand'
-  if (v === 'por hora') return 'info'
-  if (v === 'cuadrado') return 'success'
-  return 'neutral'
-}
-
 // ── Estado del expediente ───────────────────────────────────────────────────
 // Define la "completitud" del empleado: lista de campos que la oficina suele
 // pedir al alta. Cada uno con su check booleano. Visualizado como progress +
@@ -493,11 +485,7 @@ export default function EmpleadoView() {
         <Card>
           <SectionTitle>Compensación</SectionTitle>
           <dl>
-            <DataRow
-              label="Tipo nómina"
-              value={data.tipo_nomina}
-              tone={data.tipo_nomina ? nominaTone(data.tipo_nomina) : undefined}
-            />
+            <DataRow label="Tipo nómina" value={data.tipo_nomina} />
             <DataRow label="Salario/sem" value={fmtMoney(data.salario_real_pactado_x_sem)} mono />
             <DataRow label="Tipo pago" value={data.tipo_pago} />
             <DataRow label="Hrs extra" value={fmtMoney(data.hr_extra)} mono />

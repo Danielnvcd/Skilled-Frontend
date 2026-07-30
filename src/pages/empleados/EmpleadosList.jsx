@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
-  Badge, Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews, InfoTip,
+  Pagination, EmptyState, ConfirmDialog, Skeleton, SavedViews, InfoTip,
 } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import {
@@ -23,14 +23,6 @@ import { useResource } from '../../hooks/useResource'
 import { useSocket } from '../../context/SocketContext'
 
 const PER_PAGE = 20
-
-function nominaTone(tipo) {
-  const v = (tipo || '').toLowerCase()
-  if (v === 'semanal') return 'brand'
-  if (v === 'por hora') return 'info'
-  if (v === 'cuadrado') return 'success'
-  return 'neutral'
-}
 
 function fmtFechaCorta(iso) {
   if (!iso) return '—'
@@ -618,9 +610,7 @@ export default function EmpleadosList({ variante = 'activos' }) {
                     {t.puesto && <div className="text-xs text-ink-500 dark:text-ink-400">{t.puesto}</div>}
                   </TD>
                   <TD>
-                    {t.tipo_nomina
-                      ? <Badge tone={nominaTone(t.tipo_nomina)} dot>{t.tipo_nomina}</Badge>
-                      : <span className="text-ink-400 text-xs">—</span>}
+                    <div className="text-sm text-ink-800 dark:text-ink-200">{t.tipo_nomina || '—'}</div>
                   </TD>
                   <TD align="right">
                     {t.salario_real_pactado_x_sem
