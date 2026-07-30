@@ -77,9 +77,12 @@ export default function AccessGate({ children }) {
         <h1 className="text-2xl font-semibold text-ink-100 tracking-tight">
           Acceso restringido
         </h1>
-        <p className="mt-1.5 text-sm text-ink-400 leading-relaxed">
-          La plataforma está en validación por unos días. Ingresa el código de
-          acceso para continuar.
+        <p className="mt-2 text-sm leading-relaxed text-ink-400">
+          <span className="font-medium text-ink-200">
+            El sistema está en pruebas por unos días.
+          </span>{' '}
+          Mientras tanto el acceso está limitado — ingresa el código para
+          continuar.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-7 space-y-4">
