@@ -3,6 +3,12 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // TEMPORAL — sello del build para verificar que los clientes reciben la
+  // versión nueva tras un deploy (ver el badge en PortadaAlmacenes.jsx).
+  // Para quitarlo: borrar este `define` y el badge que lo usa.
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({

@@ -490,6 +490,19 @@ export default function PortadaAlmacenes() {
                 <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-ink-300 dark:bg-ink-600'}`} />
                 {connected ? 'En vivo' : 'Sin conexión'}
               </span>
+              {/* TEMPORAL — sello del build, para comprobar que tras un deploy el
+                  cliente recibe la versión nueva sin forzar recarga. Cambia solo
+                  en cada build (ver `define: __BUILD_TIME__` en vite.config.js).
+                  Para quitarlo: borrar este <span> y el define. */}
+              <span
+                title={`Versión desplegada: ${__BUILD_TIME__}`}
+                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-500 dark:text-ink-400 border border-ink-200 dark:border-ink-800 rounded-full pl-1.5 pr-2 py-0.5 tabular-nums"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
+                Build {new Date(__BUILD_TIME__).toLocaleString('es-MX', {
+                  day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+                })}
+              </span>
             </div>
             <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5 max-w-2xl">
               Control de materiales por almacén y por proyecto. Selecciona un almacén para consultar su catálogo.
