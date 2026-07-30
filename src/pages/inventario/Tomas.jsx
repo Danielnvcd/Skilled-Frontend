@@ -8,6 +8,7 @@ import {
 } from '../../components/ui'
 import { listTomas, createToma, getAlmacenes } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useSocket } from '../../context/SocketContext'
 
 const ESTATUS_LABEL = {
   ABIERTA:   'En curso',
@@ -60,6 +61,13 @@ export default function Tomas() {
   useEffect(() => {
     cargar()
   }, [filtroEstatus, filtroAlmacen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Un conteo físico lo hacen varias personas a la vez: si alguien abre, cierra
+  // o cancela una toma, la lista se refresca sola.
+  const { on } = useSocket()
+  useEffect(() => {
+    return on('toma:changed', () => cargar())
+  }, [on, filtroEstatus, filtroAlmacen]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     getAlmacenes().then(setAlmacenes).catch(() => setAlmacenes([]))

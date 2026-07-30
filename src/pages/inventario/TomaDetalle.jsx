@@ -14,6 +14,7 @@ import {
   cerrarToma, cancelarToma, imprimirToma,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { useSocket } from '../../context/SocketContext'
 
 const ESTATUS_COLORS = {
   ABIERTA: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
@@ -61,18 +62,32 @@ export default function TomaDetalle() {
   const [scannerCantidad, setScannerCantidad] = useState('')
   const [scannerProducto, setScannerProducto] = useState(null)
 
-  const cargar = () => {
-    setLoading(true)
+  // `silencioso`: refresco disparado por websocket — no mostramos el skeleton
+  // ni sacamos al usuario si falla, para no interrumpir la captura en curso.
+  const cargar = ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true)
     getToma(id)
       .then(setToma)
       .catch(err => {
+        if (silencioso) return
         toast.error(extractApiError(err, 'Error al cargar toma'))
         navigate('/inventario/tomas')
       })
-      .finally(() => setLoading(false))
+      .finally(() => { if (!silencioso) setLoading(false) })
   }
 
   useEffect(() => { cargar() }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Un conteo lo capturan varias personas a la vez: reflejamos lo que registran
+  // los demás y el cambio de estatus si alguien cierra/cancela la toma. El input
+  // que se esté editando vive en `editVal` (estado local), así que no se pisa.
+  const { on } = useSocket()
+  useEffect(() => {
+    return on('toma:changed', (payload) => {
+      if (payload?.id != null && Number(payload.id) !== Number(id)) return
+      cargar({ silencioso: true })
+    })
+  }, [on, id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isOpen = toma?.estatus === 'ABIERTA'
 
