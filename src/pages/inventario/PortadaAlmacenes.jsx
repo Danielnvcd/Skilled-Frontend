@@ -12,7 +12,6 @@ import {
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
-import { useSocket } from '../../context/SocketContext'
 
 // Eventos que cambian existencias por almacén: alta/edición de almacén, cambios
 // de producto y cualquier movimiento (que recalcula stock_por_almacen).
@@ -374,7 +373,6 @@ function ResumenProyectos({ data, onCell, activeAlmacenId, activeProyecto }) {
 }
 
 export default function PortadaAlmacenes() {
-  const { connected } = useSocket()
   const [selectedId, setSelectedId] = useState(null)
   const [page, setPage] = useState(0)               // 0-based (Pagination)
   const [search, setSearch] = useState('')
@@ -483,13 +481,6 @@ export default function PortadaAlmacenes() {
               <h1 className="text-xl sm:text-2xl font-semibold text-ink-900 dark:text-ink-100 tracking-tight">
                 Existencias por almacén
               </h1>
-              <span
-                title={connected ? 'Actualización en tiempo real activa' : 'Sin conexión en tiempo real'}
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-500 dark:text-ink-400 border border-ink-200 dark:border-ink-800 rounded-full pl-1.5 pr-2 py-0.5"
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-emerald-500 animate-pulse' : 'bg-ink-300 dark:bg-ink-600'}`} />
-                {connected ? 'En vivo' : 'Sin conexión'}
-              </span>
             </div>
             <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5 max-w-2xl">
               Control de materiales por almacén y por proyecto. Selecciona un almacén para consultar su catálogo.
