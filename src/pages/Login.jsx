@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
-import { User, Lock, ShieldCheck, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button, Input } from '../components/ui'
 
 export default function Login() {
@@ -70,12 +70,6 @@ export default function Login() {
             className="h-12 max-w-[200px] object-contain"
             draggable={false}
           />
-        </div>
-
-        {/* Pie de panel */}
-        <div className="relative z-10 flex items-center gap-2 text-[11px] uppercase tracking-widest text-ink-400 font-semibold">
-          <ShieldCheck size={14} className="text-brand-400" />
-          Conexión segura
         </div>
       </div>
 
