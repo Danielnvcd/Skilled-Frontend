@@ -78,9 +78,9 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
-          {/* Bajo mínimo: le importa sobre todo a inventario, que no es admin,
-              por eso no va dentro de AlertasBell (limitada a admin). */}
-          {(isAdmin || isInventario) && <BajoMinimoBell />}
+          {/* Bajo mínimo: solo para el rol `inventario`, que es quien repone.
+              No va dentro de AlertasBell porque aquélla es exclusiva de admin. */}
+          {isInventario && <BajoMinimoBell />}
           {isAdmin && <AlertasBell />}
           {isAdmin && <NotificacionesBell />}
 
