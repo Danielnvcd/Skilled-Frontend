@@ -5,6 +5,7 @@ import {
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
+  LineChart,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -102,6 +103,7 @@ export const MENUS = {
       label: 'Cuenta',
       items: [
         { path: '/', label: 'Inicio', icon: Home, end: true },
+        { path: '/inventario/actividad', label: 'Actividad y auditoría', icon: LineChart },
         { path: '/perfil', label: 'Mi perfil', icon: User },
       ],
     },

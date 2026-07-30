@@ -38,6 +38,7 @@ const HistoricoDetalle = lazy(() => import('./pages/historico/HistoricoDetalle')
 const Bitacora = lazy(() => import('./pages/Bitacora'))
 const Metricas = lazy(() => import('./pages/Metricas'))
 const InventarioDashboard = lazy(() => import('./pages/inventario/InventarioDashboard'))
+const PortadaAlmacenes = lazy(() => import('./pages/inventario/PortadaAlmacenes'))
 const CatalogoProductos = lazy(() => import('./pages/inventario/CatalogoProductos'))
 const ProyectosInventario = lazy(() => import('./pages/inventario/ProyectosInventario'))
 const ProyectoInventarioDetalle = lazy(() => import('./pages/inventario/ProyectoInventarioDetalle'))
@@ -100,7 +101,7 @@ function RoleRoute({ allow, children }) {
 
 function RoleBasedHome() {
   const { user } = useAuth()
-  if (user?.role === 'inventario') return <InventarioDashboard />
+  if (user?.role === 'inventario') return <PortadaAlmacenes />
   if (user?.role === 'finanzas') return <FinanzasPanel />
   if (user?.role === 'solicitante_material') return <Navigate to="/inventario/mis-pedidos" replace />
   if (user?.role === 'coordinador') return <Navigate to="/mis-proyectos" replace />
@@ -172,7 +173,10 @@ export default function App() {
         <Route path="mis-proyectos"          element={<RoleRoute allow={isCoordinador || isAdmin}><MisProyectos /></RoleRoute>} />
 
         {/* Inventario: admin + rol inventario */}
-        <Route path="inventario"             element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
+        <Route path="inventario"             element={<RoleRoute allow={isInventario}><PortadaAlmacenes /></RoleRoute>} />
+        {/* Actividad y auditoría: el antiguo panel de inicio (KPIs, gráficas,
+            solicitudes y movimientos), reubicado fuera de la portada. */}
+        <Route path="inventario/actividad"   element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
         <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
         <Route path="inventario/proyectos"   element={<RoleRoute allow={canPlanMateriales}><ProyectosInventario /></RoleRoute>} />
         <Route path="inventario/proyectos/:id" element={<RoleRoute allow={canPlanMateriales}><ProyectoInventarioDetalle /></RoleRoute>} />

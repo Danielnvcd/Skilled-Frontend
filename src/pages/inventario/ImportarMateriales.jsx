@@ -46,7 +46,7 @@ export default function ImportarMateriales() {
         invalidate('productos')        // el catálogo mostrará las imágenes de R2
         cargarEstadoImagenes()         // refresca los conteos
         if (p.error > 0) {
-          toast(`${p.error} imagen(es) no se pudieron subir. Corrige sus URLs en «${p.error} con error».`, { icon: '⚠️', duration: 7000 })
+          toast(`${p.error} imagen(es) no se pudieron subir. Corrige sus URLs en «${p.error} con error».`, { icon: <AlertTriangle size={18} />, duration: 7000 })
         }
       }
     })
@@ -62,7 +62,7 @@ export default function ImportarMateriales() {
         setImgProgress({ total: res.encolados, hechas: 0, ok: 0, error: 0, estado: 'running', actual: null })
         toast.success(`Sincronizando ${res.encolados} imagen(es) a R2…`)
         if (res.restantes > 0) {
-          toast(`Quedan ${res.restantes} para la próxima corrida (vuelve a sincronizar al terminar).`, { icon: 'ℹ️', duration: 6000 })
+          toast(`Quedan ${res.restantes} para la próxima corrida (vuelve a sincronizar al terminar).`, { icon: <Info size={18} />, duration: 6000 })
         }
       } else {
         toast.success('Todas las imágenes ya están en R2')
@@ -297,6 +297,10 @@ export default function ImportarMateriales() {
             </li>
             <li>Stock y Precio: solo números &ge; 0</li>
             <li>Precio y URL Imagen son opcionales (puedes dejarlos vacíos)</li>
+            <li>
+              <strong>Almacén</strong> y <strong>Proyecto</strong> del stock inicial (opcionales)
+              <InfoTip text="Solo para productos NUEVOS: indican a qué bodega llega el stock inicial y a qué proyecto se aparta. Vacío = bodega default y General (libre). Usa el nombre de la bodega y el número/nombre del proyecto tal como existen en el sistema." />
+            </li>
             <li>
               Cable: llena <strong>Tipo</strong> y <strong>Tamaño mm²/AWG</strong>
               <InfoTip text="Solo si la categoría contiene la palabra «cable». La unidad se pone en metros (M) sola. En otras categorías, deja esas columnas vacías." />

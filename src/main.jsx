@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast'
 import { AuthProvider } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
+import AccessGate from './components/AccessGate'  // candado temporal de pruebas (ver el archivo para quitarlo)
 import App from './App'
 import './index.css'
 
@@ -37,15 +38,17 @@ function AppToaster() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <ThemeProvider>
-        <AuthProvider>
-          <SocketProvider>
-            <App />
-            <AppToaster />
-          </SocketProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </BrowserRouter>
+    <AccessGate>
+      <BrowserRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <SocketProvider>
+              <App />
+              <AppToaster />
+            </SocketProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </BrowserRouter>
+    </AccessGate>
   </React.StrictMode>,
 )

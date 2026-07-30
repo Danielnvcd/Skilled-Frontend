@@ -22,10 +22,10 @@ import { useResource } from '../../hooks/useResource'
 const PAGE_SIZE = 50
 
 const URGENCIA_META = {
-  critico:  { label: 'Crítico',    tone: 'danger',  rowBg: 'bg-rose-50/60 dark:bg-rose-900/10', icon: '🔥', sub: '< 7 días' },
-  alto:     { label: 'Alto',       tone: 'warning', rowBg: 'bg-amber-50/60 dark:bg-amber-900/10', icon: '⚠️', sub: '< 14 días' },
-  medio:    { label: 'Medio',      tone: 'info',    rowBg: '', icon: '•', sub: '≥ 14 días' },
-  estatico: { label: 'Sin consumo', tone: 'neutral', rowBg: '', icon: '·', sub: 'No se mueve' },
+  critico:  { label: 'Crítico',    tone: 'danger',  rowBg: 'bg-rose-50/60 dark:bg-rose-900/10', sub: '< 7 días' },
+  alto:     { label: 'Alto',       tone: 'warning', rowBg: 'bg-amber-50/60 dark:bg-amber-900/10', sub: '< 14 días' },
+  medio:    { label: 'Medio',      tone: 'info',    rowBg: '', sub: '≥ 14 días' },
+  estatico: { label: 'Sin consumo', tone: 'neutral', rowBg: '', sub: 'No se mueve' },
 }
 
 export default function BajoMinimo() {

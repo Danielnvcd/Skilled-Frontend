@@ -461,7 +461,7 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase tracking-wide text-ink-500 flex items-center gap-1">
               Seleccionados
-              <InfoTip text="Productos que pasarán a la lista de etiquetas al dar “Aplicar”. Quita los que no quieras con la ✕." />
+              <InfoTip text="Productos que pasarán a la lista de etiquetas al dar “Aplicar”. Quita los que no quieras con su botón de quitar." />
             </span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-semibold text-ink-500">{asignados.length}</span>

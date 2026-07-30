@@ -79,8 +79,12 @@ export async function getProductoStocks(id, { incluirVacios = false } = {}) {
 }
 
 // Disponibilidad: actual / reservado / disponible + lista de reservas (Pausa 2-bis).
-export async function getProductoDisponibilidad(id) {
-  const { data } = await api.get(`${BASE}/productos/${id}/disponibilidad`)
+// Con `proyectoId` agrega `por_proyecto` (disponible para ese proyecto = bucket
+// del proyecto + general libre) — feature stock por proyecto.
+export async function getProductoDisponibilidad(id, { proyectoId } = {}) {
+  const params = {}
+  if (proyectoId) params.proyecto_id = proyectoId
+  const { data } = await api.get(`${BASE}/productos/${id}/disponibilidad`, { params })
   return data
 }
 
@@ -97,6 +101,31 @@ export async function getProductoKardex(id, { desde, hasta, tipo, limit = 500 } 
 // --- Almacenes ---
 export async function getAlmacenes() {
   const { data } = await api.get(`${BASE}/almacenes/`)
+  return data
+}
+
+// Portada del rol inventario: existencias por almacén (para las tarjetas).
+// Devuelve [{ almacen_id, nombre, ubicacion, total_productos, total_unidades, con_imagen }].
+// Resumen de existencias por proyecto y almacén (matriz para la portada).
+export async function getResumenProyectos() {
+  const { data } = await api.get(`${BASE}/almacenes/resumen-proyectos`)
+  return data
+}
+
+export async function getAlmacenesResumen() {
+  const { data } = await api.get(`${BASE}/almacenes/resumen`)
+  return data
+}
+
+// Galería paginada de productos con existencia en un almacén (foto + cantidad).
+// Devuelve { almacen, items, total, total_unidades, page, per_page, pages }.
+export async function getAlmacenStock(almacenId, { page = 1, perPage = 24, q, categoria, imagen, proyecto } = {}) {
+  const params = { page, per_page: perPage }
+  if (q) params.q = q
+  if (categoria) params.categoria = categoria
+  if (imagen) params.imagen = imagen      // 'con' | 'sin'
+  if (proyecto) params.proyecto_id = proyecto  // <id> | 'general' — stock por proyecto
+  const { data } = await api.get(`${BASE}/almacenes/${almacenId}/stock`, { params })
   return data
 }
 
@@ -195,6 +224,19 @@ export async function createMovimiento(payload) {
 
 export async function createMovimientoRapido(payload) {
   const { data } = await api.post(`${BASE}/movimientos/rapido`, payload)
+  return data
+}
+
+// Vale (PDF) de un movimiento ya registrado; se abre en una pestaña nueva.
+export async function imprimirMovimiento(movId) {
+  const res = await api.get(`${BASE}/movimientos/${movId}/pdf`, { responseType: 'blob' })
+  _openBlobInTab(res)
+}
+
+// Editor de stock por bodega+proyecto: fija cantidades objetivo por bucket; el
+// backend genera un AJUSTE por cada bucket que cambió.
+export async function ajustarBuckets(productoId, payload) {
+  const { data } = await api.post(`${BASE}/productos/${productoId}/ajustar-buckets`, payload)
   return data
 }
 

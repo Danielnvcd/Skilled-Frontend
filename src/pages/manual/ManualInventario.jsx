@@ -344,7 +344,7 @@ const SECCIONES = [
       { type: 'h3', icon: ShoppingCart, text: 'Generar OC desde aquí' },
       {
         type: 'p',
-        text: ['Cada producto tiene un botón de carrito 🛒. Selecciona varios y usa ', { strong: 'Generar OC Express' }, ' (ver sección Compras Express).'],
+        text: ['Cada producto tiene un botón de carrito ', { icon: ShoppingCart }, '. Selecciona varios y usa ', { strong: 'Generar OC Express' }, ' (ver sección Compras Express).'],
       },
     ],
   },
@@ -734,6 +734,10 @@ function renderToken(t, k) {
     </code>
   )
   if (t.badge) return <Badge key={k} tone={BADGE_TONE[t.badge] || 'neutral'} dot>{t.label || t.badge}</Badge>
+  if (t.icon) {
+    const Ic = t.icon
+    return <Ic key={k} size={14} className="inline-block align-text-bottom mx-0.5 text-ink-500 dark:text-ink-400" />
+  }
   return null
 }
 

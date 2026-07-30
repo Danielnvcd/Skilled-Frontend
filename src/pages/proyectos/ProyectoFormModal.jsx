@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Search, Users as UsersIcon, AlertCircle } from 'lucide-react'
+import { Search, Users as UsersIcon, AlertCircle, AlertTriangle } from 'lucide-react'
 import { Modal, Button, Input, Select, ConfirmDialog } from '../../components/ui'
 import { obtenerMeta, obtenerProyecto, crearProyecto, actualizarProyecto } from '../../api/proyectos'
 import { useResource } from '../../hooks/useResource'
@@ -131,7 +131,7 @@ export default function ProyectoFormModal({ open, onClose, proyectoId, onSaved }
         ? await actualizarProyecto(proyectoId, payload)
         : await crearProyecto(payload)
       toast.success(isEdit ? 'Proyecto actualizado' : 'Proyecto creado')
-      res?.warnings?.forEach((w) => toast(w, { icon: '⚠️' }))
+      res?.warnings?.forEach((w) => toast(w, { icon: <AlertTriangle size={18} /> }))
       onSaved?.()
       onClose?.()
     } catch (err) {

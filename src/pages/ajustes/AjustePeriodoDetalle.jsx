@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle, FileSpreadsheet, Trash2,
+  ArrowLeft, Lock, CheckCircle2, Plus, X, AlertCircle, FileSpreadsheet, Trash2, Info,
 } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog, EmptyState,
@@ -160,7 +160,7 @@ export default function AjustePeriodoDetalle() {
           ya_cobrado: 'ya cobrado(s)',
         }
         const partes = Object.entries(conteo).map(([k, v]) => `${v} ${labels[k] || k}`)
-        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}: ${partes.join(', ')}`, { icon: 'ℹ️' })
+        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}: ${partes.join(', ')}`, { icon: <Info size={18} /> })
       }
       setSelectedIds(new Set())
       setConfirmBulk(false)

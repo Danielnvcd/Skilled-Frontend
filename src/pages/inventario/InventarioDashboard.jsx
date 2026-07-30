@@ -193,7 +193,6 @@ export default function InventarioDashboard() {
   const isMobileDevice = useIsMobileDevice()
   if (isMobileDevice) return <MobileInventarioHome />
 
-  const { user } = useAuth()
   const { theme } = useTheme()
   const isDark = theme === 'dark'
   void theme
@@ -305,17 +304,14 @@ export default function InventarioDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Welcome — header sin caja: solo título + subtítulo + fecha */}
+      {/* Header sin caja: título + subtítulo + fecha */}
       <div className="flex items-end justify-between gap-3 flex-wrap pt-1">
         <div>
           <h1 className="text-2xl font-semibold text-ink-900 dark:text-ink-100 tracking-tight">
-            {greeting()},{' '}
-            <span className="text-brand-600 dark:text-sky-300 capitalize">
-              {user?.full_name || user?.username}
-            </span>!
+            Actividad y auditoría
           </h1>
           <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5">
-            Panel principal de control de inventario y almacenes.
+            Indicadores, movimientos y solicitudes de inventario, almacenes y herramientas.
           </p>
         </div>
         <p className="text-sm text-ink-500 dark:text-ink-400 tabular-nums">

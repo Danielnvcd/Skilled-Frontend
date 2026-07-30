@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowRightLeft, Plus, Package, TrendingUp, TrendingDown, AlertTriangle,
-  History, ListChecks,
+  History, ListChecks, Printer, User,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, Input,
@@ -11,6 +11,7 @@ import {
 } from '../../components/ui'
 import {
   getMovimientos, getProductosBajoMinimo, getCategoriasResumen,
+  imprimirMovimiento,
 } from '../../api/inventario'
 import ProductoPicker from '../../components/ProductoPicker'
 import { extractApiError } from '../../utils/apiError'
@@ -296,7 +297,9 @@ export default function MovimientosInventario() {
                     <THSort field="tipo" sort={sort} dir={dir} onSort={onSort}>Tipo</THSort>
                     <THSort field="producto" sort={sort} dir={dir} onSort={onSort}>Producto</THSort>
                     <THSort field="cantidad" sort={sort} dir={dir} onSort={onSort} align="right">Cantidad</THSort>
+                    <TH>Entrega / Recibe</TH>
                     <TH>Motivo</TH>
+                    <TH align="right">Vale</TH>
                   </THead>
                   <TBody>
                     {sortedMovs.map((m) => {
@@ -315,7 +318,37 @@ export default function MovimientosInventario() {
                             {m.producto_codigo && <span className="text-xs text-ink-500 ml-2 font-mono">{m.producto_codigo}</span>}
                           </TD>
                           <TD align="right" className="font-bold">{signo}{cant} {m.producto_unidad || ''}</TD>
+                          <TD className="text-xs">
+                            {(m.entrega_nombre || m.recibe_nombre) ? (
+                              <div className="space-y-0.5">
+                                {m.entrega_nombre && (
+                                  <div className="flex items-center gap-1 text-ink-600 dark:text-ink-300">
+                                    <User size={11} className="text-emerald-500 flex-shrink-0" />
+                                    <span className="truncate max-w-[140px]" title={`Entrega: ${m.entrega_nombre}`}>{m.entrega_nombre}</span>
+                                  </div>
+                                )}
+                                {m.recibe_nombre && (
+                                  <div className="flex items-center gap-1 text-ink-600 dark:text-ink-300">
+                                    <User size={11} className="text-brand-500 flex-shrink-0" />
+                                    <span className="truncate max-w-[140px]" title={`Recibe: ${m.recibe_nombre}`}>{m.recibe_nombre}</span>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-ink-400">—</span>
+                            )}
+                          </TD>
                           <TD className="text-sm text-ink-500 max-w-xs truncate" title={m.motivo}>{m.motivo || '—'}</TD>
+                          <TD align="right">
+                            <button
+                              type="button"
+                              onClick={() => imprimirMovimiento(m.id).catch((err) => toast.error(extractApiError(err, 'No se pudo abrir el vale')))}
+                              title="Imprimir vale PDF"
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-ink-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
+                            >
+                              <Printer size={15} />
+                            </button>
+                          </TD>
                         </TR>
                       )
                     })}

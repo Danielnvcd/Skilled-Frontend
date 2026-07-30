@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import {
   ShoppingCart, RefreshCw, Plus, Filter, Search, X, Trash2, Send,
   PackageCheck, FileText, Clock, Truck, CheckCircle2, Ban, Loader2, MessageCircle,
+  Info, Paperclip, Check,
 } from 'lucide-react'
 import {
   PageHeader, Button, Card, Select, Skeleton, EmptyState,
@@ -374,7 +375,7 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
   const agregarProducto = (p) => {
     setLineas((prev) => {
       if (prev.some((l) => l.producto_id === p.id)) {
-        toast('Ese producto ya está en la lista', { icon: 'ℹ️' })
+        toast('Ese producto ya está en la lista', { icon: <Info size={18} /> })
         return prev
       }
       return [...prev, {
@@ -536,7 +537,7 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
                       <span className="flex-1 text-sm truncate">{p.descripcion}</span>
                       <span className="text-[10px] text-ink-400 tabular-nums">stock {fmtNum(p.stock_actual)} {p.unidad}</span>
                       {ya ? (
-                        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Agregado ✓</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Agregado <Check size={12} /></span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400"><Plus size={13} /> Agregar</span>
                       )}
@@ -695,7 +696,7 @@ function DetalleModal({ solicitud, onClose, onChanged }) {
                       <TD align="right" className="tabular-nums">{fmtNum(d.cantidad_solicitada)} <span className="text-[10px] text-ink-400">{d.unidad}</span></TD>
                       <TD align="right" className="tabular-nums">{fmtNum(d.cantidad_recibida)}</TD>
                       <TD align="right" className={`tabular-nums font-bold ${completa ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                        {completa ? '✓' : fmtNum(d.cantidad_pendiente)}
+                        {completa ? <Check size={14} className="inline-block" /> : fmtNum(d.cantidad_pendiente)}
                       </TD>
                       <TD align="right" className="tabular-nums text-xs">{d.precio_estimado != null ? fmtMoney(d.precio_estimado) : '—'}</TD>
                     </TR>
@@ -708,7 +709,7 @@ function DetalleModal({ solicitud, onClose, onChanged }) {
           <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-ink-200 dark:border-ink-700">
             <Button variant="ghost" size="sm" leftIcon={<FileText size={14} />} onClick={() => imprimirSolicitudCompra(solicitud.id)}>PDF</Button>
             <a href={buildWhatsappLink(solicitud)} target="_blank" rel="noopener noreferrer"
-              onClick={() => { imprimirSolicitudCompra(solicitud.id); toast('Se abrió el PDF — adjúntalo en WhatsApp', { icon: '📎' }) }}>
+              onClick={() => { imprimirSolicitudCompra(solicitud.id); toast('Se abrió el PDF — adjúntalo en WhatsApp', { icon: <Paperclip size={18} /> }) }}>
               <Button variant="secondary" size="sm" leftIcon={<MessageCircle size={14} />} className="text-emerald-700">Enviar por WhatsApp</Button>
             </a>
 

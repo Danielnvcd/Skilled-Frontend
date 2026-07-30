@@ -27,6 +27,16 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;')
 }
 
+// Íconos como SVG inline (paths de lucide) para el HTML que se rasteriza a
+// imagen: html-to-image no puede montar componentes React, así que van como
+// markup. Heredan el color del texto vía currentColor.
+const svgIcon = (paths, { size = '1.15em', stroke = 2.5, valign = '-0.18em', mr = '' } = {}) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:${valign};${mr ? `margin-right:${mr};` : ''}">${paths}</svg>`
+
+const ICON_BLOOD = svgIcon('<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C8 11.1 7 13 7 15a7 7 0 0 0 7 7z"/>', { mr: '0.6mm' })
+const ICON_PHONE = svgIcon('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>', { mr: '0.6mm' })
+const ICON_CHECK = svgIcon('<path d="M20 6 9 17l-5-5"/>', { size: '1.3em', stroke: 3 })
+
 function initials(name) {
   return (name || '')
     .split(/\s+/)
@@ -249,7 +259,7 @@ function renderFrente(t, { qrData, fotoData, logoData, empresa }) {
       </div>
       <div class="ftr">
         <span>Esta credencial es personal e intransferible</span>
-        <span>✓</span>
+        <span>${ICON_CHECK}</span>
       </div>
     </div>
   `
@@ -273,11 +283,11 @@ function renderReverso(t, { qrData, logoData, empresa }) {
         <div class="rev-qr">${qrTag}</div>
         <div class="rev-info">
           <div>
-            <div class="l">♥ Tipo de Sangre</div>
+            <div class="l">${ICON_BLOOD}Tipo de Sangre</div>
             <div class="blood">${escapeHtml(t.tipo_sangre || '—')}</div>
           </div>
           <div>
-            <div class="l">☎ Emergencia</div>
+            <div class="l">${ICON_PHONE}Emergencia</div>
             <div class="em-nom">${escapeHtml(t.contacto_emergencia || '—')}</div>
             ${numEmerg}
           </div>

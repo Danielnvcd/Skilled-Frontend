@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, X,
-  Download, Pencil, UploadCloud,
+  Download, Pencil, UploadCloud, AlertTriangle,
 } from 'lucide-react'
 import { PageHeader, Button, Card, CardHeader } from '../../components/ui'
 import { importarExcel, descargarPlantillaImportar } from '../../api/trabajadores'
@@ -64,7 +64,7 @@ export default function EmpleadosImport() {
       if (res.exitosos > 0 && res.errores.length === 0) {
         toast.success(`${res.exitosos} empleado(s) importado(s)`)
       } else if (res.exitosos > 0) {
-        toast(`Importados: ${res.exitosos}. Con errores: ${res.errores.length}`, { icon: '⚠️' })
+        toast(`Importados: ${res.exitosos}. Con errores: ${res.errores.length}`, { icon: <AlertTriangle size={18} /> })
       } else {
         toast.error('No se importó ningún registro')
       }

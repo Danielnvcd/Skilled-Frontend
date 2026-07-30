@@ -3,9 +3,12 @@ import { Cable } from 'lucide-react'
 /**
  * Etiqueta técnica de CABLE (Tipo + Tamaño mm²/AWG).
  *
- * A propósito NO usa el componente Badge: se ve como una ficha técnica en cobre
+ * A propósito NO usa el componente Badge: se ve como una ficha técnica neutra
  * con esquinas suaves (rounded-md) e ícono de cable, para distinguirse de los
  * badges de estado (píldoras rounded-full como "En compra"/"Ordenada").
+ *
+ * Paleta neutra (ink) con texto negro/casi-negro — sin el ámbar/naranja previo,
+ * para que se lea limpio en el catálogo.
  *
  * Props: `tipo`, `calibre` (strings). Devuelve null si ambos están vacíos.
  * `size='sm'` (default) o `'xs'` para espacios apretados.
@@ -22,14 +25,14 @@ export default function CableTag({ tipo, calibre, size = 'sm', className = '' })
   return (
     <span
       title="Cable — Tipo · Tamaño (mm²/AWG)"
-      className={`inline-flex items-center rounded-md border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 font-medium text-amber-800 dark:text-amber-200 ${dims.pad} ${className}`}
+      className={`inline-flex items-center rounded-md border border-ink-300 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/60 font-medium text-ink-900 dark:text-ink-100 ${dims.pad} ${className}`}
     >
-      <Cable size={dims.icon} strokeWidth={2} className="text-amber-600 dark:text-amber-400 shrink-0" />
+      <Cable size={dims.icon} strokeWidth={2} className="text-ink-500 dark:text-ink-400 shrink-0" />
       {t && <span className="font-semibold">{t}</span>}
       {c && (
-        <span className="font-mono tabular-nums text-amber-900 dark:text-amber-100">
+        <span className="font-mono tabular-nums text-ink-900 dark:text-ink-100">
           {c}
-          <span className="ml-0.5 font-sans text-amber-500 dark:text-amber-400/80">mm²/AWG</span>
+          <span className="ml-0.5 font-sans text-ink-400 dark:text-ink-500">mm²/AWG</span>
         </span>
       )}
     </span>

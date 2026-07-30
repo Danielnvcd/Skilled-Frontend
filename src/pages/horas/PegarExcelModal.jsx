@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ClipboardPaste, AlertCircle, CheckCircle2, Trash2 } from 'lucide-react'
+import { ClipboardPaste, AlertCircle, CheckCircle2, Trash2, Info, X } from 'lucide-react'
 import { Modal, Button, Textarea } from '../../components/ui'
 import { bulkUpsertRegistros } from '../../api/horas'
 
@@ -162,7 +162,7 @@ export default function PegarExcelModal({
       if (res.updated) partes.push(`${res.updated} actualizado${res.updated === 1 ? '' : 's'}`)
       toast.success(`${total} registro${total === 1 ? '' : 's'} (${partes.join(' · ')})`)
       if (res.skipped?.length) {
-        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'} por validación`, { icon: 'ℹ️' })
+        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'} por validación`, { icon: <Info size={18} /> })
       }
       onAplicado?.()
       onClose?.()
@@ -272,7 +272,7 @@ export default function PegarExcelModal({
                           {c.vacio ? (
                             <span className="text-ink-300">—</span>
                           ) : c.error ? (
-                            <span className="text-red-600 dark:text-red-400 text-[10px]" title={c.error}>✗</span>
+                            <span className="text-red-600 dark:text-red-400 inline-flex" title={c.error}><X size={12} /></span>
                           ) : c.incidencia ? (
                             <span className="inline-block px-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 font-mono text-[10px]">
                               {c.incidencia}

@@ -4,16 +4,77 @@ import toast from 'react-hot-toast'
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, Activity, Package,
   Plus, Minus, AlertTriangle, CheckCircle2, Info, ChevronLeft, Save,
-  Warehouse,
+  Warehouse, Layers, FolderSync, User, X, Printer,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, Select, Skeleton,
 } from '../../components/ui'
 import {
-  getAlmacenes, createMovimiento, getProductoStocks,
+  getAlmacenes, createMovimiento, getProductoStocks, getProyectosInventario,
+  imprimirMovimiento,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import ProductoPicker from '../../components/ProductoPicker'
+import TrabajadorPicker from '../../components/TrabajadorPicker'
+
+// Selector de una parte (Entrega o Recibe): toggle Trabajador | Nombre libre.
+function PartePicker({ label, modo, setModo, trabajador, setTrabajador, nombre, setNombre }) {
+  return (
+    <div>
+      <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5">
+        <User size={12} className="inline mr-1 -mt-0.5" /> {label}
+      </label>
+      <div className="grid grid-cols-2 gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setModo('trabajador')}
+          className={`py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${
+            modo === 'trabajador'
+              ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300'
+              : 'border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-500'
+          }`}
+        >
+          Trabajador
+        </button>
+        <button
+          type="button"
+          onClick={() => setModo('libre')}
+          className={`py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${
+            modo === 'libre'
+              ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300'
+              : 'border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-500'
+          }`}
+        >
+          Nombre libre
+        </button>
+      </div>
+      {modo === 'trabajador' ? (
+        trabajador ? (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/50 px-3 py-2">
+            <span className="text-sm font-medium text-ink-900 dark:text-ink-100 truncate">
+              {trabajador.nombre_completo}
+              <span className="text-ink-400 font-normal ml-1">· #{trabajador.no_empleado}</span>
+            </span>
+            <button type="button" onClick={() => setTrabajador(null)} title="Cambiar" className="text-ink-400 hover:text-ink-700 dark:hover:text-ink-200">
+              <X size={16} />
+            </button>
+          </div>
+        ) : (
+          <TrabajadorPicker value={trabajador} onSelect={setTrabajador} />
+        )
+      ) : (
+        <input
+          type="text"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          maxLength={200}
+          placeholder="Nombre (no está en el sistema)"
+          className="block w-full h-10 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
+        />
+      )}
+    </div>
+  )
+}
 
 const TIPOS = [
   {
@@ -48,6 +109,14 @@ const TIPOS = [
     color: 'sky',
     sign: '→',
   },
+  {
+    key: 'REASIGNACION',
+    label: 'Reasignar',
+    desc: 'Mueve stock entre proyectos (misma bodega)',
+    Icon: FolderSync,
+    color: 'violet',
+    sign: '⇄',
+  },
 ]
 
 const COLORS = {
@@ -79,12 +148,20 @@ const COLORS = {
     text:   'text-sky-700 dark:text-sky-300',
     btn:    'bg-sky-600 hover:bg-sky-700',
   },
+  violet: {
+    border: 'border-violet-500',
+    ring:   'ring-violet-500/20',
+    bg:     'bg-violet-50 dark:bg-violet-900/20',
+    text:   'text-violet-700 dark:text-violet-300',
+    btn:    'bg-violet-600 hover:bg-violet-700',
+  },
 }
 
 export default function RegistrarMovimiento() {
   const navigate = useNavigate()
 
   const [almacenes, setAlmacenes] = useState([])
+  const [proyectos, setProyectos] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -97,15 +174,32 @@ export default function RegistrarMovimiento() {
   // ENTRADA/SALIDA solo uno, AJUSTE depende del signo.
   const [almacenOrigenId, setAlmacenOrigenId] = useState('')
   const [almacenDestinoId, setAlmacenDestinoId] = useState('')
+  // Feature stock por proyecto. `proyectoId` = bucket del movimiento
+  // (ENTRADA/SALIDA/AJUSTE/TRASPASO); '' = general. REASIGNACION usa origen/destino.
+  const [proyectoId, setProyectoId] = useState('')
+  const [proyectoOrigenId, setProyectoOrigenId] = useState('')
+  const [proyectoDestinoId, setProyectoDestinoId] = useState('')
   const [motivo, setMotivo] = useState('')
+
+  // Partes del vale (feature "vale de movimiento"): quién entrega / quién recibe.
+  // Cada parte = trabajador del sistema o nombre libre (igual que entrega directa).
+  const [entregaModo, setEntregaModo] = useState('libre')
+  const [entregaTrabajador, setEntregaTrabajador] = useState(null)
+  const [entregaNombre, setEntregaNombre] = useState('')
+  const [recibeModo, setRecibeModo] = useState('trabajador')
+  const [recibeTrabajador, setRecibeTrabajador] = useState(null)
+  const [recibeNombre, setRecibeNombre] = useState('')
 
   // Desglose de stock por bodega del producto seleccionado (Pausa 2).
   const [stocksProducto, setStocksProducto] = useState(null)
   const [loadingStocks, setLoadingStocks] = useState(false)
 
   useEffect(() => {
-    getAlmacenes()
-      .then((alms) => setAlmacenes(alms))
+    Promise.all([getAlmacenes(), getProyectosInventario().catch(() => [])])
+      .then(([alms, proys]) => {
+        setAlmacenes(alms)
+        setProyectos(Array.isArray(proys) ? proys : [])
+      })
       .catch((err) => toast.error(extractApiError(err, 'Error al cargar datos')))
       .finally(() => setLoading(false))
   }, [])
@@ -147,7 +241,7 @@ export default function RegistrarMovimiento() {
     let delta = 0
     if (tipo === 'ENTRADA') delta = cant
     else if (tipo === 'SALIDA') delta = -cant
-    else if (tipo === 'TRASPASO') delta = 0  // no cambia el total
+    else if (tipo === 'TRASPASO' || tipo === 'REASIGNACION') delta = 0  // no cambia el total
     else delta = ajusteDir === '-' ? -cant : cant  // AJUSTE
     const nuevo = stock + delta
 
@@ -165,22 +259,33 @@ export default function RegistrarMovimiento() {
       delta,
       nuevo,
       negativo: nuevo < 0,
-      bajoMinimo: tipo !== 'TRASPASO' && nuevo >= 0 && nuevo < minimo,
+      bajoMinimo: tipo !== 'TRASPASO' && tipo !== 'REASIGNACION' && nuevo >= 0 && nuevo < minimo,
       cantidadInvalida: cant <= 0,
       insuficienteEnOrigen,
     }
   }, [producto, cantidad, tipo, ajusteDir, almacenOrigenId, stockEnOrigen])
 
   // Determinar qué selectores de almacén mostrar según el tipo.
+  const esReasignacion = tipo === 'REASIGNACION'
+  // El bucket de proyecto aplica a ENTRADA/SALIDA/AJUSTE/TRASPASO (uno solo).
+  const necesitaProyecto = ['ENTRADA', 'SALIDA', 'AJUSTE', 'TRASPASO'].includes(tipo)
+  // Las partes del vale (entrega/recibe) aplican a movimientos con contraparte
+  // física: ENTRADA/SALIDA/TRASPASO. AJUSTE/REASIGNACION son internos.
+  const necesitaPartes = ['ENTRADA', 'SALIDA', 'TRASPASO'].includes(tipo)
   const necesitaDestino = tipo === 'ENTRADA' || tipo === 'TRASPASO' ||
                           (tipo === 'AJUSTE' && ajusteDir === '+')
   const necesitaOrigen = tipo === 'SALIDA' || tipo === 'TRASPASO' ||
                          (tipo === 'AJUSTE' && ajusteDir === '-')
 
-  const almacenOk =
-    (!necesitaOrigen || !!almacenOrigenId) &&
-    (!necesitaDestino || !!almacenDestinoId) &&
-    (tipo !== 'TRASPASO' || almacenOrigenId !== almacenDestinoId)
+  const almacenOk = esReasignacion
+    ? !!almacenOrigenId
+    : ((!necesitaOrigen || !!almacenOrigenId) &&
+       (!necesitaDestino || !!almacenDestinoId) &&
+       (tipo !== 'TRASPASO' || almacenOrigenId !== almacenDestinoId))
+
+  // Reasignación: origen y destino de proyecto deben diferir ('' = general).
+  const reasignacionOk = !esReasignacion ||
+    (String(proyectoOrigenId) !== String(proyectoDestinoId))
 
   const puedeGuardar =
     !!productoId &&
@@ -190,7 +295,8 @@ export default function RegistrarMovimiento() {
     !calculo.negativo &&
     !calculo.cantidadInvalida &&
     !calculo.insuficienteEnOrigen &&
-    almacenOk
+    almacenOk &&
+    reasignacionOk
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -205,10 +311,28 @@ export default function RegistrarMovimiento() {
         cantidad: cantidadFinal,
         motivo: motivo.trim() || null,
       }
-      if (almacenOrigenId) payload.almacen_origen_id = Number(almacenOrigenId)
-      if (almacenDestinoId) payload.almacen_destino_id = Number(almacenDestinoId)
-      await createMovimiento(payload)
+      if (esReasignacion) {
+        // Una sola bodega + buckets de proyecto origen/destino ('' = general).
+        payload.almacen_origen_id = Number(almacenOrigenId)
+        payload.proyecto_origen_id = proyectoOrigenId ? Number(proyectoOrigenId) : null
+        payload.proyecto_destino_id = proyectoDestinoId ? Number(proyectoDestinoId) : null
+      } else {
+        if (almacenOrigenId) payload.almacen_origen_id = Number(almacenOrigenId)
+        if (almacenDestinoId) payload.almacen_destino_id = Number(almacenDestinoId)
+        // Bucket de proyecto del movimiento ('' = general/sin proyecto).
+        payload.proyecto_id = proyectoId ? Number(proyectoId) : null
+      }
+      // Partes del vale (opcionales): trabajador o nombre libre, por parte.
+      if (necesitaPartes) {
+        if (entregaModo === 'trabajador' && entregaTrabajador) payload.entrega_trabajador_id = entregaTrabajador.id
+        else if (entregaNombre.trim()) payload.entrega_nombre = entregaNombre.trim()
+        if (recibeModo === 'trabajador' && recibeTrabajador) payload.recibe_trabajador_id = recibeTrabajador.id
+        else if (recibeNombre.trim()) payload.recibe_nombre = recibeNombre.trim()
+      }
+      const mov = await createMovimiento(payload)
       toast.success(`${tipoCfg.label} registrada correctamente`)
+      // Vale PDF: se abre al registrar movimientos con contraparte (como entrega directa).
+      if (necesitaPartes && mov?.id) imprimirMovimiento(mov.id).catch(() => {})
       navigate('/inventario/movimientos')
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo registrar el movimiento'))
@@ -369,50 +493,158 @@ export default function RegistrarMovimiento() {
             </div>
           </div>
 
-          {/* Almacenes — obligatorios según tipo (Pausa 2: stock por bodega) */}
+          {/* Almacenes + proyecto — feature stock por proyecto */}
           {almacenes.length === 0 ? (
             <Card className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 text-sm">
               <AlertTriangle size={14} className="inline text-amber-600 mr-1.5" />
               No hay bodegas registradas. Crea una en "Almacenes" antes de mover stock.
             </Card>
+          ) : esReasignacion ? (
+            /* Reasignación: una sola bodega + mover de un proyecto a otro. */
+            <div className="space-y-3">
+              <Select
+                label="Bodega *"
+                value={almacenOrigenId}
+                onChange={(e) => setAlmacenOrigenId(e.target.value)}
+                required
+              >
+                <option value="">Selecciona bodega…</option>
+                {almacenes.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.nombre}{a.ubicacion ? ` — ${a.ubicacion}` : ''}
+                  </option>
+                ))}
+              </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Proyecto origen"
+                  value={proyectoOrigenId}
+                  onChange={(e) => setProyectoOrigenId(e.target.value)}
+                >
+                  <option value="">General (sin proyecto)</option>
+                  {proyectos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  label="Proyecto destino"
+                  value={proyectoDestinoId}
+                  onChange={(e) => setProyectoDestinoId(e.target.value)}
+                >
+                  <option value="">General (sin proyecto)</option>
+                  {proyectos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              {!reasignacionOk && (
+                <p className="text-[11px] text-rose-500 inline-flex items-center gap-1">
+                  <Info size={11} /> El proyecto origen y destino deben ser distintos.
+                </p>
+              )}
+            </div>
           ) : (
-            <div className={tipo === 'TRASPASO' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : ''}>
-              {necesitaOrigen && (
+            <div className="space-y-3">
+              <div className={tipo === 'TRASPASO' ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' : ''}>
+                {necesitaOrigen && (
+                  <Select
+                    label={`Bodega origen${necesitaOrigen ? ' *' : ''}`}
+                    value={almacenOrigenId}
+                    onChange={(e) => setAlmacenOrigenId(e.target.value)}
+                    required={necesitaOrigen}
+                  >
+                    <option value="">Selecciona bodega…</option>
+                    {almacenes.map((a) => {
+                      const s = stocksProducto?.stocks.find((x) => x.almacen_id === a.id)
+                      const disponible = s ? Number(s.cantidad) : 0
+                      return (
+                        <option key={a.id} value={a.id}>
+                          {a.nombre}{producto ? ` — disponible: ${disponible}` : ''}
+                        </option>
+                      )
+                    })}
+                  </Select>
+                )}
+                {necesitaDestino && (
+                  <Select
+                    label={`Bodega destino${necesitaDestino ? ' *' : ''}`}
+                    value={almacenDestinoId}
+                    onChange={(e) => setAlmacenDestinoId(e.target.value)}
+                    required={necesitaDestino}
+                  >
+                    <option value="">Selecciona bodega…</option>
+                    {almacenes
+                      .filter((a) => tipo !== 'TRASPASO' || String(a.id) !== String(almacenOrigenId))
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.nombre}{a.ubicacion ? ` — ${a.ubicacion}` : ''}
+                        </option>
+                      ))}
+                  </Select>
+                )}
+              </div>
+              {/* Bucket de proyecto del movimiento (feature stock por proyecto). */}
+              {necesitaProyecto && (
                 <Select
-                  label={`Bodega origen${necesitaOrigen ? ' *' : ''}`}
-                  value={almacenOrigenId}
-                  onChange={(e) => setAlmacenOrigenId(e.target.value)}
-                  required={necesitaOrigen}
+                  label={
+                    tipo === 'ENTRADA' ? 'Proyecto destino (opcional)'
+                    : tipo === 'TRASPASO' ? 'Proyecto a mover'
+                    : 'Proyecto (opcional)'
+                  }
+                  value={proyectoId}
+                  onChange={(e) => setProyectoId(e.target.value)}
                 >
-                  <option value="">Selecciona bodega…</option>
-                  {almacenes.map((a) => {
-                    const s = stocksProducto?.stocks.find((x) => x.almacen_id === a.id)
-                    const disponible = s ? Number(s.cantidad) : 0
-                    return (
-                      <option key={a.id} value={a.id}>
-                        {a.nombre}{producto ? ` — disponible: ${disponible}` : ''}
-                      </option>
-                    )
-                  })}
+                  <option value="">General (sin proyecto)</option>
+                  {proyectos.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
+                    </option>
+                  ))}
                 </Select>
               )}
-              {necesitaDestino && (
-                <Select
-                  label={`Bodega destino${necesitaDestino ? ' *' : ''}`}
-                  value={almacenDestinoId}
-                  onChange={(e) => setAlmacenDestinoId(e.target.value)}
-                  required={necesitaDestino}
-                >
-                  <option value="">Selecciona bodega…</option>
-                  {almacenes
-                    .filter((a) => tipo !== 'TRASPASO' || String(a.id) !== String(almacenOrigenId))
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.nombre}{a.ubicacion ? ` — ${a.ubicacion}` : ''}
-                      </option>
-                    ))}
-                </Select>
+              {necesitaProyecto && (
+                <p className="text-[11px] text-ink-500 italic">
+                  {tipo === 'ENTRADA'
+                    ? 'Etiqueta la mercancía a un proyecto, o déjala como General/libre.'
+                    : tipo === 'SALIDA'
+                      ? 'Sale primero del proyecto elegido y, si no alcanza, del General. Nunca de otro proyecto.'
+                      : tipo === 'TRASPASO'
+                        ? 'Se mueve ese bucket de proyecto entre bodegas conservando la etiqueta.'
+                        : 'Ajusta el bucket del proyecto elegido (o General).'}
+                </p>
               )}
+            </div>
+          )}
+
+          {/* Partes del movimiento (feature "vale de movimiento"): quién entrega
+              y quién recibe. Se imprime el vale PDF al registrar. */}
+          {necesitaPartes && (
+            <div className="rounded-lg border border-ink-200 dark:border-ink-700 bg-ink-50/50 dark:bg-ink-800/30 p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Partes del vale</span>
+                <span className="text-[10px] text-ink-400">(opcional · se imprime el comprobante)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <PartePicker
+                  label={tipo === 'ENTRADA' ? 'Quién entrega (proveedor)' : 'Quién entrega'}
+                  modo={entregaModo} setModo={setEntregaModo}
+                  trabajador={entregaTrabajador} setTrabajador={setEntregaTrabajador}
+                  nombre={entregaNombre} setNombre={setEntregaNombre}
+                />
+                <PartePicker
+                  label="Quién recibe"
+                  modo={recibeModo} setModo={setRecibeModo}
+                  trabajador={recibeTrabajador} setTrabajador={setRecibeTrabajador}
+                  nombre={recibeNombre} setNombre={setRecibeNombre}
+                />
+              </div>
+              <p className="text-[11px] text-ink-500 inline-flex items-center gap-1">
+                <Printer size={11} /> Al registrar se abre el vale PDF con ambos nombres para firmar.
+              </p>
             </div>
           )}
 
@@ -517,30 +749,49 @@ export default function RegistrarMovimiento() {
             </div>
           </Card>
 
-          {/* Desglose por bodega (Pausa 2) */}
+          {/* Desglose por bodega y proyecto (feature stock por proyecto) */}
           {producto && (
             <Card className="overflow-hidden">
               <div className="px-3 py-2 border-b border-ink-200 dark:border-ink-800 flex items-center gap-2">
                 <Warehouse size={12} className="text-ink-500" />
-                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Stock por bodega</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-ink-500">Stock por bodega y proyecto</span>
               </div>
               {loadingStocks ? (
                 <div className="p-2 text-[11px] text-ink-400">Cargando…</div>
-              ) : !stocksProducto || stocksProducto.stocks.length === 0 ? (
+              ) : !stocksProducto || !stocksProducto.stocks || stocksProducto.stocks.length === 0 ? (
                 <div className="p-2 text-[11px] text-ink-400">Sin registros.</div>
               ) : (
                 <ul className="divide-y divide-ink-100 dark:divide-ink-800">
                   {stocksProducto.stocks
                     .slice()
                     .sort((a, b) => b.cantidad - a.cantidad)
-                    .map((s) => (
-                      <li key={s.almacen_id} className="flex items-center justify-between px-3 py-1.5 text-[12px]">
-                        <span className="truncate">{s.almacen_nombre}</span>
-                        <span className={`font-mono font-bold tabular-nums ${s.cantidad > 0 ? 'text-ink-900 dark:text-ink-100' : 'text-ink-400'}`}>
-                          {s.cantidad} {producto.unidad}
-                        </span>
-                      </li>
-                    ))}
+                    .map((s) => {
+                      const buckets = (stocksProducto.stocks_proyecto || [])
+                        .filter((x) => x.almacen_id === s.almacen_id && Number(x.cantidad) > 0)
+                      return (
+                        <li key={s.almacen_id} className="px-3 py-1.5 text-[12px]">
+                          <div className="flex items-center justify-between">
+                            <span className="truncate font-medium">{s.almacen_nombre}</span>
+                            <span className={`font-mono font-bold tabular-nums ${s.cantidad > 0 ? 'text-ink-900 dark:text-ink-100' : 'text-ink-400'}`}>
+                              {s.cantidad} {producto.unidad}
+                            </span>
+                          </div>
+                          {buckets.length > 0 && (
+                            <ul className="mt-0.5 pl-3 space-y-0.5">
+                              {buckets.map((b, i) => (
+                                <li key={i} className="flex items-center justify-between text-[11px] text-ink-500">
+                                  <span className="inline-flex items-center gap-1 truncate">
+                                    <Layers size={10} className="opacity-60" />
+                                    {b.proyecto_nombre || 'General'}
+                                  </span>
+                                  <span className="font-mono tabular-nums">{b.cantidad}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      )
+                    })}
                 </ul>
               )}
             </Card>

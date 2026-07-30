@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   Plus, Search, Upload, Download, Pencil, UserMinus, UserCheck,
   FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard, X,
-  MoreHorizontal, FileDown, SlidersHorizontal,
+  MoreHorizontal, FileDown, SlidersHorizontal, Info,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
@@ -292,7 +292,7 @@ export default function EmpleadosList({ variante = 'activos' }) {
       const plural = res.affected === 1 ? '' : 's'
       toast.success(`${res.affected} empleado${plural} ${verbo}${plural}`)
       if (res.skipped?.length) {
-        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}`, { icon: 'ℹ️' })
+        toast(`${res.skipped.length} omitido${res.skipped.length === 1 ? '' : 's'}`, { icon: <Info size={18} /> })
       }
       setSelectedIds(new Set())
       setConfirmBulk(false)

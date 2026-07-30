@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, Save, Download, IdCard, User, Briefcase, HeartPulse, DollarSign,
-  Files, AlertCircle,
+  Files, AlertCircle, AlertTriangle,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Textarea, Select, Card, CardHeader, Skeleton, Badge, InfoTip,
@@ -167,7 +167,7 @@ export default function EmpleadoForm({ modo }) {
         : await crearTrabajador(fd)
 
       if (res.warnings?.length) {
-        res.warnings.forEach((w) => toast(w, { icon: '⚠️' }))
+        res.warnings.forEach((w) => toast(w, { icon: <AlertTriangle size={18} /> }))
       }
       toast.success(editando ? 'Empleado actualizado' : 'Empleado creado')
       if (!editando) {

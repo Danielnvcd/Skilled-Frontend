@@ -588,7 +588,7 @@ function ModalBajaDirecta({ unidadId, onClose, onDone }) {
       <Modal open onClose={onClose} title="Dar de baja directamente">
         <div className="space-y-3">
           <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm">
-            <strong className="text-red-700 dark:text-red-200">⚠ Esta acción es irreversible.</strong> La unidad quedará
+            <strong className="inline-flex items-center gap-1 text-red-700 dark:text-red-200"><AlertTriangle size={14} /> Esta acción es irreversible.</strong> La unidad quedará
             marcada como dada de baja y no podrá volver a usarse. Se conservará todo el historial.
           </div>
           <div>

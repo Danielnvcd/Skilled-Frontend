@@ -139,7 +139,7 @@ export default function TomaDetalle() {
         const detalle = Math.abs(diff) < 1e-9
           ? 'coincide con el sistema'
           : `diferencia ${diff > 0 ? '+' : ''}${diff.toFixed(2)}`
-        toast.success(`✓ Guardado: ${updated.cantidad_fisica.toFixed(2)} — ${detalle}`)
+        toast.success(`Guardado: ${updated.cantidad_fisica.toFixed(2)} — ${detalle}`)
       }
     } catch (err) {
       toast.error(extractApiError(err, 'Error al guardar'))

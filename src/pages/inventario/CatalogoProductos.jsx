@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn, AlertTriangle } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -12,6 +12,7 @@ import {
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   deleteCategoriaConProductos,
   getProductoStocks, getProductosConCompraActiva, getUnidadesProductos,
+  getAlmacenes, getProyectosInventario, ajustarBuckets,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
@@ -20,6 +21,165 @@ import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
 import { Upload } from 'lucide-react'
+
+// ── Campo (label + valor) de la ficha de detalle del producto ────────────────
+// Se usa en el modal que se abre al hacer click en la imagen de un producto.
+function DetalleCampo({ label, value, mono = false }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-bold uppercase tracking-wider text-ink-400 dark:text-ink-500">{label}</dt>
+      <dd className={`text-ink-800 dark:text-ink-100 break-words ${mono ? 'font-mono tabular-nums' : ''}`}>
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+// ── Editor de stock por bodega+proyecto (feature stock por proyecto) ─────────
+// En la EDICIÓN de un producto: muestra cada bucket (almacén·proyecto) con su
+// cantidad actual y una cantidad objetivo editable; permite agregar buckets. Al
+// guardar llama ajustarBuckets → el backend genera un AJUSTE por cada cambio.
+function BucketEditor({ productoId, unidad, almacenes, proyectos, onSaved }) {
+  const [rows, setRows] = useState([])       // [{ almacen_id, proyecto_id, almacen_nombre, proyecto_nombre, actual, objetivo }]
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [nuevoAlmacen, setNuevoAlmacen] = useState('')
+  const [nuevoProyecto, setNuevoProyecto] = useState('')
+  const permiteDecimales = unidadPermiteDecimales(unidad)
+
+  const cargar = () => {
+    setLoading(true)
+    getProductoStocks(productoId, { incluirVacios: true })
+      .then((d) => {
+        const bs = (d.stocks_proyecto || []).map((b) => ({
+          almacen_id: b.almacen_id,
+          proyecto_id: b.proyecto_id ?? null,
+          almacen_nombre: b.almacen_nombre,
+          proyecto_nombre: b.proyecto_nombre || 'General',
+          actual: Number(b.cantidad) || 0,
+          objetivo: String(Number(b.cantidad) || 0),
+        }))
+        setRows(bs)
+      })
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { cargar() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [productoId])
+
+  const claveDe = (almacenId, proyId) => `${almacenId}:${proyId ?? 0}`
+  const clavesExistentes = new Set(rows.map((r) => claveDe(r.almacen_id, r.proyecto_id)))
+
+  const setObjetivo = (idx, val) => setRows((prev) => prev.map((r, i) =>
+    i === idx ? { ...r, objetivo: permiteDecimales ? val : val.replace(/[.,].*$/, '') } : r,
+  ))
+
+  const agregarBucket = () => {
+    if (!nuevoAlmacen) return
+    const proyId = nuevoProyecto ? Number(nuevoProyecto) : null
+    if (clavesExistentes.has(claveDe(Number(nuevoAlmacen), proyId))) {
+      toast.error('Ese almacén y proyecto ya está en la lista')
+      return
+    }
+    const alm = almacenes.find((a) => String(a.id) === String(nuevoAlmacen))
+    const proy = proyectos.find((p) => String(p.id) === String(nuevoProyecto))
+    setRows((prev) => [...prev, {
+      almacen_id: Number(nuevoAlmacen),
+      proyecto_id: proyId,
+      almacen_nombre: alm ? alm.nombre : `Almacén #${nuevoAlmacen}`,
+      proyecto_nombre: proy ? proy.numero_proyecto : 'General',
+      actual: 0,
+      objetivo: '',
+    }])
+    setNuevoAlmacen(''); setNuevoProyecto('')
+  }
+
+  const hayCambios = rows.some((r) => r.objetivo !== '' && Number(r.objetivo) !== r.actual)
+  const hayInvalido = rows.some((r) => r.objetivo === '' || isNaN(Number(r.objetivo)) || Number(r.objetivo) < 0)
+
+  const guardar = async () => {
+    if (!hayCambios || hayInvalido) return
+    setSaving(true)
+    try {
+      const buckets = rows.map((r) => ({
+        almacen_id: r.almacen_id,
+        proyecto_id: r.proyecto_id ?? null,
+        cantidad_objetivo: Number(r.objetivo),
+      }))
+      const res = await ajustarBuckets(productoId, { buckets })
+      toast.success(`Stock ajustado (${res?.buckets_ajustados ?? 0} bucket${(res?.buckets_ajustados ?? 0) === 1 ? '' : 's'})`)
+      cargar()
+      onSaved?.()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo ajustar el stock'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-ink-200 dark:border-ink-800 p-3 space-y-3 bg-ink-50/50 dark:bg-ink-900/30">
+      <div className="flex items-center gap-2">
+        <Warehouse size={14} className="text-ink-500" />
+        <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Stock por bodega y proyecto</p>
+      </div>
+      {loading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-ink-500">Sin existencias registradas. Agrega un bucket para capturar stock.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((r, idx) => {
+            const objetivoNum = Number(r.objetivo)
+            const delta = r.objetivo === '' || isNaN(objetivoNum) ? 0 : objetivoNum - r.actual
+            return (
+              <div key={claveDe(r.almacen_id, r.proyecto_id)} className="flex items-center gap-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium text-ink-800 dark:text-ink-100 truncate">{r.almacen_nombre}</span>
+                  <span className="text-ink-400"> · </span>
+                  <span className="text-ink-500">{r.proyecto_nombre}</span>
+                </div>
+                <span className="text-[11px] text-ink-400 tabular-nums w-16 text-right">actual: {r.actual}</span>
+                <Input
+                  type="number" min="0"
+                  step={permiteDecimales ? '0.01' : 1}
+                  value={r.objetivo}
+                  onChange={(e) => setObjetivo(idx, e.target.value)}
+                  wrapperClassName="w-24"
+                  className="h-9 text-center tabular-nums"
+                />
+                <span className={`text-[11px] font-bold tabular-nums w-14 text-right ${delta > 0 ? 'text-emerald-600' : delta < 0 ? 'text-rose-600' : 'text-ink-300'}`}>
+                  {delta > 0 ? `+${delta}` : delta < 0 ? delta : '—'}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Agregar bucket nuevo */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 pt-2 border-t border-ink-200 dark:border-ink-800">
+        <Select label="Bodega" value={nuevoAlmacen} onChange={(e) => setNuevoAlmacen(e.target.value)} wrapperClassName="flex-1">
+          <option value="">Selecciona…</option>
+          {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+        </Select>
+        <Select label="Proyecto" value={nuevoProyecto} onChange={(e) => setNuevoProyecto(e.target.value)} wrapperClassName="flex-1">
+          <option value="">General (sin proyecto)</option>
+          {proyectos.map((p) => <option key={p.id} value={p.id}>{p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}</option>)}
+        </Select>
+        <Button type="button" variant="secondary" size="sm" leftIcon={<Plus size={14} />} onClick={agregarBucket} disabled={!nuevoAlmacen}>
+          Agregar
+        </Button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] text-ink-500 italic">Cada cambio genera un AJUSTE trazable en el kardex.</p>
+        <Button type="button" size="sm" loading={saving} disabled={!hayCambios || hayInvalido} onClick={guardar}>
+          Guardar ajustes de stock
+        </Button>
+      </div>
+    </div>
+  )
+}
 
 export default function CatalogoProductos() {
   const [search, setSearch] = useState('')
@@ -54,7 +214,7 @@ export default function CatalogoProductos() {
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', cable_tipo: '', cable_calibre: ''
+    codigo: '', descripcion: '', marca: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', cable_tipo: '', cable_calibre: '', stock_inicial_almacen_id: '', stock_inicial_proyecto_id: ''
   })
   // ¿La categoría elegida es de cable? Activa los campos Tipo/Tamaño y fuerza unidad M.
   const esCable = esCategoriaCable(form.categoria)
@@ -87,9 +247,11 @@ export default function CatalogoProductos() {
     return () => clearTimeout(t)
   }, [catModal?.imagen_url])
 
-  // Modal para ver la imagen del producto en grande.
-  const [imgModal, setImgModal] = useState(null)  // { url, titulo, codigo }
-  const verImagen = (p) => { if (p?.imagen_url) setImgModal({ url: p.imagen_url, titulo: p.descripcion, codigo: p.codigo }) }
+  // Modal de detalle del producto: se abre al hacer click en la imagen y muestra
+  // la foto en grande + TODA la info del producto (incl. Tipo/Calibre en cables).
+  // Guarda el producto completo.
+  const [imgModal, setImgModal] = useState(null)  // producto completo | null
+  const verImagen = (p) => { if (p) setImgModal(p) }
 
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
@@ -102,6 +264,14 @@ export default function CatalogoProductos() {
   const [stocksModal, setStocksModal] = useState(null)
   const [stocksData, setStocksData] = useState(null)
   const [loadingStocks, setLoadingStocks] = useState(false)
+
+  // Feature stock por proyecto: catálogos para elegir destino del stock inicial.
+  const [almacenesLista, setAlmacenesLista] = useState([])
+  const [proyectosLista, setProyectosLista] = useState([])
+  useEffect(() => {
+    getAlmacenes().then((d) => setAlmacenesLista(Array.isArray(d) ? d : [])).catch(() => {})
+    getProyectosInventario().then((d) => setProyectosLista(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!stocksModal) { setStocksData(null); return }
@@ -262,6 +432,8 @@ export default function CatalogoProductos() {
       const payload = {
         ...form,
         unidad: unidadEfectiva,
+        // Marca opcional: '' → null (independiente del proveedor).
+        marca: form.marca?.trim() || null,
         stock_actual: Number(form.stock_actual),
         stock_minimo: Number(form.stock_minimo),
         precio_unitario: Number(form.precio_unitario),
@@ -275,9 +447,16 @@ export default function CatalogoProductos() {
       }
 
       if (editingId) {
+        // El destino del stock inicial solo aplica al crear.
+        delete payload.stock_inicial_almacen_id
+        delete payload.stock_inicial_proyecto_id
         await updateProducto(editingId, payload)
         toast.success('Producto actualizado')
       } else {
+        // Feature stock por proyecto: bucket destino del stock inicial
+        // ('' = bodega default / general).
+        payload.stock_inicial_almacen_id = form.stock_inicial_almacen_id ? Number(form.stock_inicial_almacen_id) : null
+        payload.stock_inicial_proyecto_id = form.stock_inicial_proyecto_id ? Number(form.stock_inicial_proyecto_id) : null
         await createProducto(payload)
         toast.success('Producto creado')
       }
@@ -338,7 +517,7 @@ export default function CatalogoProductos() {
 
   const openNew = () => {
     setEditingId(null)
-    setForm({ codigo: '', descripcion: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '', cable_tipo: '', cable_calibre: '' })
+    setForm({ codigo: '', descripcion: '', marca: '', categoria: '', unidad: 'pza', stock_actual: 0, stock_minimo: 0, precio_unitario: 0, imagen_url: '', proveedor_default_nombre: '', proveedor_default_contacto: '', cable_tipo: '', cable_calibre: '', stock_inicial_almacen_id: '', stock_inicial_proyecto_id: '' })
     setOpenForm(true)
   }
 
@@ -347,6 +526,7 @@ export default function CatalogoProductos() {
     setForm({
       codigo: p.codigo,
       descripcion: p.descripcion,
+      marca: p.marca || '',
       categoria: p.categoria,
       unidad: p.unidad,
       stock_actual: p.stock_actual,
@@ -682,6 +862,7 @@ export default function CatalogoProductos() {
                       <p className="font-mono text-[11px] text-brand-700 dark:text-brand-300 truncate">{p.codigo}</p>
                       <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-snug line-clamp-2">{p.descripcion}</p>
                       <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
+                      {p.marca && <p className="text-[11px] font-medium text-ink-700 dark:text-ink-300 truncate">{p.marca}</p>}
                       <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} size="xs" className="mt-0.5" />
                       <div className="mt-auto pt-2 flex items-end justify-between gap-2">
                         <div className="min-w-0">
@@ -717,6 +898,7 @@ export default function CatalogoProductos() {
               <TH>Código</TH>
               <TH>Descripción</TH>
               <TH>Categoría</TH>
+              <TH>Marca</TH>
               {hayCableEnLista && <TH align="center">Tipo</TH>}
               {hayCableEnLista && <TH align="center">Tamaño (mm²/AWG)</TH>}
               <TH>Stock</TH>
@@ -753,6 +935,7 @@ export default function CatalogoProductos() {
                     </div>
                   </TD>
                   <TD className="text-sm text-ink-600 dark:text-ink-300">{p.categoria}</TD>
+                  <TD className="text-sm text-ink-600 dark:text-ink-300">{p.marca || <span className="text-ink-300 dark:text-ink-600">—</span>}</TD>
                   {hayCableEnLista && (
                     <TD align="center" className="text-sm text-ink-600 dark:text-ink-300">
                       {p.cable_tipo || <span className="text-ink-300 dark:text-ink-600">—</span>}
@@ -831,6 +1014,7 @@ export default function CatalogoProductos() {
                           <p className="font-medium text-sm text-ink-900 dark:text-ink-100 leading-tight truncate">{p.descripcion}</p>
                           <p className="font-mono text-[11px] text-brand-700 dark:text-brand-300">{p.codigo}</p>
                           <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
+                          {p.marca && <p className="text-[11px] font-medium text-ink-700 dark:text-ink-300 truncate">{p.marca}</p>}
                           <CableTag tipo={p.cable_tipo} calibre={p.cable_calibre} size="xs" className="mt-1" />
                         </div>
                         {compra && (
@@ -888,6 +1072,7 @@ export default function CatalogoProductos() {
         <form id="producto-form" onSubmit={handleSubmit} className="space-y-4">
           <Input label="Código" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} required placeholder="Ej. RES-10K-1/4W" />
           <Input label="Descripción" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} required placeholder="Ej. Resistencia 10kΩ 1/4W" />
+          <Input label="Marca (opcional)" value={form.marca || ''} onChange={(e) => setForm({ ...form, marca: e.target.value })} placeholder="Ej. Cooper, Truper, Condumex" maxLength={100} />
           
           <div className="grid grid-cols-2 gap-4">
             <Select
@@ -948,18 +1133,77 @@ export default function CatalogoProductos() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Stock Actual" type="number" min="0"
-              step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
-              value={form.stock_actual}
-              onChange={(e) => setForm({ ...form, stock_actual: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
-              required />
+          {editingId ? (
+            /* Al EDITAR: el stock actual es la suma de buckets → no se captura
+               como número suelto; se ajusta abajo en el editor por bodega/proyecto. */
             <Input label="Stock Mínimo" type="number" min="0"
               step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
               value={form.stock_minimo}
               onChange={(e) => setForm({ ...form, stock_minimo: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
               required />
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Stock Actual" type="number" min="0"
+                step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
+                value={form.stock_actual}
+                onChange={(e) => setForm({ ...form, stock_actual: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
+                required />
+              <Input label="Stock Mínimo" type="number" min="0"
+                step={unidadPermiteDecimales(form.unidad) ? '0.01' : 1}
+                value={form.stock_minimo}
+                onChange={(e) => setForm({ ...form, stock_minimo: unidadPermiteDecimales(form.unidad) ? e.target.value : e.target.value.replace(/[.,].*$/, '') })}
+                required />
+            </div>
+          )}
+
+          {/* Al EDITAR: editor de stock por bodega+proyecto (genera AJUSTES). */}
+          {editingId && (
+            <BucketEditor
+              productoId={editingId}
+              unidad={form.unidad}
+              almacenes={almacenesLista}
+              proyectos={proyectosLista}
+              onSaved={() => load()}
+            />
+          )}
+
+          {/* Destino del stock inicial (feature stock por proyecto). Solo al
+              CREAR y si hay stock inicial > 0. Al editar, el stock se mueve con
+              movimientos (entradas/salidas/reasignación), no aquí. */}
+          {!editingId && Number(form.stock_actual) > 0 && (
+            <div className="rounded-lg border border-ink-200 dark:border-ink-800 p-3 space-y-3 bg-ink-50/50 dark:bg-ink-900/30">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
+                ¿A dónde llega este stock inicial?
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Select
+                  label="Bodega"
+                  value={form.stock_inicial_almacen_id}
+                  onChange={(e) => setForm({ ...form, stock_inicial_almacen_id: e.target.value })}
+                >
+                  <option value="">Bodega default</option>
+                  {almacenesLista.map((a) => (
+                    <option key={a.id} value={a.id}>{a.nombre}</option>
+                  ))}
+                </Select>
+                <Select
+                  label="Proyecto (opcional)"
+                  value={form.stock_inicial_proyecto_id}
+                  onChange={(e) => setForm({ ...form, stock_inicial_proyecto_id: e.target.value })}
+                >
+                  <option value="">General (sin proyecto)</option>
+                  {proyectosLista.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <p className="text-[11px] text-ink-500 italic">
+                Etiqueta el stock inicial a un proyecto (ej. "llegó solo para el Proyecto A") o déjalo como General/libre.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3">
             <Input label="Precio Unitario ($)" type="number" step="0.01" min="0" value={form.precio_unitario} onChange={(e) => setForm({ ...form, precio_unitario: e.target.value })} placeholder="0.00" />
           </div>
@@ -1087,27 +1331,88 @@ export default function CatalogoProductos() {
         title={`Eliminar categoría "${confirmDelCat?.nombre}"`}
         description={
           confirmDelCat?.total > 0
-            ? `⚠ Esta acción eliminará la categoría y sus ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}. Los productos se desactivarán y dejarán de aparecer en el catálogo. Esta acción no se puede deshacer.`
+            ? (
+              <span className="inline-flex items-start gap-1.5">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5 text-amber-500" />
+                <span>Esta acción eliminará la categoría y sus {confirmDelCat.total} producto{confirmDelCat.total === 1 ? '' : 's'}. Los productos se desactivarán y dejarán de aparecer en el catálogo. Esta acción no se puede deshacer.</span>
+              </span>
+            )
             : 'Se eliminará la categoría. No tiene productos asociados.'
         }
         confirmLabel={confirmDelCat?.total > 0 ? `Eliminar categoría y ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}` : 'Eliminar categoría'}
         tone="danger"
       />
 
-      {/* Modal para ver la imagen del producto en grande */}
+      {/* Modal de detalle: click en la imagen → foto grande + TODA la info */}
       <Modal
         open={!!imgModal}
         onClose={() => setImgModal(null)}
-        title={imgModal ? `${imgModal.codigo} — ${imgModal.titulo}` : ''}
+        title={imgModal ? `${imgModal.codigo} — ${imgModal.descripcion}` : ''}
         size="lg"
       >
         {imgModal && (
-          <div className="flex items-center justify-center bg-ink-50 dark:bg-ink-900/40 rounded-lg p-2">
-            <img
-              src={imgModal.url}
-              alt={imgModal.titulo}
-              className="max-h-[70vh] max-w-full object-contain rounded"
-            />
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Foto grande */}
+            <div className="sm:w-1/2 flex items-start justify-center bg-ink-50 dark:bg-ink-900/40 rounded-lg p-2">
+              {imgModal.imagen_url ? (
+                <img
+                  src={imgModal.imagen_url}
+                  alt={imgModal.descripcion}
+                  className="max-h-[40vh] sm:max-h-[60vh] max-w-full object-contain rounded"
+                />
+              ) : (
+                <div className="w-full h-40 flex items-center justify-center text-ink-300 dark:text-ink-600">
+                  <Package size={48} strokeWidth={1.5} />
+                </div>
+              )}
+            </div>
+            {/* Ficha con toda la info del producto */}
+            <div className="sm:w-1/2 space-y-3 text-sm">
+              <div>
+                <p className="font-mono text-xs text-brand-700 dark:text-brand-300">{imgModal.codigo}</p>
+                <p className="font-semibold text-ink-900 dark:text-ink-100 leading-snug">{imgModal.descripcion}</p>
+              </div>
+              {(imgModal.cable_tipo || imgModal.cable_calibre) && (
+                <CableTag tipo={imgModal.cable_tipo} calibre={imgModal.cable_calibre} />
+              )}
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+                <DetalleCampo label="Categoría" value={imgModal.categoria || '—'} />
+                <DetalleCampo label="Marca" value={imgModal.marca || '—'} />
+                {imgModal.cable_tipo && <DetalleCampo label="Tipo (cable)" value={imgModal.cable_tipo} />}
+                {imgModal.cable_calibre && <DetalleCampo label="Tamaño (mm²/AWG)" value={imgModal.cable_calibre} mono />}
+                <DetalleCampo label="Unidad" value={imgModal.unidad || '—'} />
+                <DetalleCampo
+                  label="Precio unitario"
+                  value={(Number(imgModal.precio_unitario) || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                  mono
+                />
+                <DetalleCampo
+                  label="Stock disponible"
+                  value={`${imgModal.stock_disponible ?? imgModal.stock_actual} ${imgModal.unidad || ''}`}
+                  mono
+                />
+                <DetalleCampo label="Stock mínimo" value={`${imgModal.stock_minimo} ${imgModal.unidad || ''}`} mono />
+                {(imgModal.stock_reservado || 0) > 0 && (
+                  <DetalleCampo label="Apartado" value={`${imgModal.stock_reservado} ${imgModal.unidad || ''}`} mono />
+                )}
+                {imgModal.proveedor_default_nombre && (
+                  <DetalleCampo label="Proveedor" value={imgModal.proveedor_default_nombre} />
+                )}
+                {imgModal.proveedor_default_contacto && (
+                  <DetalleCampo label="Contacto" value={imgModal.proveedor_default_contacto} />
+                )}
+              </dl>
+              <div className="pt-1">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Edit2 size={14} />}
+                  onClick={() => { const p = imgModal; setImgModal(null); openEdit(p) }}
+                >
+                  Editar producto
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </Modal>
@@ -1116,7 +1421,7 @@ export default function CatalogoProductos() {
       <Modal
         open={!!stocksModal}
         onClose={() => setStocksModal(null)}
-        title={stocksModal ? `Stock por bodega — ${stocksModal.codigo}` : ''}
+        title={stocksModal ? `Stock por bodega y proyecto — ${stocksModal.codigo}` : ''}
       >
         {stocksModal && (
           <div className="space-y-3">
@@ -1157,6 +1462,27 @@ export default function CatalogoProductos() {
                       ))}
                   </TBody>
                 </Table>
+              </div>
+            )}
+
+            {/* Desglose por proyecto (feature stock por proyecto) */}
+            {stocksData && (stocksData.stocks_proyecto || []).some((b) => Number(b.cantidad) > 0) && (
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500 mb-1.5">Por proyecto</p>
+                <ul className="rounded-lg border border-ink-200 dark:border-ink-800 divide-y divide-ink-100 dark:divide-ink-800 overflow-hidden">
+                  {(stocksData.stocks_proyecto || [])
+                    .filter((b) => Number(b.cantidad) > 0)
+                    .map((b, i) => (
+                      <li key={i} className="flex items-center justify-between px-3 py-1.5 text-[12px]">
+                        <span className="truncate">
+                          <span className="text-ink-500">{b.almacen_nombre}</span>
+                          <span className="mx-1 text-ink-300">·</span>
+                          <span className="font-medium">{b.proyecto_nombre || 'General'}</span>
+                        </span>
+                        <span className="font-mono font-bold tabular-nums">{b.cantidad} {stocksModal.unidad}</span>
+                      </li>
+                    ))}
+                </ul>
               </div>
             )}
 
