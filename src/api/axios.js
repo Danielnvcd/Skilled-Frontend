@@ -29,8 +29,25 @@ export function setLoggingOut(v) {
   if (isLoggingOut) cancelProactiveRefresh()
 }
 
+// Error sintético para las peticiones abortadas durante el logout. Lo marcamos
+// para que el interceptor de respuesta (y quien haga catch) sepa que no es un
+// fallo real y no lo reporte.
+export function isLogoutAbort(err) {
+  return !!err?.__logoutAbort
+}
+
 api.interceptors.request.use((config) => {
   const url = config.url || ''
+  // Durante el logout cortamos todo lo que no sea autenticación: si dejamos
+  // salir estas peticiones, el token ya no vale y cada una devuelve un 401 que
+  // ensucia la consola (y dispara un refresh que también falla). Los endpoints
+  // de auth pasan siempre para no poder bloquear un login por un flag colgado.
+  const esAuth = ['/auth/logout', '/auth/login', '/auth/verify-2fa'].some((p) => url.includes(p))
+  if (isLoggingOut && !esAuth) {
+    const err = new Error('logout en curso: petición cancelada')
+    err.__logoutAbort = true
+    return Promise.reject(err)
+  }
   const skipBearer = NO_BEARER_ENDPOINTS.some((p) => url.includes(p))
   if (!skipBearer) {
     const token = localStorage.getItem('token')
@@ -247,6 +264,10 @@ function bounceToLogin() {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    // Petición que nosotros mismos cancelamos al cerrar sesión: no hay nada que
+    // refrescar ni a dónde rebotar (ya vamos al login).
+    if (isLogoutAbort(error)) return Promise.reject(error)
+
     const original = error.config
     const url = original?.url || ''
     const status = error.response?.status
@@ -256,6 +277,19 @@ api.interceptors.response.use(
       if (status === 401 && !isAuthCall) {
         bounceToLogin()
       }
+      return Promise.reject(error)
+    }
+
+    // 401 de una petición que salió ANTES del logout y aterrizó después: sin
+    // token (o con logout en curso) no tiene sentido intentar el refresh — la
+    // cookie del RT ya no existe y el POST /auth/refresh devolvería otro 401.
+    if (isLoggingOut) {
+      // AuthContext ya está navegando al login; un bounce aquí provocaría una
+      // recarga dura compitiendo con esa navegación.
+      return Promise.reject(error)
+    }
+    if (!localStorage.getItem('token')) {
+      bounceToLogin()
       return Promise.reject(error)
     }
 
