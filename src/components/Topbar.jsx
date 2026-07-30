@@ -5,13 +5,14 @@ import { useTheme } from '../context/ThemeContext'
 import { Link } from 'react-router-dom'
 import NotificacionesBell from './NotificacionesBell'
 import AlertasBell from './AlertasBell'
+import BajoMinimoBell from './BajoMinimoBell'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
 import { ConfirmDialog } from './ui'
 import { reloadToLatest } from '../utils/forceReload'
 
 export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobileDevice = false }) {
-  const { user, isAdmin, logout } = useAuth()
+  const { user, isAdmin, isInventario, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const isDark = theme === 'dark'
   const [confirmLogout, setConfirmLogout] = useState(false)
@@ -77,6 +78,9 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
+          {/* Bajo mínimo: le importa sobre todo a inventario, que no es admin,
+              por eso no va dentro de AlertasBell (limitada a admin). */}
+          {(isAdmin || isInventario) && <BajoMinimoBell />}
           {isAdmin && <AlertasBell />}
           {isAdmin && <NotificacionesBell />}
 

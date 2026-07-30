@@ -505,28 +505,8 @@ export default function PortadaAlmacenes() {
         ))}
       </div>
 
-      {/* Tira de alerta: productos bajo mínimo (solo si hay) — acción inmediata */}
-      {bajoMinimo.length > 0 && (
-        <Link
-          to="/inventario/bajo-minimo"
-          className="group flex items-center gap-3 rounded-xl border border-amber-300 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-900/15 px-4 py-3 hover:border-amber-400 dark:hover:border-amber-700 transition-colors"
-        >
-          <div className="h-8 w-8 rounded-lg inline-flex items-center justify-center flex-shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-            <AlertTriangle size={16} strokeWidth={1.9} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-              {bajoMinimo.length} producto{bajoMinimo.length === 1 ? '' : 's'} bajo mínimo
-            </p>
-            <p className="text-[11px] text-amber-700/80 dark:text-amber-300/80 truncate">
-              {bajoMinimo.slice(0, 4).map((p) => p.codigo).join(' · ')}{bajoMinimo.length > 4 ? ' …' : ''}
-            </p>
-          </div>
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 inline-flex items-center gap-1 flex-shrink-0">
-            Ver todos <ChevronRight size={13} className="group-hover:translate-x-0.5 transition-transform" />
-          </span>
-        </Link>
-      )}
+      {/* La tira de alerta de bajo mínimo se movió a la navbar (BajoMinimoBell)
+          para que acompañe al almacenista por toda la app. Aquí queda el KPI. */}
 
       {/* Resumen de materiales por proyecto y almacén */}
       {rawResumenProy && (
