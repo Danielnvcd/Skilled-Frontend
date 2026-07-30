@@ -6,6 +6,7 @@ import { AuthProvider } from './context/AuthContext'
 import { SocketProvider } from './context/SocketContext'
 import { ThemeProvider, useTheme } from './context/ThemeContext'
 import AccessGate from './components/AccessGate'  // candado temporal de pruebas (ver el archivo para quitarlo)
+import { initServiceWorkerUpdates } from './utils/swUpdate'
 import App from './App'
 import './index.css'
 
@@ -52,3 +53,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </AccessGate>
   </React.StrictMode>,
 )
+
+// Avisa con un toast cuando hay un deploy nuevo, para las pestañas que quedan
+// abiertas sin recargar. Va después del render: el Toaster ya está montado
+// cuando esto pueda disparar.
+initServiceWorkerUpdates()
