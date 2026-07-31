@@ -95,6 +95,14 @@ export default function EstadoServidor() {
                     {data.version.asunto}
                   </p>
                 )}
+                {/* Si no se pudo averiguar la versión, se dice POR QUÉ. Un
+                    «desconocido» a secas no permite corregir nada. */}
+                {data.version?.detalle && (
+                  <p className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+                    No se pudo leer del repositorio: {data.version.detalle}. Lo más
+                    robusto en el servidor es escribir un archivo VERSION al desplegar.
+                  </p>
+                )}
               </Panel>
 
               <Panel titulo="Pool de conexiones a BD" icono={Database}>
