@@ -5,6 +5,7 @@
  * endpoints devuelven 403 con `requiere_2fa: true`. En vez de dejar la pantalla
  * en un error seco, `Aviso2FA` explica qué falta y manda a activarlo.
  */
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ShieldAlert, AlertTriangle } from 'lucide-react'
 import { Button } from '../../components/ui'
@@ -71,6 +72,44 @@ export function Indicador({ ok, titulo, detalle }) {
       </div>
     </div>
   )
+}
+
+/**
+ * Paginación EN CLIENTE para las tablas del panel.
+ *
+ * Aquí sí conviene paginar en cliente y no en servidor: los datos ya vienen
+ * completos en una sola respuesta (el buffer de peticiones está topado en 500
+ * eventos, las sesiones y los eventos de seguridad también tienen tope), así
+ * que cortar en el navegador es instantáneo y evita un viaje extra por cada
+ * cambio de página.
+ *
+ * No se resetea la página al recargar los datos: se ACOTA. Si al revalidar
+ * llegan menos elementos y la página actual ya no existe, cae a la última
+ * válida en vez de saltar a la primera — así una revalidación de fondo no te
+ * mueve la vista mientras estás leyendo.
+ */
+export function usePaginacionLocal(items, porPagina = 25) {
+  const [pagina, setPagina] = useState(0) // 0-based, como espera <Pagination>
+
+  const total = items?.length || 0
+  const totalPaginas = Math.max(1, Math.ceil(total / porPagina))
+  const paginaSegura = Math.min(pagina, totalPaginas - 1)
+  const visibles = (items || []).slice(
+    paginaSegura * porPagina,
+    (paginaSegura + 1) * porPagina,
+  )
+
+  return {
+    visibles,
+    pagina: paginaSegura,
+    totalPaginas,
+    total,
+    porPagina,
+    setPagina,
+    // Índice absoluto del primer elemento de la página: sirve para construir
+    // keys estables que no se repitan entre páginas.
+    offset: paginaSegura * porPagina,
+  }
 }
 
 export function fmtFechaHora(iso) {

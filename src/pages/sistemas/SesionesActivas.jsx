@@ -16,13 +16,16 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { MonitorSmartphone, RefreshCw, LogOut, Info } from 'lucide-react'
 import {
-  PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog,
+  PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog, Pagination,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { getSesiones, revocarSesion } from '../../api/sistemas'
 import { extractApiError } from '../../utils/apiError'
-import { EstadoCarga, fmtFechaHora } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+
+// El endpoint devuelve hasta 500 sesiones; sin paginar la tabla es interminable.
+const POR_PAGINA = 25
 
 export default function SesionesActivas() {
   const { data, loading, error, refetch } = useResource(
@@ -49,6 +52,7 @@ export default function SesionesActivas() {
   }
 
   const sesiones = data || []
+  const pag = usePaginacionLocal(sesiones, POR_PAGINA)
 
   return (
     <div className="space-y-5">
@@ -91,7 +95,7 @@ export default function SesionesActivas() {
                 <TH align="right">Acciones</TH>
               </THead>
               <TBody>
-                {sesiones.map((s) => (
+                {pag.visibles.map((s) => (
                   <TR key={s.id}>
                     <TD className="whitespace-nowrap font-medium">
                       {s.username || `#${s.usuario_id}`}
@@ -129,6 +133,13 @@ export default function SesionesActivas() {
               </TBody>
             </Table>
           )}
+          <Pagination
+            page={pag.pagina}
+            totalPages={pag.totalPaginas}
+            totalElements={pag.total}
+            size={pag.porPagina}
+            onChange={pag.setPagina}
+          />
         </div>
       </EstadoCarga>
 

@@ -20,6 +20,21 @@ export async function listarTrabajadores({
   return data
 }
 
+/**
+ * Picker ligero: solo id, nº de empleado y nombre. SIN datos sensibles.
+ *
+ * Es el que deben usar las pantallas que únicamente necesitan *elegir* a una
+ * persona, no consultar su expediente. El listado completo (`listarTrabajadores`)
+ * expone sueldo, RFC y área, y por eso está restringido a RRHH y coordinador:
+ * roles como `inventario` o `sistemas` reciben 403 ahí, pero sí pueden usar este.
+ */
+export async function listarTrabajadoresParaAsignar({ q = '', perPage = 5000 } = {}) {
+  const { data } = await api.get(`${BASE}/para-asignar`, {
+    params: { q, per_page: perPage },
+  })
+  return data
+}
+
 // Opciones para los selects de filtro (áreas, puestos, tipos). Respeta el scope
 // de rol en el backend.
 export async function obtenerFiltrosTrabajadores() {

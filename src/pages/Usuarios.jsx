@@ -14,7 +14,7 @@ import {
   listarUsuarios, crearUsuario, eliminarUsuario, reactivarUsuario, cambiarPasswordUsuario, actualizarUsuario,
   subirFotoUsuario,
 } from '../api/users'
-import { listarTrabajadores } from '../api/trabajadores'
+import { listarTrabajadoresParaAsignar } from '../api/trabajadores'
 import { useResource } from '../hooks/useResource'
 
 const ROLE_LABELS = {
@@ -281,8 +281,12 @@ export default function Usuarios() {
     // Carga diferida: solo al abrir el modal por primera vez.
       if (trabajadores.length === 0 && !loadingTrab) {
         setLoadingTrab(true)
-        // per_page=5000 para cargar todos los activos al editar.
-        listarTrabajadores({ page: 1, perPage: 5000, estado: 'todos' })
+        // Picker ligero, no el listado completo: aquí solo se necesita ELEGIR
+        // a la persona para ligarla a la cuenta. El listado completo trae
+        // sueldo, RFC y área, y está restringido a RRHH — esta pantalla la usa
+        // el rol `sistemas`, que a propósito no tiene acceso a esos datos y
+        // recibía 403 al abrir el modal de edición.
+        listarTrabajadoresParaAsignar({ perPage: 5000 })
           .then((res) => setTrabajadores(res?.items || []))
           .catch(() => toast.error('No se pudieron cargar los empleados'))
           .finally(() => setLoadingTrab(false))

@@ -8,12 +8,15 @@
 import { useState } from 'react'
 import { ShieldAlert, RefreshCw } from 'lucide-react'
 import {
-  PageHeader, Button, Skeleton, Badge, EmptyState, Select,
+  PageHeader, Button, Skeleton, Badge, EmptyState, Select, Pagination,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { getEventosSeguridad } from '../../api/sistemas'
-import { EstadoCarga, fmtFechaHora } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+
+// El endpoint devuelve hasta 200 eventos; sin paginar la tabla se vuelve larga.
+const POR_PAGINA = 25
 
 // Lo que merece destacarse en rojo: intentos de entrar que fallaron o señales
 // de cuenta comprometida. Lo demás es actividad administrativa normal.
@@ -30,6 +33,7 @@ export default function EventosSeguridad() {
   )
 
   const eventos = data || []
+  const pag = usePaginacionLocal(eventos, POR_PAGINA)
 
   return (
     <div className="space-y-5">
@@ -73,7 +77,7 @@ export default function EventosSeguridad() {
               <TH>IP</TH>
             </THead>
             <TBody>
-              {eventos.map((e) => {
+              {pag.visibles.map((e) => {
                 const critico = esCritico(e.accion)
                 return (
                   <TR key={e.id} className={critico ? 'bg-red-50/60 dark:bg-red-900/10' : ''}>
@@ -92,6 +96,13 @@ export default function EventosSeguridad() {
             </TBody>
           </Table>
         )}
+        <Pagination
+          page={pag.pagina}
+          totalPages={pag.totalPaginas}
+          totalElements={pag.total}
+          size={pag.porPagina}
+          onChange={pag.setPagina}
+        />
       </EstadoCarga>
     </div>
   )

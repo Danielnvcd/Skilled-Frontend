@@ -15,12 +15,16 @@
  */
 import { ListTree, RefreshCw, Info } from 'lucide-react'
 import {
-  PageHeader, Button, Skeleton, Badge, EmptyState,
+  PageHeader, Button, Skeleton, Badge, EmptyState, Pagination,
   Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { getPeticiones } from '../../api/sistemas'
-import { EstadoCarga, fmtFechaHora } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+
+// 25 por página: la tabla es densa (6 columnas, rutas y user-agents largos) y
+// más filas obligan a hacer scroll perdiendo los encabezados de vista.
+const POR_PAGINA = 25
 
 function tonoStatus(status) {
   if (status >= 500) return 'danger'
@@ -37,6 +41,7 @@ export default function Peticiones() {
 
   const resumen = data?.resumen
   const eventos = data?.eventos || []
+  const pag = usePaginacionLocal(eventos, POR_PAGINA)
 
   return (
     <div className="space-y-5">
@@ -125,8 +130,8 @@ export default function Peticiones() {
                     <TH>IP</TH>
                   </THead>
                   <TBody>
-                    {eventos.map((e, i) => (
-                      <TR key={`${e.ts}-${i}`}>
+                    {pag.visibles.map((e, i) => (
+                      <TR key={`${e.ts}-${pag.offset + i}`}>
                         <TD className="whitespace-nowrap text-xs">
                           {fmtFechaHora(new Date(e.ts * 1000).toISOString())}
                         </TD>
@@ -145,6 +150,13 @@ export default function Peticiones() {
                   </TBody>
                 </Table>
               )}
+              <Pagination
+                page={pag.pagina}
+                totalPages={pag.totalPaginas}
+                totalElements={pag.total}
+                size={pag.porPagina}
+                onChange={pag.setPagina}
+              />
             </section>
           </div>
         )}
