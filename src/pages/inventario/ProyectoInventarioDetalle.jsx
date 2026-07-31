@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   FolderOpen, ArrowLeft, Save, Plus, Trash2, RefreshCw, AlertTriangle,
   History, PlusCircle, PencilLine, MinusCircle, User as UserIcon,
-  ClipboardList, FileText, Package, Wrench, ChevronRight,
+  ClipboardList, FileText, Package, Wrench, ChevronRight, Boxes,
 } from 'lucide-react'
 import {
   PageHeader, Button, Card, Skeleton, EmptyState, Modal, InfoTip,
@@ -13,7 +13,7 @@ import {
 import ProductoPicker from '../../components/ProductoPicker'
 import {
   getProyectoMaterialDetalle, guardarPlanMateriales, getProyectoPlanHistorial,
-  getProyectoPedidos, imprimirSolicitud,
+  getProyectoPedidos, imprimirSolicitud, getProyectoExistencias,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { useResource } from '../../hooks/useResource'
@@ -45,6 +45,38 @@ function planArrayHasChanges(plan, guardado) {
   return false
 }
 
+function ResumenExistencias({ etiqueta, valor }) {
+  return (
+    <div className="rounded-xl border border-ink-200 bg-white p-3 dark:border-ink-800 dark:bg-ink-900">
+      <p className="text-xs text-ink-500 dark:text-ink-400">{etiqueta}</p>
+      <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100">{valor}</p>
+    </div>
+  )
+}
+
+/**
+ * Cobertura de la existencia frente a lo planeado.
+ *
+ * Se corta la barra al 100 % aunque haya de sobra: lo que interesa de un
+ * vistazo es si FALTA, no cuánto exceso hay. El número exacto ya está al lado.
+ */
+function BarraCobertura({ pct }) {
+  if (pct === null || pct === undefined) return null
+  const lleno = Math.max(0, Math.min(100, pct))
+  const completo = pct >= 100
+  return (
+    <span
+      className="inline-block h-1.5 w-14 overflow-hidden rounded-full bg-ink-200 dark:bg-ink-700 align-middle"
+      title={`${pct.toFixed(0)} % de lo planeado`}
+    >
+      <span
+        className={`block h-full rounded-full ${completo ? 'bg-emerald-500' : 'bg-amber-500'}`}
+        style={{ width: `${lleno}%` }}
+      />
+    </span>
+  )
+}
+
 export default function ProyectoInventarioDetalle() {
   const { id } = useParams()
   const proyectoId = Number(id)
@@ -74,6 +106,14 @@ export default function ProyectoInventarioDetalle() {
     { staleMs: 30_000, invalidateOn: ['solicitud:changed'] },
   )
   const pedidos = rawPedidos ?? []
+
+  // Existencias FÍSICAS del proyecto. Se invalida con los movimientos porque
+  // cualquier entrada, salida o reasignación cambia los buckets.
+  const { data: existencias, loading: cargandoExistencias } = useResource(
+    ['proyecto-existencias', proyectoId],
+    () => getProyectoExistencias(proyectoId),
+    { staleMs: 20_000, invalidateOn: ['producto:changed', 'solicitud:changed'] },
+  )
 
   useEffect(() => {
     if (error) toast.error(extractApiError(error, 'Error al cargar el proyecto'))
@@ -286,6 +326,7 @@ export default function ProyectoInventarioDetalle() {
         {[
           { id: 'plan', label: 'Plan', icon: FolderOpen },
           { id: 'consumo', label: 'Seguimiento', icon: Package },
+          { id: 'existencias', label: 'Existencias', icon: Boxes, count: existencias?.totales?.materiales || 0 },
           { id: 'pedidos', label: 'Pedidos', icon: ClipboardList, count: pedidos.length },
           { id: 'historial', label: 'Historial', icon: History, count: historial.length },
         ].map((t) => {
@@ -524,6 +565,89 @@ export default function ProyectoInventarioDetalle() {
       )}
 
       {/* ── Pedidos (solicitudes) del proyecto ── */}
+      {/* ── Existencias físicas del proyecto ──────────────────────────────
+          Responde "¿qué material tengo guardado a nombre de este proyecto y
+          en qué bodega?". Es distinto de Seguimiento, que compara planeado
+          contra consumido. Hasta ahora había que entrar bodega por bodega y
+          sumar a mano. */}
+      {tab === 'existencias' && (
+      <>
+      <h3 className="text-sm font-bold uppercase tracking-wide text-ink-700 dark:text-ink-200 mb-2 flex items-center gap-2">
+        <Boxes size={15} /> Material apartado a este proyecto
+        <InfoTip text="Material que está físicamente en bodega reservado para este proyecto. No es lo planeado ni lo ya consumido: es lo que hay ahora mismo." />
+      </h3>
+
+      {cargandoExistencias ? (
+        <Skeleton className="h-48 rounded-lg" />
+      ) : !existencias || existencias.materiales.length === 0 ? (
+        <EmptyState
+          icon={Boxes}
+          title="Sin material apartado"
+          description="Este proyecto no tiene material reservado en bodega. Al registrar una entrada indicando el proyecto, aparecerá aquí."
+        />
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <ResumenExistencias etiqueta="Materiales" valor={existencias.totales.materiales} />
+            <ResumenExistencias etiqueta="Unidades" valor={num(existencias.totales.unidades)} />
+            <ResumenExistencias
+              etiqueta="Valor en bodega"
+              valor={money(existencias.totales.valor)}
+            />
+          </div>
+
+          <Table>
+            <THead>
+              <TH>Material</TH>
+              {existencias.almacenes.map((a) => (
+                <TH key={a.id} align="right">{a.nombre}</TH>
+              ))}
+              <TH align="right">Total</TH>
+              <TH align="right">Planeado</TH>
+            </THead>
+            <TBody>
+              {existencias.materiales.map((m) => (
+                <TR key={m.producto_id}>
+                  <TD>
+                    <span className="font-mono text-xs text-ink-500 dark:text-ink-400">{m.codigo}</span>
+                    <span className="ml-2">{m.descripcion}</span>
+                  </TD>
+                  {/* Una columna por bodega donde este proyecto tiene algo. Las
+                      bodegas sin existencia de este material salen con guion,
+                      no en blanco: un hueco se lee como dato faltante. */}
+                  {existencias.almacenes.map((a) => (
+                    <TD key={a.id} align="right" className="tabular-nums">
+                      {m.por_almacen[a.id] ?? m.por_almacen[String(a.id)] ?? '—'}
+                    </TD>
+                  ))}
+                  <TD align="right" className="whitespace-nowrap font-semibold tabular-nums">
+                    {num(m.total)} {m.unidad}
+                  </TD>
+                  <TD align="right" className="tabular-nums">
+                    {/* `cobertura` viene null cuando el material no está en el
+                        plan. Eso NO es 0 %: es "no había plan para esto", y se
+                        distingue a propósito en vez de pintar una barra vacía
+                        que sugeriría un faltante. */}
+                    {m.cantidad_planeada > 0 ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="text-ink-500 dark:text-ink-400">
+                          {num(m.cantidad_planeada)}
+                        </span>
+                        <BarraCobertura pct={m.cobertura} />
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-400">fuera del plan</span>
+                    )}
+                  </TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </div>
+      )}
+      </>
+      )}
+
       {tab === 'pedidos' && (
       <>
       <h3 className="text-sm font-bold uppercase tracking-wide text-ink-700 dark:text-ink-200 mb-2 flex items-center gap-2">

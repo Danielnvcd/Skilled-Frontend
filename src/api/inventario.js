@@ -430,6 +430,33 @@ export async function deleteCategoriaConProductos(nombre) {
   return data
 }
 
+/**
+ * Cuánto puede salir de una bodega, separado en «del proyecto» y «libre».
+ *
+ * En lote: las pantallas de varias líneas (entrega directa, entrega de una
+ * solicitud) necesitan esto para TODOS sus renglones, y una petición por
+ * renglón dispararía cuarenta al abrir un modal.
+ *
+ * Cada item trae los dos totales, nombrados por su REGLA y no por el tipo de
+ * movimiento — ver `reglaDeDisponibilidad` en utils/buckets.js:
+ *   con_fallback = proyecto + general   (SALIDA, AJUSTE−, entregas)
+ *   exacto       = solo el bucket       (TRASPASO, REASIGNACION)
+ */
+export async function getDisponibilidadBuckets({ ids, almacenId, proyectoId }) {
+  // `almacenId` es opcional: con bodega se responde «¿puedo mover esto desde
+  // aquí?»; sin ella, «¿existe esto para este proyecto, en algún lado?» — que
+  // es la pregunta al PEDIR material, donde todavía no hay bodega elegida.
+  if (!ids?.length) return { items: [] }
+  const { data } = await api.get(`${BASE}/productos/disponibilidad-buckets`, {
+    params: {
+      ids: ids.join(','),
+      almacen_id: almacenId,
+      proyecto_id: proyectoId || undefined,
+    },
+  })
+  return data
+}
+
 // --- Proyectos (endpoint del módulo inventario; distinto del módulo de proyectos) ---
 export async function getProyectosInventario() {
   const { data } = await api.get(`${BASE}/proyectos/`)
@@ -478,6 +505,116 @@ export async function getProyectoPlanHistorial(proyectoId, limit = 50) {
 // con imprimirSolicitud(id).
 export async function getProyectoPedidos(proyectoId) {
   const { data } = await api.get(`${BASE}/proyectos-materiales/${proyectoId}/pedidos`)
+  return data
+}
+
+/**
+ * Material FÍSICO apartado al proyecto, desglosado por bodega.
+ *
+ * Distinto del detalle del proyecto: aquél compara planeado contra consumido
+ * (qué se pensaba usar y qué ya se entregó); esto dice qué hay guardado ahora
+ * mismo a nombre del proyecto. Antes había que entrar bodega por bodega y
+ * sumar a mano.
+ */
+export async function getProyectoExistencias(proyectoId) {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/${proyectoId}/existencias`)
+  return data
+}
+
+// ── Material por proyecto: asignar, devolver, importar ──────────────────────
+// Sección «Material por proyecto». El proyecto es el CONTEXTO (va en la URL),
+// no un campo más del formulario: por eso ninguna de estas funciones lo recibe
+// dentro del payload.
+
+// Tarjetas de la pantalla principal. General viene SIEMPRE primero, con
+// `es_general: true` y `proyecto_id: null`.
+export async function getResumenAsignacion() {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/resumen-asignacion`)
+  return data
+}
+
+/**
+ * Material libre — el que no está apartado a ninguna obra.
+ *
+ * Espejo de `getProyectoExistencias`, para el bucket General. Este SÍ pagina:
+ * General suele tener el catálogo casi entero y bajarlo completo en cada visita
+ * sería regalar megabytes por nada.
+ */
+export async function getExistenciasGeneral({ q = '', page = 1, perPage = 50 } = {}) {
+  const { data } = await api.get(`${BASE}/proyectos-materiales/general/existencias`, {
+    params: { q: q || undefined, page, per_page: perPage },
+  })
+  return data
+}
+
+/**
+ * Simula la asignación sin escribir nada.
+ *
+ * Devuelve una línea por material con `estado` = ok | aviso | error, más
+ * `actual` y `resultado` (el antes y el después, no el incremento).
+ *
+ * Comparte validación con `aplicarAsignacion` en el backend: lo que promete
+ * esta llamada es exactamente lo que hará la otra. Por eso la vista previa se
+ * puede mostrar como un hecho y no como una estimación.
+ */
+export async function previsualizarAsignacion(proyectoId, { lineas, origen = 'general', modo = 'sumar' }) {
+  const { data } = await api.post(
+    `${BASE}/proyectos-materiales/${proyectoId}/asignar/previsualizar`,
+    { lineas, origen, modo },
+  )
+  return data
+}
+
+// Aplica en una sola transacción. `origen: 'general'` mueve stock que ya está
+// en bodega (REASIGNACION); `origen: 'entrada'` registra material que acaba de
+// llegar para la obra (ENTRADA). Son cosas distintas y quien captura elige.
+export async function aplicarAsignacion(proyectoId, { lineas, origen = 'general', modo = 'sumar', motivo }) {
+  const { data } = await api.post(
+    `${BASE}/proyectos-materiales/${proyectoId}/asignar`,
+    { lineas, origen, modo, motivo },
+  )
+  return data
+}
+
+// Saca material del proyecto. Sin `destino_proyecto_id` vuelve a General.
+// Nunca es una salida: el material no deja el almacén, solo cambia de etiqueta.
+export async function devolverMaterialProyecto(proyectoId, { lineas, destinoProyectoId = null, motivo }) {
+  const { data } = await api.post(
+    `${BASE}/proyectos-materiales/${proyectoId}/devolver`,
+    { lineas, destino_proyecto_id: destinoProyectoId, motivo },
+  )
+  return data
+}
+
+// Plantilla de TRES columnas (SKU · Cantidad · Bodega), pre-llenada con los
+// materiales que el proyecto ya tiene. La cantidad va vacía a propósito: para
+// que subir el archivo sin tocarlo no duplique nada.
+export async function descargarPlantillaAsignacion(proyectoId, etiqueta = 'proyecto') {
+  const res = await api.get(
+    `${BASE}/proyectos-materiales/${proyectoId}/plantilla-asignacion`,
+    { responseType: 'blob' },
+  )
+  const url = URL.createObjectURL(new Blob([res.data], { type: res.headers['content-type'] }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `asignacion_${String(etiqueta).replace(/[^\w-]/g, '') || 'proyecto'}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+// Sube la plantilla llena y devuelve la MISMA previsualización que la captura a
+// mano. No escribe: confirmar sigue siendo `aplicarAsignacion`.
+export async function importarAsignacion(proyectoId, file, { origen = 'general', modo = 'sumar' } = {}) {
+  const fd = new FormData()
+  fd.append('archivo', file)
+  fd.append('origen', origen)
+  fd.append('modo', modo)
+  const { data } = await api.post(
+    `${BASE}/proyectos-materiales/${proyectoId}/asignar/importar`, fd,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
   return data
 }
 

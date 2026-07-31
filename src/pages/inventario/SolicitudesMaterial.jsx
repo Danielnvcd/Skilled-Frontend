@@ -12,9 +12,12 @@ import {
 import {
   getSolicitudes, updateSolicitudEstado, imprimirSolicitud,
   patchSolicitudDetalle, entregarSolicitud, getAlmacenes, getSolicitudUbicaciones,
+  getDisponibilidadBuckets,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
+import DisponibilidadBucket from '../../components/DisponibilidadBucket'
+import { REGLA_CON_FALLBACK, disponibleSegunRegla } from '../../utils/buckets'
 import { cableResumen } from '../../utils/cable'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
@@ -857,7 +860,8 @@ function EntregaModal({ solicitud, onClose, onDone }) {
   const [motivo, setMotivo] = useState('')
   const [fechaDevolucionPrevista, setFechaDevolucionPrevista] = useState('')
   const [cantidades, setCantidades] = useState({}) // detalle_id → string (aplica a material Y herramienta)
-  const [ubicaciones, setUbicaciones] = useState({}) // producto_id → { ubicaciones: [...] }
+  const [ubicaciones, setUbicaciones] = useState({})
+  const [buckets, setBuckets] = useState({}) // producto_id → { ubicaciones: [...] }
   const [estantePick, setEstantePick] = useState({}) // detalle_id → estante_id (de qué celda surtir)
   const [saving, setSaving] = useState(false)
 
@@ -871,7 +875,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
       })
       .catch(() => toast.error('No se pudieron cargar almacenes'))
     // Ubicaciones (estante/celda) por producto, para surtir más rápido.
-    setUbicaciones({}); setEstantePick({})
+    setUbicaciones({}); setEstantePick({}); setBuckets({})
     getSolicitudUbicaciones(solicitud.id)
       .then((res) => {
         const porProd = res?.por_producto || {}
@@ -900,6 +904,33 @@ function EntregaModal({ solicitud, onClose, onDone }) {
     setMotivo('')
     setFechaDevolucionPrevista('')
   }, [solicitud?.id])
+
+  // Disponibilidad por bucket de las líneas de material. La entrega descuenta
+  // con la regla proyecto→General (`_consumir_proyecto_luego_general`), pero el
+  // modal solo mostraba «pendiente»: nada decía si ese pendiente se puede
+  // surtir realmente desde la bodega elegida. El 409 al guardar era la primera
+  // noticia.
+  const idsMaterial = (solicitud?.detalles || [])
+    .filter((d) => (d.tipo_item || 'MATERIAL') === 'MATERIAL' && d.producto_id)
+    .map((d) => d.producto_id)
+  const clave = idsMaterial.slice().sort((a, b) => a - b).join(',')
+
+  useEffect(() => {
+    if (!almacenId || !clave) { setBuckets({}); return }
+    let cancel = false
+    getDisponibilidadBuckets({
+      ids: clave.split(',').map(Number),
+      almacenId: Number(almacenId),
+      proyectoId: solicitud?.proyecto_id || null,
+    })
+      .then((res) => {
+        if (!cancel) {
+          setBuckets(Object.fromEntries((res.items || []).map((i) => [i.producto_id, i])))
+        }
+      })
+      .catch(() => { if (!cancel) setBuckets({}) })
+    return () => { cancel = true }
+  }, [almacenId, clave, solicitud?.proyecto_id])
 
   if (!solicitud) return null
 
@@ -1075,6 +1106,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                   const permiteDec = unidadPermiteDecimales(d.producto_unidad)
                   const decimalInvalido = !permiteDec && numVal !== Math.floor(numVal)
                   const ubic = ubicaciones[String(d.producto_id)]?.ubicaciones || []
+                  const bucket = buckets[d.producto_id] ?? null
                   return (
                     <tr key={d.id}>
                       <td className="px-3 py-2">
@@ -1082,6 +1114,18 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                         <p className="text-xs text-ink-500">{d.producto_codigo} · {d.producto_unidad}</p>
                         {cableResumen(d) && (
                           <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300">Cable: {cableResumen(d)} mm²/AWG</p>
+                        )}
+                        {bucket && (
+                          <div className="mt-1">
+                            <DisponibilidadBucket
+                              bucket={bucket}
+                              regla={REGLA_CON_FALLBACK}
+                              requerido={numVal > 0 ? numVal : null}
+                              proyecto={solicitud?.proyecto || null}
+                              unidad={d.producto_unidad}
+                              compacto
+                            />
+                          </div>
                         )}
                         {ubic.length === 0 ? (
                           <p className="text-[11px] text-ink-400 mt-1 flex items-center gap-1">

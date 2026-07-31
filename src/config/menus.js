@@ -5,7 +5,7 @@ import {
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  LineChart, MonitorSmartphone, ShieldAlert,
+  LineChart, MonitorSmartphone, ShieldAlert, PackageOpen,
   // Panel de sistemas: iconos propios, sin reutilizar los de otros módulos
   // (Wrench, por ejemplo, ES el catálogo de herramientas en este sistema).
   Gauge, Network, LockKeyhole, DatabaseZap, UserRoundCog,
@@ -152,6 +152,7 @@ export const MENUS = {
         { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
         { path: '/inventario/bajo-minimo', label: 'Bajo mínimo', icon: AlertTriangle },
         { path: '/inventario/almacenes', label: 'Almacenes', icon: Boxes },
+        { path: '/inventario/material-proyecto', label: 'Material por proyecto', icon: PackageOpen },
         { path: '/inventario/etiquetas', label: 'Etiquetas', icon: Tag },
       ],
     },

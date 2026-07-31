@@ -10,7 +10,11 @@ import {
 import {
   Button, Card, PageHeader, Modal, Input, Select, InfoTip, Pagination,
 } from '../../components/ui'
-import { getProductosPaginado, getCategoriasResumen, getCategoriasConfig, createSolicitud, getProyectosInventario, getProyectosPlanificables, previewSolicitudPdf } from '../../api/inventario'
+import {
+  getProductosPaginado, getCategoriasResumen, getCategoriasConfig, createSolicitud,
+  getProyectosInventario, getProyectosPlanificables, previewSolicitudPdf,
+  getDisponibilidadBuckets,
+} from '../../api/inventario'
 import { unidadPermiteDecimales } from '../../utils/unidades'
 import { cableResumen } from '../../utils/cable'
 import { getHerramientasPaginado } from '../../api/herramientas'
@@ -88,12 +92,21 @@ function QtyStepper({ value, onChange, step = 1, min = 0.1, unidad = '', decimal
 }
 
 // ─── Card de producto ──────────────────────────────────────────────────────
-function ProductoCard({ producto, enCart, onClick }) {
+function ProductoCard({ producto, enCart, onClick, bucket, conProyecto }) {
   const cfg = getCatCfg(producto.categoria)
   const Icon = cfg.Icon
-  const stock = parseFloat(producto.stock_actual)
+  // Con proyecto elegido, lo que importa NO es el total del catálogo sino lo
+  // que este proyecto puede recibir: su propio bucket más lo libre. El resto
+  // está apartado a otras obras y la entrega nunca lo tocaría — enseñarlo aquí
+  // es prometer material que al surtir no aparece.
+  const stock = conProyecto && bucket
+    ? Number(bucket.con_fallback) || 0
+    : parseFloat(producto.stock_actual)
   const minimo = parseFloat(producto.stock_minimo)
   const bajo = stock <= minimo
+  const apartadoAjeno = conProyecto && bucket
+    ? Math.max(0, (parseFloat(producto.stock_actual) || 0) - stock)
+    : 0
   return (
     <button
       type="button"
@@ -144,6 +157,15 @@ function ProductoCard({ producto, enCart, onClick }) {
             {Number.isInteger(stock) ? stock : stock.toFixed(1)} {producto.unidad}
           </span>
         </div>
+        {/* La diferencia entre el total del catálogo y lo que este proyecto
+            puede recibir necesita explicación: sin ella parece que el sistema
+            se equivocó o que el stock desapareció. */}
+        {apartadoAjeno > 0 && (
+          <span className="text-[10px] text-amber-700 dark:text-amber-400 leading-tight">
+            {Number.isInteger(apartadoAjeno) ? apartadoAjeno : apartadoAjeno.toFixed(1)} apartado
+            {' '}a otras obras
+          </span>
+        )}
       </div>
       {/* Botón hover */}
       <div className="absolute bottom-3 right-3 w-8 h-8 rounded-full bg-brand-700 group-hover:bg-brand-800 text-white inline-flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
@@ -295,6 +317,32 @@ export default function MisPedidos() {
   )
   const prodData = rawProd ?? { items: [], total: 0, pages: 1 }
   const productos = prodData.items
+
+  // Disponibilidad real para el proyecto elegido, de los productos VISIBLES.
+  // El catálogo viene paginado del servidor, así que es una consulta por página
+  // y no por producto. Sin proyecto no se pide nada: el total del catálogo ya
+  // es la respuesta correcta a «¿existe esto?».
+  const [buckets, setBuckets] = useState({})
+  const idsVisibles = useMemo(
+    () => productos.map((p) => p.id).sort((a, b) => a - b).join(','),
+    [productos],
+  )
+
+  useEffect(() => {
+    if (!proyectoId || !idsVisibles) { setBuckets({}); return }
+    let cancel = false
+    getDisponibilidadBuckets({
+      ids: idsVisibles.split(',').map(Number),
+      proyectoId: Number(proyectoId),
+    })
+      .then((res) => {
+        if (!cancel) {
+          setBuckets(Object.fromEntries((res.items || []).map((i) => [i.producto_id, i])))
+        }
+      })
+      .catch(() => { if (!cancel) setBuckets({}) })
+    return () => { cancel = true }
+  }, [proyectoId, idsVisibles])
   const prodTotal = prodData.total || 0
   const prodPages = prodData.pages || 1
 
@@ -750,6 +798,8 @@ export default function MisPedidos() {
                       producto={p}
                       enCart={cart.find((c) => c.id === p.id)}
                       onClick={() => openQtyModal(p)}
+                      bucket={buckets[p.id]}
+                      conProyecto={!!proyectoId}
                     />
                   ))}
                 </div>

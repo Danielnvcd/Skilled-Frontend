@@ -9,9 +9,11 @@ import {
 } from '../../components/ui'
 import {
   getAlmacenes, getProyectosInventario,
-  createEntregaDirecta, imprimirSolicitud,
+  createEntregaDirecta, imprimirSolicitud, getDisponibilidadBuckets,
 } from '../../api/inventario'
 import { useProductoSearch } from '../../hooks/useProductoSearch'
+import DisponibilidadBucket from '../../components/DisponibilidadBucket'
+import { REGLA_CON_FALLBACK, disponibleSegunRegla } from '../../utils/buckets'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
 import { cableResumen } from '../../utils/cable'
@@ -139,6 +141,36 @@ export default function EntregaDirecta() {
     () => proyectos.find((p) => String(p.id) === String(proyectoId)) || null,
     [proyectos, proyectoId],
   )
+
+  // Disponibilidad REAL de cada material en la bodega elegida, separada en «del
+  // proyecto» y «libre». Antes se validaba contra `stock_disponible`, que es el
+  // total del producto en TODAS las bodegas y sin distinguir bucket: la pantalla
+  // decía que sí y el backend respondía «disponible 60 (proyecto 40 + general
+  // 20)» al entregar. La entrega usa la regla proyecto→General.
+  const [buckets, setBuckets] = useState({})
+  const [cargandoBuckets, setCargandoBuckets] = useState(false)
+  const idsEnCarrito = useMemo(
+    () => items.map((it) => it.producto.id).sort((a, b) => a - b).join(','),
+    [items],
+  )
+
+  useEffect(() => {
+    if (!almacenOrigenId || !idsEnCarrito) { setBuckets({}); return }
+    let cancel = false
+    setCargandoBuckets(true)
+    getDisponibilidadBuckets({
+      ids: idsEnCarrito.split(',').map(Number),
+      almacenId: Number(almacenOrigenId),
+      proyectoId: proyectoId ? Number(proyectoId) : null,
+    })
+      .then((res) => {
+        if (cancel) return
+        setBuckets(Object.fromEntries((res.items || []).map((i) => [i.producto_id, i])))
+      })
+      .catch(() => { if (!cancel) setBuckets({}) })
+      .finally(() => { if (!cancel) setCargandoBuckets(false) })
+    return () => { cancel = true }
+  }, [almacenOrigenId, proyectoId, idsEnCarrito])
   const almacenSel = useMemo(
     () => almacenes.find((a) => String(a.id) === String(almacenOrigenId)) || null,
     [almacenes, almacenOrigenId],
@@ -254,7 +286,12 @@ export default function EntregaDirecta() {
             <ul className="divide-y divide-ink-100 dark:divide-ink-800">
               {items.map((it) => {
                 const cantNum = Number(it.cantidad)
-                const disp = Number(it.producto.stock_disponible ?? it.producto.stock_actual) || 0
+                const bucket = buckets[it.producto.id] ?? null
+                // Mientras no haya bodega elegida no hay bucket que consultar;
+                // se cae al total del producto solo para no dejar la fila muda.
+                const disp = bucket
+                  ? disponibleSegunRegla(bucket, REGLA_CON_FALLBACK)
+                  : Number(it.producto.stock_disponible ?? it.producto.stock_actual) || 0
                 const decimalMal = cantNum > 0 && !unidadPermiteDecimales(it.producto.unidad) && !Number.isInteger(cantNum)
                 const excede = cantNum > disp
                 const error = decimalMal || excede
@@ -262,15 +299,33 @@ export default function EntregaDirecta() {
                   <li key={it.producto.id} className="flex items-center gap-4 px-5 py-4">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-ink-900 dark:text-ink-100 truncate">{it.producto.descripcion}</p>
-                      <p className="text-xs text-ink-500 font-mono mt-0.5">
-                        {it.producto.codigo} · disp: {disp} {it.producto.unidad}
-                      </p>
+                      <p className="text-xs text-ink-500 font-mono mt-0.5">{it.producto.codigo}</p>
+                      {bucket ? (
+                        <div className="mt-1">
+                          <DisponibilidadBucket
+                            bucket={bucket}
+                            regla={REGLA_CON_FALLBACK}
+                            requerido={cantNum > 0 ? cantNum : null}
+                            proyecto={proyectoSel?.numero_proyecto ?? null}
+                            unidad={it.producto.unidad}
+                            compacto
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-ink-400 italic mt-0.5">
+                          {almacenOrigenId
+                            ? (cargandoBuckets ? 'Consultando existencias…' : 'Sin existencia en esta bodega')
+                            : 'Elige la bodega para ver de dónde sale'}
+                        </p>
+                      )}
                       {cableResumen(it.producto) && (
                         <p className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 mt-0.5">Cable: {cableResumen(it.producto)} mm²/AWG</p>
                       )}
                       {error && (
                         <p className="text-[11px] text-rose-600 dark:text-rose-400 mt-1">
-                          {decimalMal ? `“${it.producto.unidad}” no admite decimales.` : 'Excede el stock disponible.'}
+                          {decimalMal
+                            ? `“${it.producto.unidad}” no admite decimales.`
+                            : 'Excede lo disponible en esta bodega para este proyecto.'}
                         </p>
                       )}
                     </div>

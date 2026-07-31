@@ -24,6 +24,51 @@ import { Upload } from 'lucide-react'
 
 // ── Campo (label + valor) de la ficha de detalle del producto ────────────────
 // Se usa en el modal que se abre al hacer click en la imagen de un producto.
+/**
+ * Agrupa los buckets de stock POR PROYECTO, con las bodegas como detalle.
+ *
+ * El API devuelve una fila por combinación (bodega, proyecto), que es el grano
+ * natural del almacenamiento pero no el de la pregunta que hace el usuario:
+ * «¿cuánto material tengo del proyecto Norte?». Sin agrupar, contestarla obliga
+ * a localizar sus filas entre todas y sumarlas de cabeza.
+ *
+ * General (proyecto_id null) va primero por convención: es el stock libre y el
+ * punto de referencia contra el que se leen los demás.
+ */
+function agruparPorProyecto(buckets) {
+  const grupos = new Map()
+  for (const b of buckets || []) {
+    const cantidad = Number(b.cantidad) || 0
+    if (cantidad <= 0) continue
+    const clave = b.proyecto_id ?? 'general'
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        clave,
+        proyecto_id: b.proyecto_id ?? null,
+        proyecto_nombre: b.proyecto_nombre,
+        proyecto_descripcion: b.proyecto_descripcion,
+        total: 0,
+        almacenes: [],
+      })
+    }
+    const g = grupos.get(clave)
+    g.total += cantidad
+    g.almacenes.push({ nombre: b.almacen_nombre, cantidad })
+  }
+
+  for (const g of grupos.values()) {
+    // Redondeo a 2 decimales: sumar flotantes produce colas como 169.99999997.
+    g.total = Math.round(g.total * 100) / 100
+    g.almacenes.sort((a, b) => b.cantidad - a.cantidad)
+  }
+
+  return [...grupos.values()].sort((a, b) => {
+    if (a.proyecto_id === null) return -1
+    if (b.proyecto_id === null) return 1
+    return b.total - a.total
+  })
+}
+
 function DetalleCampo({ label, value, mono = false }) {
   return (
     <div className="min-w-0">
@@ -1223,7 +1268,7 @@ export default function CatalogoProductos() {
                 </Select>
               </div>
               <p className="text-[11px] text-ink-500 italic">
-                Etiqueta el stock inicial a un proyecto (ej. "llegó solo para el Proyecto A") o déjalo como General/libre.
+                Etiqueta el stock inicial a un proyecto (ej. "llegó solo para el Proyecto A") o déjalo en General (sin proyecto).
               </p>
             </div>
           )}
@@ -1488,23 +1533,38 @@ export default function CatalogoProductos() {
               </div>
             )}
 
-            {/* Desglose por proyecto (feature stock por proyecto) */}
+            {/* Desglose por proyecto.
+                Antes era una lista plana con una línea por combinación
+                bodega+proyecto, así que responder "¿cuánto tiene el Norte?"
+                obligaba a buscar sus líneas entre todas y sumarlas de cabeza:
+                el agrupamiento estaba al revés de la pregunta. Ahora se agrupa
+                POR PROYECTO y las bodegas quedan como detalle de cada uno. */}
             {stocksData && (stocksData.stocks_proyecto || []).some((b) => Number(b.cantidad) > 0) && (
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500 mb-1.5">Por proyecto</p>
                 <ul className="rounded-lg border border-ink-200 dark:border-ink-800 divide-y divide-ink-100 dark:divide-ink-800 overflow-hidden">
-                  {(stocksData.stocks_proyecto || [])
-                    .filter((b) => Number(b.cantidad) > 0)
-                    .map((b, i) => (
-                      <li key={i} className="flex items-center justify-between px-3 py-1.5 text-[12px]">
-                        <span className="truncate">
-                          <span className="text-ink-500">{b.almacen_nombre}</span>
-                          <span className="mx-1 text-ink-300">·</span>
-                          <span className="font-medium">{b.proyecto_nombre || 'General'}</span>
+                  {agruparPorProyecto(stocksData.stocks_proyecto).map((g) => (
+                    <li key={g.clave} className="px-3 py-2 text-[12px]">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="truncate font-medium">
+                          {g.proyecto_nombre || 'General'}
+                          {g.proyecto_descripcion && (
+                            <span className="ml-1 font-normal text-ink-500">— {g.proyecto_descripcion}</span>
+                          )}
                         </span>
-                        <span className="font-mono font-bold tabular-nums">{b.cantidad} {stocksModal.unidad}</span>
-                      </li>
-                    ))}
+                        <span className="whitespace-nowrap font-mono font-bold tabular-nums">
+                          {g.total} {stocksModal.unidad}
+                        </span>
+                      </div>
+                      {/* El detalle por bodega solo aparece si hay más de una:
+                          con una sola sería repetir el mismo número. */}
+                      {g.almacenes.length > 1 && (
+                        <div className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">
+                          {g.almacenes.map((a) => `${a.nombre} ${a.cantidad}`).join(' · ')}
+                        </div>
+                      )}
+                    </li>
+                  ))}
                 </ul>
               </div>
             )}

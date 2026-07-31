@@ -47,6 +47,9 @@ const InventarioDashboard = lazy(() => import('./pages/inventario/InventarioDash
 const PortadaAlmacenes = lazy(() => import('./pages/inventario/PortadaAlmacenes'))
 const CatalogoProductos = lazy(() => import('./pages/inventario/CatalogoProductos'))
 const ProyectosInventario = lazy(() => import('./pages/inventario/ProyectosInventario'))
+const MaterialPorProyecto = lazy(() => import('./pages/inventario/MaterialPorProyecto'))
+const MaterialProyectoDetalle = lazy(() => import('./pages/inventario/MaterialProyectoDetalle'))
+const MaterialGeneral = lazy(() => import('./pages/inventario/MaterialGeneral'))
 const ProyectoInventarioDetalle = lazy(() => import('./pages/inventario/ProyectoInventarioDetalle'))
 const ProductoKardex = lazy(() => import('./pages/inventario/ProductoKardex'))
 const BajoMinimo = lazy(() => import('./pages/inventario/BajoMinimo'))
@@ -202,6 +205,14 @@ export default function App() {
             solicitudes y movimientos), reubicado fuera de la portada. */}
         <Route path="inventario/actividad"   element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
         <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
+        {/* Material por proyecto: asignar, mover y devolver existencias.
+            Distinto de "inventario/proyectos", que es el PLAN (lo que se pensaba
+            usar) — esto es el material físico apartado ahora mismo.
+            "/general" convive con "/:id" sin conflicto: React Router ordena por
+            especificidad y el segmento estático gana al dinámico. */}
+        <Route path="inventario/material-proyecto"     element={<RoleRoute allow={isInventario}><MaterialPorProyecto /></RoleRoute>} />
+        <Route path="inventario/material-proyecto/general" element={<RoleRoute allow={isInventario}><MaterialGeneral /></RoleRoute>} />
+        <Route path="inventario/material-proyecto/:id" element={<RoleRoute allow={isInventario}><MaterialProyectoDetalle /></RoleRoute>} />
         <Route path="inventario/proyectos"   element={<RoleRoute allow={canPlanMateriales}><ProyectosInventario /></RoleRoute>} />
         <Route path="inventario/proyectos/:id" element={<RoleRoute allow={canPlanMateriales}><ProyectoInventarioDetalle /></RoleRoute>} />
         <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={isInventario}><ProductoKardex /></RoleRoute>} />

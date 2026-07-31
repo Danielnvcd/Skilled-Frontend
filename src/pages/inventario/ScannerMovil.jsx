@@ -11,6 +11,7 @@ import {
 import {
   createMovimiento, getInventarioEstante,
   getProductoPorCodigo, createMovimientoRapido,
+  getProductoStocks,
 } from '../../api/inventario'
 import { validarUnidadQR } from '../../api/herramientas'
 import { useNavigate } from 'react-router-dom'
@@ -31,6 +32,11 @@ export default function ScannerMovil() {
   const [productoDirecto, setProductoDirecto] = useState(null)
   // ajusteDir: '+' suma al stock, '-' resta. Solo aplica cuando tipo=AJUSTE.
   const [accionForm, setAccionForm] = useState({ tipo: 'SALIDA', cantidad: '', ajusteDir: '+' })
+  // Buckets del producto escaneado. El movimiento rápido NO manda proyecto_id
+  // —el escáner es una herramienta de bodega, no de asignación— así que solo
+  // puede tocar el bucket General. Mostrar el stock global aquí era prometer
+  // material que este camino nunca iba a poder mover.
+  const [buckets, setBuckets] = useState(null)
   const [accionSaving, setAccionSaving] = useState(false)
 
   const [estante, setEstante] = useState(null)
@@ -133,6 +139,24 @@ export default function ScannerMovil() {
       toast.error('QR no reconocido (no es estante, herramienta ni producto)', { id: 'qr' })
     }
   }
+
+  useEffect(() => {
+    if (!productoDirecto?.id) { setBuckets(null); return }
+    let cancel = false
+    getProductoStocks(productoDirecto.id)
+      .then((res) => {
+        if (cancel) return
+        let libre = 0
+        let apartado = 0
+        for (const f of res.stocks_proyecto || []) {
+          if (f.proyecto_id == null) libre += Number(f.cantidad) || 0
+          else apartado += Number(f.cantidad) || 0
+        }
+        setBuckets({ libre, apartado })
+      })
+      .catch(() => { if (!cancel) setBuckets(null) })
+    return () => { cancel = true }
+  }, [productoDirecto?.id])
 
   const submitAccionRapida = async (e) => {
     e.preventDefault()
@@ -504,14 +528,33 @@ export default function ScannerMovil() {
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 p-3">
-                <p className="text-[10px] uppercase text-ink-500 font-bold">Stock actual</p>
+                <p className="text-[10px] uppercase text-ink-500 font-bold">En bodega</p>
                 <p className="text-lg font-bold tabular-nums">{Number(productoDirecto.stock_actual ?? 0).toFixed(2)} {productoDirecto.unidad}</p>
               </div>
-              <div className="rounded-md bg-ink-50 dark:bg-ink-800/50 p-3">
-                <p className="text-[10px] uppercase text-ink-500 font-bold">Disponible</p>
-                <p className="text-lg font-bold tabular-nums">{Number(productoDirecto.stock_disponible ?? productoDirecto.stock_actual ?? 0).toFixed(2)}</p>
+              <div className={`rounded-md p-3 ${buckets && buckets.apartado > 0 ? 'bg-brand-50 dark:bg-brand-900/20 ring-1 ring-brand-500/20' : 'bg-ink-50 dark:bg-ink-800/50'}`}>
+                <p className="text-[10px] uppercase text-ink-500 font-bold">Puedes mover</p>
+                <p className="text-lg font-bold tabular-nums">
+                  {buckets
+                    ? `${buckets.libre.toFixed(2)}`
+                    : Number(productoDirecto.stock_disponible ?? productoDirecto.stock_actual ?? 0).toFixed(2)}
+                </p>
               </div>
             </div>
+
+            {/* Cuando hay material apartado, la diferencia entre las dos cifras
+                de arriba necesita explicación: si no, parece que el sistema
+                perdió stock. */}
+            {buckets && buckets.apartado > 0 && (
+              <div className="rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/60 p-3 text-xs">
+                <p className="font-semibold text-amber-800 dark:text-amber-200">
+                  {buckets.apartado.toFixed(2)} {productoDirecto.unidad} están apartados a proyectos.
+                </p>
+                <p className="text-amber-700 dark:text-amber-300 mt-0.5">
+                  Desde aquí solo se mueve lo libre. Para sacar material de una obra usa
+                  Entrega directa o Material por proyecto, que sí registran de qué obra sale.
+                </p>
+              </div>
+            )}
 
             <form onSubmit={submitAccionRapida} className="space-y-4">
               <div className="grid grid-cols-3 gap-2">

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import DisponibilidadBucket from '../../components/DisponibilidadBucket'
+import {
+  bucketDesdeStocks, disponibleSegunRegla, explicaDisponible, reglaDeDisponibilidad,
+} from '../../utils/buckets'
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, Activity, Package,
   Plus, Minus, AlertTriangle, CheckCircle2, Info, ChevronLeft, Save,
@@ -157,6 +161,9 @@ const COLORS = {
   },
 }
 
+// REASIGNACION saca del bucket del proyecto ORIGEN, no del bucket único.
+const esReasignacionTipo = (t) => t === 'REASIGNACION'
+
 export default function RegistrarMovimiento() {
   const navigate = useNavigate()
 
@@ -223,12 +230,32 @@ export default function RegistrarMovimiento() {
     return () => { cancel = true }
   }, [productoId])
 
-  // Stock disponible en la bodega origen seleccionada (para validar SALIDAs/TRASPASOs).
-  const stockEnOrigen = useMemo(() => {
+  // Regla de disponibilidad que aplica este movimiento. Vive en utils/buckets
+  // para que la tabla de qué tipo usa qué regla exista en UN solo lugar.
+  const reglaDisp = useMemo(
+    () => reglaDeDisponibilidad(tipo, ajusteDir),
+    [tipo, ajusteDir],
+  )
+
+  // El bucket de proyecto que este movimiento va a tocar. En REASIGNACION es el
+  // proyecto ORIGEN (de dónde sale); en el resto, el bucket único del formulario.
+  const proyectoEnJuego = esReasignacionTipo(tipo) ? proyectoOrigenId : proyectoId
+
+  // Disponible en la bodega origen SEGÚN LA REGLA, no el total de la bodega.
+  // Antes se validaba contra el agregado por almacén: para un TRASPASO eso
+  // sumaba stock etiquetado a otras obras que el backend nunca habría movido,
+  // así que la pantalla decía que sí y el guardado decía que no.
+  const bucketOrigen = useMemo(() => {
     if (!stocksProducto || !almacenOrigenId) return null
-    const row = stocksProducto.stocks.find((s) => String(s.almacen_id) === String(almacenOrigenId))
-    return row ? Number(row.cantidad) : 0
-  }, [stocksProducto, almacenOrigenId])
+    return bucketDesdeStocks(
+      stocksProducto.stocks_proyecto, almacenOrigenId, proyectoEnJuego,
+    )
+  }, [stocksProducto, almacenOrigenId, proyectoEnJuego])
+
+  const stockEnOrigen = useMemo(
+    () => (bucketOrigen ? disponibleSegunRegla(bucketOrigen, reglaDisp) : null),
+    [bucketOrigen, reglaDisp],
+  )
 
   // Cálculo del stock resultante con signo según tipo.
   // TRASPASO no afecta el total global, solo redistribuye entre bodegas.
@@ -609,7 +636,7 @@ export default function RegistrarMovimiento() {
               {necesitaProyecto && (
                 <p className="text-[11px] text-ink-500 italic">
                   {tipo === 'ENTRADA'
-                    ? 'Etiqueta la mercancía a un proyecto, o déjala como General/libre.'
+                    ? 'Etiqueta la mercancía a un proyecto, o déjala en General (sin proyecto).'
                     : tipo === 'SALIDA'
                       ? 'Sale primero del proyecto elegido y, si no alcanza, del General. Nunca de otro proyecto.'
                       : tipo === 'TRASPASO'
@@ -618,6 +645,31 @@ export default function RegistrarMovimiento() {
                 </p>
               )}
             </div>
+          )}
+
+          {/* De dónde sale el material, con el desglose a la vista. Antes aquí
+              solo se validaba contra el total de la bodega, que en un TRASPASO
+              incluye stock de otras obras que el backend jamás habría movido. */}
+          {bucketOrigen && stockEnOrigen !== null && (
+            <Card className="p-3">
+              <div className="flex items-start justify-between gap-3">
+                <span className="text-xs font-semibold text-ink-600 dark:text-ink-300 shrink-0">
+                  De dónde sale
+                </span>
+                <DisponibilidadBucket
+                  bucket={bucketOrigen}
+                  regla={reglaDisp}
+                  requerido={cantidad === '' ? null : Math.abs(Number(cantidad))}
+                  proyecto={
+                    proyectoEnJuego
+                      ? (proyectos.find((x) => String(x.id) === String(proyectoEnJuego))?.numero_proyecto
+                         ?? 'el proyecto')
+                      : null
+                  }
+                  unidad={producto?.unidad ?? ''}
+                />
+              </div>
+            </Card>
           )}
 
           {/* Partes del movimiento (feature "vale de movimiento"): quién entrega
@@ -845,7 +897,8 @@ export default function RegistrarMovimiento() {
                 <div>
                   <p className="font-bold text-rose-700 dark:text-rose-300 text-sm">Stock insuficiente en bodega origen</p>
                   <p className="text-xs text-rose-600 dark:text-rose-400 mt-0.5">
-                    Disponible en esa bodega: <strong>{stockEnOrigen}</strong>. Ajusta la cantidad o elige otra bodega.
+                    {explicaDisponible(bucketOrigen, reglaDisp, { conProyecto: !!proyectoEnJuego })}
+                    {' '}Ajusta la cantidad, cambia de bodega o elige otro proyecto.
                   </p>
                 </div>
               </div>
