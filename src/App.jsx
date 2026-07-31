@@ -16,6 +16,10 @@ const Verify2FA = lazy(() => import('./pages/Verify2FA'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Directorio = lazy(() => import('./pages/Directorio'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
+const SistemasEstado = lazy(() => import('./pages/sistemas/EstadoServidor'))
+const SistemasPeticiones = lazy(() => import('./pages/sistemas/Peticiones'))
+const SistemasSesiones = lazy(() => import('./pages/sistemas/SesionesActivas'))
+const SistemasSeguridad = lazy(() => import('./pages/sistemas/EventosSeguridad'))
 const EmpleadosList = lazy(() => import('./pages/empleados/EmpleadosList'))
 const EmpleadoForm = lazy(() => import('./pages/empleados/EmpleadoForm'))
 const EmpleadoView = lazy(() => import('./pages/empleados/EmpleadoView'))
@@ -105,11 +109,14 @@ function RoleBasedHome() {
   if (user?.role === 'finanzas') return <FinanzasPanel />
   if (user?.role === 'solicitante_material') return <Navigate to="/inventario/mis-pedidos" replace />
   if (user?.role === 'coordinador') return <Navigate to="/mis-proyectos" replace />
+  // `sistemas` NO ve el Dashboard: es la portada de RRHH y sus llamadas
+  // (nómina, empleados) le devolverían 403. Su portada es el panel.
+  if (user?.role === 'sistemas') return <Navigate to="/sistemas" replace />
   return <Dashboard />
 }
 
 export default function App() {
-  const { user, isAdmin, isCoordinador } = useAuth()
+  const { user, isAdmin, isCoordinador, puedeGestionarSistema } = useAuth()
 
   const role = user?.role
   const isInventario = role === 'inventario' || isAdmin
@@ -137,9 +144,18 @@ export default function App() {
         {/* Panel financiero: home del rol finanzas; el admin también puede verlo */}
         <Route path="finanzas"    element={<RoleRoute allow={role === 'finanzas' || isAdmin}><FinanzasPanel /></RoleRoute>} />
 
-        {/* Solo admin */}
-        <Route path="usuarios"                element={<RoleRoute allow={isAdmin}><Usuarios /></RoleRoute>} />
-        <Route path="bitacora"                element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>} />
+        {/* Panel de sistemas (TI/soporte). Eje de permisos independiente del de
+            admin/RRHH: administra el sistema, no los datos de nómina. El
+            backend además exige 2FA en cada endpoint; si falta, la vista lo
+            explica y manda a activarlo en lugar de fallar en seco. */}
+        <Route path="sistemas"             element={<RoleRoute allow={puedeGestionarSistema}><SistemasEstado /></RoleRoute>} />
+        <Route path="sistemas/peticiones"  element={<RoleRoute allow={puedeGestionarSistema}><SistemasPeticiones /></RoleRoute>} />
+        <Route path="sistemas/sesiones"    element={<RoleRoute allow={puedeGestionarSistema}><SistemasSesiones /></RoleRoute>} />
+        <Route path="sistemas/seguridad"   element={<RoleRoute allow={puedeGestionarSistema}><SistemasSeguridad /></RoleRoute>} />
+
+        {/* La gestión de cuentas se movió de admin al rol sistemas. */}
+        <Route path="usuarios"                element={<RoleRoute allow={puedeGestionarSistema}><Usuarios /></RoleRoute>} />
+        <Route path="bitacora"                element={<RoleRoute allow={isAdmin || puedeGestionarSistema}><Bitacora /></RoleRoute>} />
         <Route path="manual"                  element={<RoleRoute allow={isAdmin}><ManualAdmin /></RoleRoute>} />
         <Route path="manual-coordinador"      element={<RoleRoute allow={isCoordinador || isAdmin}><ManualCoordinador /></RoleRoute>} />
         <Route path="metricas"                element={<RoleRoute allow={isAdmin}><Metricas /></RoleRoute>} />

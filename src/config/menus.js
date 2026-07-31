@@ -5,7 +5,7 @@ import {
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  LineChart,
+  LineChart, Activity, ListTree, MonitorSmartphone, ShieldAlert,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -42,11 +42,41 @@ export const MENUS = {
     },
     {
       label: 'Administración',
+      // `/usuarios` ya NO vive aquí: el alta de cuentas se movió al rol
+      // `sistemas` (ver MENUS.sistemas más abajo). Admin quedó enfocado en RRHH.
       items: [
-        { path: '/usuarios', label: 'Usuarios', icon: Users },
         { path: '/metricas', label: 'Métricas', icon: BarChart3 },
         { path: '/bitacora', label: 'Bitácora', icon: History },
         { path: '/manual', label: 'Manual de uso', icon: BookOpen },
+      ],
+    },
+  ],
+
+  // Sistemas (TI/soporte): administra el SISTEMA, no los datos de nómina.
+  // Es el eje de permisos independiente del de admin — ver `buildPerms` en
+  // AuthContext y `is_admin()` / `puede_gestionar_sistema()` en el backend.
+  sistemas: [
+    {
+      label: 'Cuenta',
+      items: [
+        { path: '/perfil', label: 'Mi perfil', icon: User },
+        { path: '/directorio', label: 'Directorio', icon: Users },
+      ],
+    },
+    {
+      label: 'Panel de sistemas',
+      items: [
+        { path: '/sistemas', label: 'Estado del servidor', icon: Activity, end: true },
+        { path: '/sistemas/peticiones', label: 'Peticiones', icon: ListTree },
+        { path: '/sistemas/sesiones', label: 'Sesiones activas', icon: MonitorSmartphone },
+        { path: '/sistemas/seguridad', label: 'Eventos de seguridad', icon: ShieldAlert },
+      ],
+    },
+    {
+      label: 'Cuentas',
+      items: [
+        { path: '/usuarios', label: 'Usuarios', icon: Users },
+        { path: '/bitacora', label: 'Bitácora', icon: History },
       ],
     },
   ],
@@ -201,8 +231,9 @@ export const MENUS = {
   ],
 }
 
-// super_admin usa el mismo menú que admin
-MENUS.super_admin = MENUS.admin
+// super_admin cruza AMBOS ejes: es la cuenta de recuperación, así que ve la
+// operación de RRHH y además el panel de sistemas.
+MENUS.super_admin = [...MENUS.admin, ...MENUS.sistemas.filter((s) => s.label !== 'Cuenta')]
 
 // Bottom nav de móvil: 4-5 atajos por rol. Se muestra solo en pantallas <md.
 // Cada item es { path, label, icon, end? }.
@@ -238,6 +269,13 @@ export const BOTTOM_NAV = {
     { path: '/', label: 'Inicio', icon: Home, end: true },
     { path: '/finanzas', label: 'Finanzas', icon: DollarSign },
     { path: '/directorio', label: 'Directorio', icon: Users },
+    { path: '/perfil', label: 'Cuenta', icon: User },
+  ],
+  sistemas: [
+    { path: '/sistemas', label: 'Estado', icon: Activity, end: true },
+    { path: '/sistemas/peticiones', label: 'Peticiones', icon: ListTree },
+    { path: '/sistemas/sesiones', label: 'Sesiones', icon: MonitorSmartphone },
+    { path: '/usuarios', label: 'Usuarios', icon: Users },
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],
 }

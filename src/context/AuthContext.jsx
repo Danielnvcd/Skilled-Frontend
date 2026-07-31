@@ -17,7 +17,14 @@ function purgeUserScopedCaches() {
 function buildPerms(user) {
   const role = user?.role
   const isSuperAdmin = role === 'super_admin'
+  // `isAdmin` = acceso a la operación de RRHH/nómina. `sistemas` NO entra aquí
+  // a propósito: administra el sistema (cuentas, sesiones, servidor), no los
+  // sueldos ni los expedientes. Espeja `is_admin()` del backend.
   const isAdmin = role === 'admin' || isSuperAdmin
+  // Eje independiente: administración del sistema. super_admin cruza los dos
+  // porque es la cuenta de recuperación.
+  const isSistemas = role === 'sistemas'
+  const puedeGestionarSistema = isSistemas || isSuperAdmin
   const isCoordinador = role === 'coordinador'
   const isInventario = role === 'inventario'
   const isSolicitante = role === 'solicitante_material'
@@ -26,10 +33,16 @@ function buildPerms(user) {
     role,
     isSuperAdmin,
     isAdmin,
+    isSistemas,
+    puedeGestionarSistema,
     isCoordinador,
     isInventario,
     isSolicitante,
     isFinanzas,
+    // El panel de sistemas exige 2FA; lo reflejamos en el cliente para poder
+    // mandar a inscribirlo ANTES de que el backend devuelva 403 y la pantalla
+    // quede en un error seco. El backend sigue siendo la autoridad.
+    tiene2fa: !!user?.totp_enabled,
   }
 }
 

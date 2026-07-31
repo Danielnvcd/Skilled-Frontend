@@ -1,10 +1,14 @@
 /**
  * Barra visual + label que muestra la fuerza estimada de una contraseña.
  *
- * No bloquea el submit — solo guía. El back impone el mínimo real (8 chars).
+ * No bloquea el submit — solo guía. El back impone el mínimo real: 12 chars
+ * con mayúsculas, minúsculas, números y símbolos (ver `is_strong_password` en
+ * app/utils/security.py). Mantener este umbral sincronizado con el backend: si
+ * el indicador dice "Fuerte" y el back la rechaza, el usuario no entiende nada.
  *
- * Score 0–5 sumando: 8+ chars, 12+ chars, mixto mayús/minús, dígitos, símbolos.
+ * Score 0–5 sumando: 12+ chars, 16+ chars, mixto mayús/minús, dígitos, símbolos.
  */
+const LARGO_MINIMO = 12
 export default function PasswordStrengthIndicator({ password, className = '' }) {
   if (!password) return null
 
@@ -33,8 +37,8 @@ export default function PasswordStrengthIndicator({ password, className = '' }) 
 
 function computeScore(pw) {
   let s = 0
-  if (pw.length >= 8) s++
-  if (pw.length >= 12) s++
+  if (pw.length >= LARGO_MINIMO) s++
+  if (pw.length >= 16) s++
   if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++
   if (/[0-9]/.test(pw)) s++
   if (/[^a-zA-Z0-9]/.test(pw)) s++
@@ -73,12 +77,14 @@ function mapScore(s) {
 }
 
 function hint(pw) {
-  if (pw.length < 8) return `mínimo 8 caracteres (${pw.length}/8)`
+  if (pw.length < LARGO_MINIMO) {
+    return `mínimo ${LARGO_MINIMO} caracteres (${pw.length}/${LARGO_MINIMO})`
+  }
   const missing = []
   if (!(/[a-z]/.test(pw) && /[A-Z]/.test(pw))) missing.push('mayúsculas y minúsculas')
   if (!/[0-9]/.test(pw)) missing.push('números')
   if (!/[^a-zA-Z0-9]/.test(pw)) missing.push('símbolos')
-  if (missing.length === 0 && pw.length < 12) return 'agregá más caracteres para "Fuerte"'
+  if (missing.length === 0 && pw.length < 16) return 'agregá más caracteres para "Fuerte"'
   if (missing.length === 0) return ''
   return `agregá ${missing.slice(0, 2).join(' y ')}`
 }

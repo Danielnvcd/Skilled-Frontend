@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import { User, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button, Input } from '../components/ui'
+import { safeRedirectPath } from '../utils/safeRedirect'
 
 export default function Login() {
   const [username, setUsername] = useState('')
@@ -23,11 +24,15 @@ export default function Login() {
     try {
       const result = await login(username, password, remember)
       if (result.requires2fa) {
-        navigate('/verify-2fa', { state: { username, stepToken: result.stepToken, from: searchParams.get('from') } })
+        // El `from` se sanea AQUÍ, antes de propagarlo al paso de 2FA, para que
+        // nunca circule un destino no confiable por el state de navegación.
+        navigate('/verify-2fa', {
+          state: { username, stepToken: result.stepToken, from: safeRedirectPath(searchParams.get('from')) },
+        })
       } else {
-        const from = searchParams.get('from')
-        const safeFrom = from && from.startsWith('/') && !from.startsWith('//') ? from : '/'
-        navigate(safeFrom)
+        // `?from=` lo controla quien manda el enlace: ver src/utils/safeRedirect.js
+        // (el guard ingenuo dejaba pasar `/\evil.com` → https://evil.com).
+        navigate(safeRedirectPath(searchParams.get('from')))
         toast.success('Inicio de sesión exitoso')
       }
     } catch (err) {

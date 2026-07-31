@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
 import { extractApiError } from '../utils/apiError'
+import { safeRedirectPath } from '../utils/safeRedirect'
 import { ShieldCheck, ArrowLeft, FileKey2 } from 'lucide-react'
 import { Button } from '../components/ui'
 
@@ -80,8 +81,10 @@ export default function Verify2FA() {
         : code
       await verify2fa(stepToken, codeToSend)
       clearPending()
-      const safeFrom = from && from.startsWith('/') && !from.startsWith('//') ? from : '/'
-      navigate(safeFrom)
+      // `from` puede venir del state de navegación o de sessionStorage; en
+      // ambos casos su origen último es el `?from=` de la URL de login, que
+      // controla el atacante. Se sanea otra vez aquí (ver safeRedirect.js).
+      navigate(safeRedirectPath(from))
       toast.success(useBackup ? 'Acceso con código de respaldo' : 'Verificación exitosa')
     } catch (err) {
       const msg = extractApiError(err, useBackup ? 'Código de respaldo inválido' : 'Código incorrecto')

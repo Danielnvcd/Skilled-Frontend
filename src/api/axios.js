@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { safeRedirectPath } from '../utils/safeRedirect'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -256,7 +257,11 @@ function bounceToLogin() {
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   if (window.location.pathname !== '/login') {
-    const from = window.location.pathname + window.location.search
+    // Saneamos también al CONSTRUIR el `from`: `window.location.pathname` ya
+    // viene normalizado por el navegador, pero así el invariante "el parámetro
+    // `from` siempre es una ruta interna válida" se sostiene en ambos extremos
+    // y no depende de que el consumidor se acuerde de validar.
+    const from = safeRedirectPath(window.location.pathname + window.location.search)
     window.location.href = '/login?from=' + encodeURIComponent(from)
   }
 }
