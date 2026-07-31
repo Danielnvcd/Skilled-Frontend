@@ -9,7 +9,7 @@
  * servidor se reinicia solo.
  */
 import {
-  Gauge, RefreshCw, Server, Database, Zap, GitCommitHorizontal,
+  Gauge, RefreshCw, Server, Database, Zap,
 } from 'lucide-react'
 import { PageHeader, Button, Skeleton } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
@@ -74,35 +74,6 @@ export default function EstadoServidor() {
                 <Dato etiqueta="Activo desde hace" valor={fmtDuracion(data.proceso?.uptime_segundos)} />
                 <Dato etiqueta="Entorno" valor={data.proceso?.entorno} />
                 <Dato etiqueta="Modo Socket.IO" valor={data.proceso?.modo_socketio} />
-              </Panel>
-
-              {/* Saber qué versión corre evita diagnosticar durante media hora
-                  un fallo cuya causa es que el servidor va atrás del repo. */}
-              <Panel titulo="Versión desplegada" icono={GitCommitHorizontal}>
-                <Dato etiqueta="Commit" valor={data.version?.commit || 'desconocido'} />
-                <Dato
-                  etiqueta="Fecha"
-                  valor={data.version?.fecha
-                    ? new Date(data.version.fecha).toLocaleString('es-MX', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })
-                    : '—'}
-                />
-                <Dato etiqueta="Origen del dato" valor={data.version?.origen} />
-                {data.version?.asunto && (
-                  <p className="pt-1 text-xs leading-snug text-ink-500 dark:text-ink-400">
-                    {data.version.asunto}
-                  </p>
-                )}
-                {/* Si no se pudo averiguar la versión, se dice POR QUÉ. Un
-                    «desconocido» a secas no permite corregir nada. */}
-                {data.version?.detalle && (
-                  <p className="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
-                    No se pudo leer del repositorio: {data.version.detalle}. Lo más
-                    robusto en el servidor es escribir un archivo VERSION al desplegar.
-                  </p>
-                )}
               </Panel>
 
               <Panel titulo="Pool de conexiones a BD" icono={Database}>
