@@ -13,7 +13,7 @@
  *      la URL concreta: este panel lo ve el rol `sistemas`, que a propósito no
  *      tiene acceso a los datos de RRHH.
  */
-import { ListTree, RefreshCw, Info } from 'lucide-react'
+import { Network, RefreshCw, Info } from 'lucide-react'
 import {
   PageHeader, Button, Skeleton, Badge, EmptyState, Pagination,
   Table, THead, TH, TBody, TR, TD,
@@ -57,7 +57,7 @@ export default function Peticiones() {
       <PageHeader
         title="Peticiones"
         description="Actividad reciente de la API, agregada por ruta."
-        icon={ListTree}
+        icon={Network}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/peticiones" />
         }
@@ -193,7 +193,7 @@ export default function Peticiones() {
               </h2>
               {eventos.length === 0 ? (
                 <EmptyState
-                  icon={ListTree}
+                  icon={Network}
                   title="Sin registros todavía"
                   description="El buffer se llena conforme llega tráfico. Si Redis está caído, no se registra nada."
                 />

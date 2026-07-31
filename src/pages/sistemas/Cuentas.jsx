@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import {
-  KeyRound, RefreshCw, LockOpen, ShieldOff, ShieldCheck, AlertTriangle,
+  LockKeyhole, RefreshCw, LockOpen, ShieldOff, ShieldCheck, AlertTriangle,
 } from 'lucide-react'
 import {
   PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog, Pagination,
@@ -54,7 +54,7 @@ export default function Cuentas() {
       <PageHeader
         title="Cuentas"
         description="Bloqueos por intentos fallidos y estado del segundo factor."
-        icon={KeyRound}
+        icon={LockKeyhole}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/bloqueos" />
         }

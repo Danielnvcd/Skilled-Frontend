@@ -5,7 +5,10 @@ import {
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  LineChart, Activity, ListTree, MonitorSmartphone, ShieldAlert, KeyRound,
+  LineChart, MonitorSmartphone, ShieldAlert,
+  // Panel de sistemas: iconos propios, sin reutilizar los de otros módulos
+  // (Wrench, por ejemplo, ES el catálogo de herramientas en este sistema).
+  Gauge, Network, LockKeyhole, DatabaseZap, UserRoundCog,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -66,12 +69,12 @@ export const MENUS = {
     {
       label: 'Panel de sistemas',
       items: [
-        { path: '/sistemas', label: 'Estado del servidor', icon: Activity, end: true },
-        { path: '/sistemas/peticiones', label: 'Peticiones', icon: ListTree },
+        { path: '/sistemas', label: 'Estado del servidor', icon: Gauge, end: true },
+        { path: '/sistemas/peticiones', label: 'Peticiones', icon: Network },
         { path: '/sistemas/sesiones', label: 'Sesiones activas', icon: MonitorSmartphone },
         { path: '/sistemas/seguridad', label: 'Eventos de seguridad', icon: ShieldAlert },
-        { path: '/sistemas/cuentas', label: 'Bloqueos y 2FA', icon: KeyRound },
-        { path: '/sistemas/mantenimiento', label: 'Mantenimiento', icon: Wrench },
+        { path: '/sistemas/cuentas', label: 'Bloqueos y 2FA', icon: LockKeyhole },
+        { path: '/sistemas/mantenimiento', label: 'Mantenimiento', icon: DatabaseZap },
       ],
     },
     {
@@ -82,7 +85,7 @@ export const MENUS = {
       // filtrada a lo que sí corresponde a este rol —incluidas las acciones
       // sobre cuentas—, así que no se pierde nada.
       items: [
-        { path: '/usuarios', label: 'Usuarios', icon: Users },
+        { path: '/usuarios', label: 'Usuarios', icon: UserRoundCog },
       ],
     },
   ],
@@ -278,10 +281,10 @@ export const BOTTOM_NAV = {
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],
   sistemas: [
-    { path: '/sistemas', label: 'Estado', icon: Activity, end: true },
-    { path: '/sistemas/peticiones', label: 'Peticiones', icon: ListTree },
+    { path: '/sistemas', label: 'Estado', icon: Gauge, end: true },
+    { path: '/sistemas/peticiones', label: 'Peticiones', icon: Network },
     { path: '/sistemas/sesiones', label: 'Sesiones', icon: MonitorSmartphone },
-    { path: '/usuarios', label: 'Usuarios', icon: Users },
+    { path: '/usuarios', label: 'Usuarios', icon: UserRoundCog },
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],
 }

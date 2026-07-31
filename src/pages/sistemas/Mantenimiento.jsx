@@ -8,7 +8,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import {
-  Wrench, RefreshCw, Database, ImageOff, Trash2, RotateCw, CheckCircle2,
+  DatabaseZap, RefreshCw, Database, ImageOff, Trash2, RotateCw, CheckCircle2,
 } from 'lucide-react'
 import {
   PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog, Select,
@@ -80,7 +80,7 @@ export default function Mantenimiento() {
       <PageHeader
         title="Mantenimiento"
         description="Crecimiento de la base de datos y estado del procesado de imágenes."
-        icon={Wrench}
+        icon={DatabaseZap}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/almacenamiento" />
         }

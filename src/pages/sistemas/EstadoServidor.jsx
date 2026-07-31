@@ -9,7 +9,7 @@
  * servidor se reinicia solo.
  */
 import {
-  Activity, RefreshCw, Server, Database, Zap, GitCommitHorizontal,
+  Gauge, RefreshCw, Server, Database, Zap, GitCommitHorizontal,
 } from 'lucide-react'
 import { PageHeader, Button, Skeleton } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
@@ -31,7 +31,7 @@ export default function EstadoServidor() {
       <PageHeader
         title="Estado del servidor"
         description="Salud de la infraestructura que sostiene la aplicación."
-        icon={Activity}
+        icon={Gauge}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/estado" />
         }
