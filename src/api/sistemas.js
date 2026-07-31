@@ -10,8 +10,51 @@ export async function getEstadoServidor() {
   return data
 }
 
-export async function getPeticiones(limite = 200) {
-  const { data } = await api.get('/sistemas/peticiones', { params: { limite } })
+// Devuelve dos capas: `eventos`/`resumen` (muestra con detalle, muestreada) y
+// `contadores` (métricas exactas por día, sin muestreo).
+export async function getPeticiones({ limite = 200, dias = 7 } = {}) {
+  const { data } = await api.get('/sistemas/peticiones', { params: { limite, dias } })
+  return data
+}
+
+// ── Cuentas ─────────────────────────────────────────────────────────────────
+
+export async function getBloqueos() {
+  const { data } = await api.get('/sistemas/bloqueos')
+  return data
+}
+
+export async function liberarBloqueo(tipo, identificador) {
+  const { data } = await api.delete(
+    `/sistemas/bloqueos/${tipo}/${encodeURIComponent(identificador)}`,
+  )
+  return data
+}
+
+export async function getSin2fa() {
+  const { data } = await api.get('/sistemas/sin-2fa')
+  return data
+}
+
+// ── Mantenimiento ───────────────────────────────────────────────────────────
+
+export async function getAlmacenamiento() {
+  const { data } = await api.get('/sistemas/almacenamiento')
+  return data
+}
+
+export async function purgarBitacora(meses) {
+  const { data } = await api.post('/sistemas/purgar-bitacora', { meses })
+  return data
+}
+
+export async function getImagenes() {
+  const { data } = await api.get('/sistemas/imagenes')
+  return data
+}
+
+export async function reintentarImagenes() {
+  const { data } = await api.post('/sistemas/imagenes/reintentar')
   return data
 }
 

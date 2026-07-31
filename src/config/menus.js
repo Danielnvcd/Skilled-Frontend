@@ -5,7 +5,7 @@ import {
   Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  LineChart, Activity, ListTree, MonitorSmartphone, ShieldAlert,
+  LineChart, Activity, ListTree, MonitorSmartphone, ShieldAlert, KeyRound,
 } from 'lucide-react'
 
 // ── Menú por rol ─────────────────────────────────────────────────────────────
@@ -70,13 +70,19 @@ export const MENUS = {
         { path: '/sistemas/peticiones', label: 'Peticiones', icon: ListTree },
         { path: '/sistemas/sesiones', label: 'Sesiones activas', icon: MonitorSmartphone },
         { path: '/sistemas/seguridad', label: 'Eventos de seguridad', icon: ShieldAlert },
+        { path: '/sistemas/cuentas', label: 'Bloqueos y 2FA', icon: KeyRound },
+        { path: '/sistemas/mantenimiento', label: 'Mantenimiento', icon: Wrench },
       ],
     },
     {
       label: 'Cuentas',
+      // `/bitacora` NO va aquí: la bitácora completa registra toda la actividad
+      // del negocio (quién editó a qué empleado, quién cerró una nómina), y eso
+      // pertenece al eje de RRHH. «Eventos de seguridad» es esa misma bitácora
+      // filtrada a lo que sí corresponde a este rol —incluidas las acciones
+      // sobre cuentas—, así que no se pierde nada.
       items: [
         { path: '/usuarios', label: 'Usuarios', icon: Users },
-        { path: '/bitacora', label: 'Bitácora', icon: History },
       ],
     },
   ],

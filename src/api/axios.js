@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { safeRedirectPath } from '../utils/safeRedirect'
+import { registrarDesdeRespuesta } from './rateLimit'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
@@ -267,8 +268,15 @@ function bounceToLogin() {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Registra el cupo restante que reporta el servidor, para poder avisar
+    // antes de agotarlo en vez de estrellarse contra un 429.
+    registrarDesdeRespuesta(response)
+    return response
+  },
   async (error) => {
+    // También en el error: un 429 trae el `Retry-After` que dice cuánto esperar.
+    if (error?.response) registrarDesdeRespuesta(error.response)
     // Petición que nosotros mismos cancelamos al cerrar sesión: no hay nada que
     // refrescar ni a dónde rebotar (ya vamos al login).
     if (isLogoutAbort(error)) return Promise.reject(error)

@@ -22,7 +22,7 @@ import {
 import { useResource } from '../../hooks/useResource'
 import { getSesiones, revocarSesion } from '../../api/sistemas'
 import { extractApiError } from '../../utils/apiError'
-import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal, useRefrescar, BotonActualizar } from './PanelLayout'
 
 // El endpoint devuelve hasta 500 sesiones; sin paginar la tabla es interminable.
 const POR_PAGINA = 25
@@ -51,6 +51,8 @@ export default function SesionesActivas() {
     }
   }
 
+  const { refrescando, refrescar } = useRefrescar(refetch)
+
   const sesiones = data || []
   const pag = usePaginacionLocal(sesiones, POR_PAGINA)
 
@@ -61,9 +63,7 @@ export default function SesionesActivas() {
         description="Todas las sesiones abiertas en la plataforma."
         icon={MonitorSmartphone}
         actions={
-          <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={15} />} onClick={refetch}>
-            Actualizar
-          </Button>
+          <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/sesiones" />
         }
       />
 

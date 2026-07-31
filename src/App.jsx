@@ -20,6 +20,8 @@ const SistemasEstado = lazy(() => import('./pages/sistemas/EstadoServidor'))
 const SistemasPeticiones = lazy(() => import('./pages/sistemas/Peticiones'))
 const SistemasSesiones = lazy(() => import('./pages/sistemas/SesionesActivas'))
 const SistemasSeguridad = lazy(() => import('./pages/sistemas/EventosSeguridad'))
+const SistemasCuentas = lazy(() => import('./pages/sistemas/Cuentas'))
+const SistemasMantenimiento = lazy(() => import('./pages/sistemas/Mantenimiento'))
 const EmpleadosList = lazy(() => import('./pages/empleados/EmpleadosList'))
 const EmpleadoForm = lazy(() => import('./pages/empleados/EmpleadoForm'))
 const EmpleadoView = lazy(() => import('./pages/empleados/EmpleadoView'))
@@ -152,10 +154,16 @@ export default function App() {
         <Route path="sistemas/peticiones"  element={<RoleRoute allow={puedeGestionarSistema}><SistemasPeticiones /></RoleRoute>} />
         <Route path="sistemas/sesiones"    element={<RoleRoute allow={puedeGestionarSistema}><SistemasSesiones /></RoleRoute>} />
         <Route path="sistemas/seguridad"   element={<RoleRoute allow={puedeGestionarSistema}><SistemasSeguridad /></RoleRoute>} />
+        <Route path="sistemas/cuentas"     element={<RoleRoute allow={puedeGestionarSistema}><SistemasCuentas /></RoleRoute>} />
+        <Route path="sistemas/mantenimiento" element={<RoleRoute allow={puedeGestionarSistema}><SistemasMantenimiento /></RoleRoute>} />
 
         {/* La gestión de cuentas se movió de admin al rol sistemas. */}
         <Route path="usuarios"                element={<RoleRoute allow={puedeGestionarSistema}><Usuarios /></RoleRoute>} />
-        <Route path="bitacora"                element={<RoleRoute allow={isAdmin || puedeGestionarSistema}><Bitacora /></RoleRoute>} />
+        {/* La bitácora completa es del eje de RRHH. El rol `sistemas` usa
+            /sistemas/seguridad, que es la misma bitácora filtrada a eventos de
+            seguridad. Dejarla abierta aquí solo servía para pintar una pantalla
+            que después el backend rechazaba con 403. */}
+        <Route path="bitacora"                element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>} />
         <Route path="manual"                  element={<RoleRoute allow={isAdmin}><ManualAdmin /></RoleRoute>} />
         <Route path="manual-coordinador"      element={<RoleRoute allow={isCoordinador || isAdmin}><ManualCoordinador /></RoleRoute>} />
         <Route path="metricas"                element={<RoleRoute allow={isAdmin}><Metricas /></RoleRoute>} />

@@ -20,11 +20,16 @@ import {
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { getPeticiones } from '../../api/sistemas'
-import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal, useRefrescar, BotonActualizar } from './PanelLayout'
 
 // 25 por página: la tabla es densa (6 columnas, rutas y user-agents largos) y
 // más filas obligan a hacer scroll perdiendo los encabezados de vista.
 const POR_PAGINA = 25
+
+function fmtNumero(n) {
+  if (n === null || n === undefined) return '—'
+  return new Intl.NumberFormat('es-MX').format(n)
+}
 
 function tonoStatus(status) {
   if (status >= 500) return 'danger'
@@ -35,12 +40,16 @@ function tonoStatus(status) {
 export default function Peticiones() {
   const { data, loading, error, refetch } = useResource(
     'sistemas:peticiones',
-    () => getPeticiones(200),
+    () => getPeticiones({ limite: 200, dias: 7 }),
     { staleMs: 10_000 },
   )
 
+  const { refrescando, refrescar } = useRefrescar(refetch)
+
   const resumen = data?.resumen
   const eventos = data?.eventos || []
+  const contadores = data?.contadores
+  const hoy = contadores?.hoy
   const pag = usePaginacionLocal(eventos, POR_PAGINA)
 
   return (
@@ -50,17 +59,85 @@ export default function Peticiones() {
         description="Actividad reciente de la API, agregada por ruta."
         icon={ListTree}
         actions={
-          <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={15} />} onClick={refetch}>
-            Actualizar
-          </Button>
+          <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/peticiones" />
         }
       />
 
       <EstadoCarga error={error} loading={loading} skeleton={<Skeleton className="h-64" />}>
         {resumen && (
-          <div className="space-y-5">
+          <div className="space-y-6">
+            {/* ── Métricas EXACTAS del día ─────────────────────────────────
+                Contadores que se incrementan en toda petición: estos números
+                son reales, no una estimación sobre la muestra. */}
+            {hoy && hoy.total > 0 && (
+              <section className="space-y-3">
+                <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-100">
+                  Hoy — cifras exactas
+                </h2>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  <Tarjeta etiqueta="Peticiones" valor={fmtNumero(hoy.total)} />
+                  <Tarjeta
+                    etiqueta="Con error"
+                    valor={fmtNumero(hoy.errores)}
+                    tono={hoy.errores > 0 ? 'alerta' : undefined}
+                    pie={hoy.total ? `${((hoy.errores / hoy.total) * 100).toFixed(1)}%` : null}
+                  />
+                  <Tarjeta etiqueta="Tiempo medio" valor={`${hoy.ms_promedio} ms`} />
+                  <Tarjeta
+                    etiqueta="p95"
+                    valor={hoy.percentiles?.p95 ? `${hoy.percentiles.p95} ms` : '—'}
+                    pie="aproximado"
+                  />
+                </div>
+
+                {contadores?.serie?.length > 1 && (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <THead>
+                        <TH>Día</TH>
+                        <TH align="right">Peticiones</TH>
+                        <TH align="right">Errores</TH>
+                        <TH align="right">Lentas</TH>
+                        <TH align="right">Tiempo medio</TH>
+                      </THead>
+                      <TBody>
+                        {[...contadores.serie].reverse().map((d) => (
+                          <TR key={d.fecha}>
+                            <TD className="whitespace-nowrap">
+                              {new Date(`${d.fecha}T12:00:00`).toLocaleDateString('es-MX', {
+                                weekday: 'short', day: '2-digit', month: 'short',
+                              })}
+                            </TD>
+                            <TD align="right" className="tabular-nums">{fmtNumero(d.total)}</TD>
+                            <TD align="right" className="tabular-nums">{d.errores || '—'}</TD>
+                            <TD align="right" className="tabular-nums">{d.lentas || '—'}</TD>
+                            <TD align="right" className="whitespace-nowrap tabular-nums">
+                              {d.total ? `${d.ms_promedio} ms` : '—'}
+                            </TD>
+                          </TR>
+                        ))}
+                      </TBody>
+                    </Table>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {contadores && contadores.disponible === false && (
+              <p className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-200">
+                <Info size={14} className="mt-0.5 flex-shrink-0" />
+                <span>
+                  Las cifras exactas no están disponibles: dependen de Redis y ahora
+                  mismo no responde. Abajo sigue la muestra reciente.
+                </span>
+              </p>
+            )}
+
+            <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-100">
+              Muestra reciente
+            </h2>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Tarjeta etiqueta="Registradas" valor={resumen.total} />
+              <Tarjeta etiqueta="En la muestra" valor={resumen.total} />
               <Tarjeta etiqueta="Con error" valor={resumen.errores} tono={resumen.errores > 0 ? 'alerta' : undefined} />
               <Tarjeta etiqueta="Tiempo medio" valor={`${resumen.ms_promedio} ms`} />
               <Tarjeta etiqueta="p95" valor={`${resumen.ms_p95} ms`} />
@@ -69,9 +146,10 @@ export default function Peticiones() {
             <p className="flex items-start gap-2 rounded-lg border border-ink-200 bg-ink-50 px-3 py-2 text-xs leading-relaxed text-ink-600 dark:border-ink-800 dark:bg-ink-900 dark:text-ink-400">
               <Info size={14} className="mt-0.5 flex-shrink-0" />
               <span>
-                Se registra <strong className="font-medium">siempre</strong> lo que falla
-                (4xx/5xx) y lo que tarda más de {resumen.umbral_lenta_ms} ms; del tráfico
-                normal se guarda 1 de cada {resumen.muestreo_ok}. Las rutas se muestran
+                Esta sección es una <strong className="font-medium">muestra con detalle</strong>,
+                no el total: se guarda siempre lo que falla (4xx/5xx) y lo que tarda más de{' '}
+                {resumen.umbral_lenta_ms} ms, y del tráfico normal 1 de cada{' '}
+                {resumen.muestreo_ok}. Para cifras reales, mira «Hoy» arriba. Las rutas van
                 normalizadas, sin los identificadores concretos.
               </span>
             </p>
@@ -165,7 +243,7 @@ export default function Peticiones() {
   )
 }
 
-function Tarjeta({ etiqueta, valor, tono }) {
+function Tarjeta({ etiqueta, valor, tono, pie }) {
   return (
     <div
       className={`rounded-xl border p-3 ${
@@ -178,6 +256,9 @@ function Tarjeta({ etiqueta, valor, tono }) {
       <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100">
         {valor}
       </p>
+      {pie && (
+        <p className="text-[11px] text-ink-500 dark:text-ink-400">{pie}</p>
+      )}
     </div>
   )
 }

@@ -5,11 +5,12 @@
  * endpoints devuelven 403 con `requiere_2fa: true`. En vez de dejar la pantalla
  * en un error seco, `Aviso2FA` explica qué falta y manda a activarlo.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldAlert, AlertTriangle } from 'lucide-react'
+import { ShieldAlert, AlertTriangle, RefreshCw, Timer } from 'lucide-react'
 import { Button } from '../../components/ui'
 import { esFalta2fa } from '../../api/sistemas'
+import { getCupo, suscribirCupo } from '../../api/rateLimit'
 
 export function Aviso2FA() {
   const navigate = useNavigate()
@@ -37,9 +38,127 @@ export function Aviso2FA() {
   )
 }
 
+/**
+ * Botón «Actualizar» con estado real.
+ *
+ * `useResource` expone `loading` como `!data && !error`, o sea que en un
+ * refetch nunca se pone en true. El botón no daba ninguna señal de estar
+ * haciendo algo, así que uno volvía a pulsarlo — y a los pocos clics saltaba
+ * el rate limit con un 429. El problema no era el límite, era la falta de
+ * respuesta visual.
+ *
+ * Este hook lleva su propio estado en vuelo, deshabilita el botón mientras
+ * dura y acepta varias recargas a la vez (hay pantallas con dos recursos).
+ */
+export function useRefrescar(...recargas) {
+  const [refrescando, setRefrescando] = useState(false)
+
+  const refrescar = async () => {
+    if (refrescando) return
+    setRefrescando(true)
+    try {
+      await Promise.allSettled(recargas.map((fn) => fn?.()))
+    } finally {
+      setRefrescando(false)
+    }
+  }
+
+  return { refrescando, refrescar }
+}
+
+// A partir de cuántas peticiones restantes se avisa. 10 da margen de sobra
+// para reaccionar: aunque cada refresco de una pantalla consuma 2 (hay vistas
+// con dos recursos), quedan varios intentos antes del tope.
+const UMBRAL_AVISO = 10
+
+/**
+ * Botón «Actualizar» que avisa ANTES de agotar el cupo.
+ *
+ * El servidor publica cuántas peticiones quedan en los headers `X-RateLimit-*`
+ * (ver src/api/rateLimit.js). Cuando bajan del umbral se muestra el aviso; al
+ * llegar a cero el botón se deshabilita y dice cuándo se podrá de nuevo, en
+ * lugar de dejar que el usuario se estrelle contra un 429.
+ *
+ * `ruta` es la del endpoint principal de la pantalla, sin baseURL ni query
+ * (ej. '/sistemas/peticiones'). Si no se pasa, el botón funciona igual pero
+ * sin avisos — no se inventa información que no se tiene.
+ */
+export function BotonActualizar({ onClick, refrescando, ruta }) {
+  const [cupo, setCupo] = useState(() => (ruta ? getCupo(ruta) : null))
+  const [ahora, setAhora] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!ruta) return
+    setCupo(getCupo(ruta))
+    return suscribirCupo((rutaCambiada) => {
+      if (rutaCambiada === ruta) setCupo(getCupo(ruta))
+    })
+  }, [ruta])
+
+  const agotado = cupo && cupo.restantes <= 0 && cupo.resetMs && cupo.resetMs > ahora
+  const segundosParaReset = agotado ? Math.ceil((cupo.resetMs - ahora) / 1000) : 0
+
+  // El contador solo corre mientras el cupo está agotado: no tiene sentido
+  // re-renderizar cada segundo el resto del tiempo.
+  useEffect(() => {
+    if (!agotado) return
+    const id = setInterval(() => setAhora(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [agotado])
+
+  const cercaDelTope = cupo && !agotado && cupo.restantes <= UMBRAL_AVISO
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        variant="secondary"
+        size="sm"
+        leftIcon={<RefreshCw size={15} className={refrescando ? 'animate-spin' : undefined} />}
+        onClick={onClick}
+        loading={refrescando}
+        disabled={refrescando || agotado}
+      >
+        Actualizar
+      </Button>
+
+      {agotado && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-red-700 dark:text-red-400">
+          <Timer size={12} />
+          Disponible en {segundosParaReset}s
+        </span>
+      )}
+
+      {cercaDelTope && (
+        <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400">
+          <AlertTriangle size={12} />
+          Quedan {cupo.restantes} actualizaciones este minuto
+        </span>
+      )}
+    </div>
+  )
+}
+
 /** Envuelve el contenido: muestra el aviso de 2FA o el error real. */
 export function EstadoCarga({ error, loading, children, skeleton = null }) {
   if (esFalta2fa(error)) return <Aviso2FA />
+
+  // 429: no es un fallo del sistema, es que se pidió demasiado seguido.
+  // Merece un mensaje propio — el genérico asusta sin motivo.
+  if (error?.response?.status === 429) {
+    return (
+      <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-900/20">
+        <Timer size={18} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+        <div className="text-amber-900 dark:text-amber-200">
+          <p className="font-medium">Demasiadas actualizaciones seguidas</p>
+          <p className="mt-0.5 leading-snug">
+            Espera un momento y vuelve a intentar. Los datos se refrescan solos al
+            volver a la pantalla, no hace falta insistir.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   if (error) {
     return (
       <div className="flex items-start gap-3 rounded-xl border border-red-300 bg-red-50 p-4 text-sm dark:border-red-900/50 dark:bg-red-900/20">

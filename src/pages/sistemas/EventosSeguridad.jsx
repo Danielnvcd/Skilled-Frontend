@@ -13,7 +13,7 @@ import {
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { getEventosSeguridad } from '../../api/sistemas'
-import { EstadoCarga, fmtFechaHora, usePaginacionLocal } from './PanelLayout'
+import { EstadoCarga, fmtFechaHora, usePaginacionLocal, useRefrescar, BotonActualizar } from './PanelLayout'
 
 // El endpoint devuelve hasta 200 eventos; sin paginar la tabla se vuelve larga.
 const POR_PAGINA = 25
@@ -32,6 +32,7 @@ export default function EventosSeguridad() {
     { staleMs: 20_000, invalidateOn: ['bitacora:new'] },
   )
 
+  const { refrescando, refrescar } = useRefrescar(refetch)
   const eventos = data || []
   const pag = usePaginacionLocal(eventos, POR_PAGINA)
 
@@ -54,9 +55,7 @@ export default function EventosSeguridad() {
               <option value="30">Últimos 30 días</option>
               <option value="90">Últimos 90 días</option>
             </Select>
-            <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={15} />} onClick={refetch}>
-              Actualizar
-            </Button>
+            <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/eventos-seguridad" />
           </div>
         }
       />
