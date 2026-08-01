@@ -40,7 +40,19 @@ function AppToaster() {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AccessGate>
-      <BrowserRouter>
+      {/* Future flags de react-router 6.x: adoptan hoy el comportamiento que
+          será el de v7, y de paso callan los avisos de consola en desarrollo.
+            · v7_startTransition — envuelve las navegaciones en
+              `React.startTransition`. Con las páginas en `lazy` (ver App.jsx),
+              al cambiar de pantalla se mantiene la actual hasta que el chunk
+              está listo, en vez de parpadear al fallback de Suspense.
+            · v7_relativeSplatPath — cambia la resolución de rutas relativas
+              dentro de rutas splat. Hoy no hay ninguna en la app, así que no
+              altera nada; se activa para que añadir una más adelante no traiga
+              la semántica vieja de rebote.
+          Seguimos en la línea 6.x a propósito: v7 es un major y sus dos CVEs no
+          nos aplican (ver `src/utils/safeRedirect.js`). */}
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider>
           <AuthProvider>
             <SocketProvider>
