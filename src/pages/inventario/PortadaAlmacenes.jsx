@@ -455,6 +455,21 @@ export default function PortadaAlmacenes() {
         <QuickActions />
       </div>
 
+      {/* ── Panorama ────────────────────────────────────────────────────────
+          Los totales del inventario, arriba: es lo primero que se mira al
+          entrar y de aquí salen los atajos al catálogo, bajo mínimo y
+          proyectos. La matriz proyectos × almacenes salió de aquí: hacía lo
+          mismo que el recorrido y era el segundo selector de almacén. Vive en
+          su pantalla del menú (Material por proyecto). */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-200">Panorama del inventario</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {kpis.map((k) => (
+            <StatCard key={k.label} value={k.value} label={k.label} Icon={k.Icon} to={k.to} tone={k.tone} />
+          ))}
+        </div>
+      </section>
+
       {/* ── La página: las bodegas, siempre a la vista ─────────────────────── */}
       <section className="space-y-3">
         <SectionHeader
@@ -690,19 +705,6 @@ export default function PortadaAlmacenes() {
           )}
         </section>
       )}
-
-      {/* ── Panorama ────────────────────────────────────────────────────────
-          Los totales del inventario. La matriz proyectos × almacenes salió de
-          aquí: hacía lo mismo que el recorrido y era el segundo selector de
-          almacén. Vive en su pantalla del menú (Material por proyecto). */}
-      <section className="space-y-3 pt-5 border-t border-ink-200 dark:border-ink-800">
-        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-200">Panorama del inventario</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {kpis.map((k) => (
-            <StatCard key={k.label} value={k.value} label={k.label} Icon={k.Icon} to={k.to} tone={k.tone} />
-          ))}
-        </div>
-      </section>
 
       <div className="pt-4 text-xs text-ink-400 dark:text-ink-500 border-t border-ink-200 dark:border-ink-800">
         Skilled &middot; Sistema de inventario &copy; {new Date().getFullYear()}
