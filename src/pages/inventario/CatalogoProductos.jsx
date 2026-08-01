@@ -12,7 +12,8 @@ import {
   getCategorias, getCategoriasConfig, upsertCategoriaConfig, deleteCategoriaConfig,
   deleteCategoriaConProductos,
   getProductoStocks, getProductosConCompraActiva, getUnidadesProductos,
-  getAlmacenes, getProyectosInventario, ajustarBuckets,
+  getAlmacenes, getProyectosInventario, ajustarBuckets, exportarProductos,
+  getProductos, sugerirMinimos, actualizarMinimos,
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import { unidadPermiteDecimales } from '../../utils/unidades'
@@ -20,7 +21,7 @@ import { esCategoriaCable, CABLE_UNIDAD } from '../../utils/cable'
 import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
-import { Upload } from 'lucide-react'
+import { Upload, FileDown } from 'lucide-react'
 
 // ── Campo (label + valor) de la ficha de detalle del producto ────────────────
 // Se usa en el modal que se abre al hacer click en la imagen de un producto.
@@ -254,6 +255,145 @@ export default function CatalogoProductos() {
   }, [])
   const nFiltros = (stockFiltro ? 1 : 0) + (imagenFiltro ? 1 : 0) + (unidadFiltro ? 1 : 0) + (compraFiltro ? 1 : 0)
   const limpiarFiltros = () => { setStockFiltro(''); setImagenFiltro(''); setUnidadFiltro(''); setCompraFiltro(false) }
+
+  // ── Exportar a Excel lo que se está viendo ───────────────────────────────
+  // El export vive aquí (y no solo en Importar) porque aquí están los filtros:
+  // bajar 5 000 filas para corregir una categoría era el camino largo. Lo que
+  // no se exporta no se toca al reimportar.
+  const [exportando, setExportando] = useState(false)
+  const hayFiltros = !!(categoriaFiltro || search.trim() || nFiltros)
+  const handleExportar = async () => {
+    setExportando(true)
+    try {
+      await exportarProductos({
+        categoria: categoriaFiltro || undefined,
+        // `debouncedSearch` (no `search`): es el término con el que se cargó la
+        // lista. Con el texto en crudo se exportaría algo distinto de lo que la
+        // pantalla está mostrando si el usuario acaba de teclear.
+        q: debouncedSearch.trim() || undefined,
+        stock: stockFiltro || undefined,
+        imagen: imagenFiltro || undefined,
+        unidad: unidadFiltro || undefined,
+        compra: compraFiltro || undefined,
+      })
+      toast.success(hayFiltros
+        ? 'Excel de los productos filtrados. Edítalo y súbelo en Importar.'
+        : 'Catálogo exportado. Edítalo y súbelo en Importar.', { duration: 6000 })
+    } catch {
+      toast.error('No se pudo exportar el catálogo')
+    } finally {
+      setExportando(false)
+    }
+  }
+
+  // ── Stock mínimo en masa ─────────────────────────────────────────────────
+  // Trabaja sobre los productos que están filtrados en pantalla: con miles de
+  // SKUs, ir ficha por ficha es la razón por la que el mínimo nunca se llena, y
+  // sin mínimo la pantalla "Bajo mínimo" y las alertas de compra no avisan nada.
+  const [minimosOpen, setMinimosOpen] = useState(false)
+  const [minimosModo, setMinimosModo] = useState('sugerido')  // 'sugerido' | 'fijo'
+  const [minimoFijo, setMinimoFijo] = useState('')
+  const [diasConsumo, setDiasConsumo] = useState(30)
+  const [diasCobertura, setDiasCobertura] = useState(15)
+  const [minimosItems, setMinimosItems] = useState([])   // ids/sugerencias del filtro
+  const [minimosCargando, setMinimosCargando] = useState(false)
+  const [minimosAplicando, setMinimosAplicando] = useState(false)
+  const TOPE_MINIMOS = 1000
+
+  // Mismos filtros con los que se cargó la lista (por eso `debouncedSearch`):
+  // así "los productos filtrados" son exactamente los que están en pantalla.
+  const filtrosActivos = () => ({
+    categoria: categoriaFiltro || undefined,
+    q: debouncedSearch.trim() || undefined,
+    stock: stockFiltro || undefined,
+    imagen: imagenFiltro || undefined,
+    unidad: unidadFiltro || undefined,
+    compra: compraFiltro || undefined,
+  })
+
+  const cargarSugerencias = async (ids, dc = diasConsumo, dcob = diasCobertura) => {
+    const res = await sugerirMinimos({ productoIds: ids, diasConsumo: dc, diasCobertura: dcob })
+    setMinimosItems(res.items || [])
+  }
+
+  const abrirMinimos = async () => {
+    setMinimosOpen(true)
+    setMinimosCargando(true)
+    setMinimosItems([])
+    try {
+      const lista = await getProductos({ limit: TOPE_MINIMOS, ...filtrosActivos() })
+      const ids = (Array.isArray(lista) ? lista : []).map((p) => p.id)
+      if (ids.length === 0) {
+        toast.error('No hay productos en el filtro actual')
+        setMinimosOpen(false)
+        return
+      }
+      // Al tope: hay más productos filtrados de los que se pueden procesar de
+      // una vez. Decirlo, porque si no el usuario creería que ya cubrió todo.
+      if (ids.length >= TOPE_MINIMOS) {
+        toast(`Se tomaron los primeros ${TOPE_MINIMOS}. Filtra por categoría para cubrir el resto.`,
+          { icon: '⚠️', duration: 8000 })
+      }
+      await cargarSugerencias(ids)
+    } catch {
+      toast.error('No se pudieron calcular las sugerencias')
+      setMinimosOpen(false)
+    } finally {
+      setMinimosCargando(false)
+    }
+  }
+
+  // Los días vienen de inputs: un campo vacío daría 0 y el backend lo rechaza.
+  // Se acotan a los mismos rangos que valida el servidor.
+  const _clamp = (v, min, max, def) => {
+    const n = Number(v)
+    return Number.isFinite(n) && n > 0 ? Math.min(Math.max(Math.round(n), min), max) : def
+  }
+
+  const recalcular = async (dcRaw, dcobRaw) => {
+    if (minimosItems.length === 0) return
+    const dc = _clamp(dcRaw, 7, 365, 30)
+    const dcob = _clamp(dcobRaw, 1, 180, 15)
+    setDiasConsumo(dc)
+    setDiasCobertura(dcob)
+    setMinimosCargando(true)
+    try {
+      await cargarSugerencias(minimosItems.map((i) => i.id), dc, dcob)
+    } catch {
+      toast.error('No se pudieron recalcular las sugerencias')
+    } finally {
+      setMinimosCargando(false)
+    }
+  }
+
+  // En modo sugerido solo se aplican los que SÍ tienen consumo: proponer 0 a un
+  // material que no se mueve no dice nada y borraría un mínimo puesto a mano.
+  const minimosAplicables = minimosModo === 'sugerido'
+    ? minimosItems.filter((i) => !i.sin_consumo && i.sugerido !== i.stock_minimo)
+    : minimosItems
+
+  const aplicarMinimos = async () => {
+    setMinimosAplicando(true)
+    try {
+      const payload = minimosModo === 'sugerido'
+        ? { items: minimosAplicables.map((i) => ({ id: i.id, stock_minimo: i.sugerido })) }
+        : { productoIds: minimosItems.map((i) => i.id), stockMinimo: Number(minimoFijo) }
+      const r = await actualizarMinimos(payload)
+      if (r.actualizados > 0) {
+        toast.success(`Stock mínimo actualizado en ${r.actualizados} producto(s)`)
+        invalidate('productos')
+        load()
+      } else {
+        toast('No hubo cambios que aplicar', { icon: '👌' })
+      }
+      if (r.errores?.length > 0) toast.error(`${r.errores.length} producto(s) con problema: ${r.errores[0]}`)
+      setMinimosOpen(false)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo actualizar el stock mínimo')
+    } finally {
+      setMinimosAplicando(false)
+    }
+  }
 
   const [openForm, setOpenForm] = useState(false)
   const [editingId, setEditingId] = useState(null)
@@ -633,6 +773,29 @@ export default function CatalogoProductos() {
         description="Gestión del catálogo maestro de inventario."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<FileDown size={15} />}
+              loading={exportando}
+              onClick={handleExportar}
+              title={hayFiltros
+                ? 'Descarga en Excel solo los productos que estás viendo'
+                : 'Descarga todo el catálogo en Excel'}
+            >
+              <span className="sm:hidden">Excel</span>
+              <span className="hidden sm:inline">{hayFiltros ? 'Exportar filtrados' : 'Exportar Excel'}</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<AlertTriangle size={15} />}
+              onClick={abrirMinimos}
+              title="Fija el stock mínimo de los productos filtrados, o aplica el sugerido por consumo"
+            >
+              <span className="sm:hidden">Mínimos</span>
+              <span className="hidden sm:inline">Stock mínimo</span>
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setCatModal({ mode: 'new', nombre: '', imagen_url: '' })}>
               <Plus size={15} className="mr-1 sm:hidden" /><span className="sm:hidden">Categoría</span><span className="hidden sm:inline">+ Nueva Categoría</span>
             </Button>
@@ -1410,6 +1573,131 @@ export default function CatalogoProductos() {
         confirmLabel={confirmDelCat?.total > 0 ? `Eliminar categoría y ${confirmDelCat.total} producto${confirmDelCat.total === 1 ? '' : 's'}` : 'Eliminar categoría'}
         tone="danger"
       />
+
+      {/* Stock mínimo en masa sobre los productos filtrados */}
+      <Modal
+        open={minimosOpen}
+        onClose={() => setMinimosOpen(false)}
+        title="Stock mínimo en masa"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setMinimosOpen(false)} disabled={minimosAplicando}>
+              Cancelar
+            </Button>
+            <Button
+              loading={minimosAplicando}
+              disabled={minimosCargando || (minimosModo === 'sugerido'
+                ? minimosAplicables.length === 0
+                : minimoFijo === '' || Number(minimoFijo) < 0)}
+              onClick={aplicarMinimos}
+            >
+              {minimosModo === 'sugerido'
+                ? `Aplicar a ${minimosAplicables.length} producto(s)`
+                : `Fijar en ${minimosItems.length} producto(s)`}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink-600 dark:text-ink-300">
+            Se aplicará a los <strong>{minimosItems.length}</strong> producto(s) que tienes filtrados
+            {categoriaFiltro ? <> en <strong>{categoriaFiltro}</strong></> : ''}.
+            El mínimo solo controla la alerta de <strong>Bajo mínimo</strong>: no mueve existencias.
+          </p>
+
+          <div className="inline-flex rounded-md border border-ink-200 dark:border-ink-700 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setMinimosModo('sugerido')}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                minimosModo === 'sugerido' ? 'bg-brand-700 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300'
+              }`}
+            >
+              Sugerido por consumo
+            </button>
+            <button
+              type="button"
+              onClick={() => setMinimosModo('fijo')}
+              className={`px-3 py-1.5 text-xs font-semibold border-l border-ink-200 dark:border-ink-700 transition-colors ${
+                minimosModo === 'fijo' ? 'bg-brand-700 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300'
+              }`}
+            >
+              El mismo para todos
+            </button>
+          </div>
+
+          {minimosModo === 'fijo' ? (
+            <Input
+              label="Stock mínimo para todos los productos filtrados"
+              type="number" min="0" step="0.01"
+              value={minimoFijo}
+              onChange={(e) => setMinimoFijo(e.target.value)}
+              placeholder="Ej. 10"
+              hint="En unidades por pieza debe ser entero."
+            />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Días de consumo a mirar"
+                  type="number" min="7" max="365"
+                  value={diasConsumo}
+                  onChange={(e) => setDiasConsumo(e.target.value)}
+                  onBlur={() => recalcular(diasConsumo, diasCobertura)}
+                  hint="Cuánto historial se promedia."
+                />
+                <Input
+                  label="Días que quieres aguantar"
+                  type="number" min="1" max="180"
+                  value={diasCobertura}
+                  onChange={(e) => setDiasCobertura(e.target.value)}
+                  onBlur={() => recalcular(diasConsumo, diasCobertura)}
+                  hint="Mínimo = consumo diario × estos días."
+                />
+              </div>
+
+              {minimosCargando ? (
+                <p className="text-sm text-ink-500 dark:text-ink-400 py-6 text-center">Calculando…</p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto rounded-lg border border-ink-200 dark:border-ink-800">
+                  <table className="w-full text-sm">
+                    <thead className="bg-ink-50 dark:bg-ink-800 sticky top-0">
+                      <tr className="text-left text-xs text-ink-500 dark:text-ink-400">
+                        <th className="px-3 py-2">Producto</th>
+                        <th className="px-3 py-2 text-right">Consumo/día</th>
+                        <th className="px-3 py-2 text-right">Mínimo hoy</th>
+                        <th className="px-3 py-2 text-right">Sugerido</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+                      {minimosItems.map((i) => (
+                        <tr key={i.id} className={i.sin_consumo ? 'opacity-50' : ''}>
+                          <td className="px-3 py-1.5">
+                            <span className="font-mono text-xs text-brand-700 dark:text-brand-300">{i.codigo}</span>
+                            <span className="text-ink-500 dark:text-ink-400"> — {i.descripcion}</span>
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">
+                            {i.sin_consumo ? <span className="text-xs">sin movimiento</span> : i.consumo_diario}
+                          </td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{i.stock_minimo}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold">
+                            {i.sin_consumo ? '—' : i.sugerido}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <p className="text-xs text-ink-500 dark:text-ink-400">
+                Los productos <strong>sin movimiento</strong> en el periodo no se tocan: sin consumo no
+                hay forma de sugerir un número, y poner 0 borraría el mínimo que alguien haya puesto a mano.
+              </p>
+            </>
+          )}
+        </div>
+      </Modal>
 
       {/* Modal de detalle: click en la imagen → foto grande + TODA la info */}
       <Modal

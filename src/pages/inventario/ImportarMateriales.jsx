@@ -1,11 +1,66 @@
 import { useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, MinusCircle, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info, AlertTriangle } from 'lucide-react'
+import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info, AlertTriangle, History, Undo2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button, Card, PageHeader, Modal, Select, InfoTip, Badge } from '../../components/ui'
-import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes, getImagenesErrores, updateProducto, upsertCategoriaConfig } from '../../api/inventario'
+import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes, getImagenesErrores, updateProducto, upsertCategoriaConfig, getAlmacenes, getProyectosInventario, getImportaciones, deshacerImportacion } from '../../api/inventario'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
+
+// ── Piezas de los modales de importación ─────────────────────────────────────
+// El módulo usa una paleta sobria (brand apagado + escala ink). Los recuadros
+// de color saturado que había aquí competían con eso, así que la superficie es
+// neutra y el color queda reducido a una barra de 2px: distingue de un vistazo
+// sin gritar. Mismo componente en los tres modales para que el flujo
+// (plan → aplicar → deshacer) se lea como una sola pantalla.
+const ACENTOS = {
+  nuevo:     'bg-emerald-500',
+  cambio:    'bg-brand-500',
+  neutro:    'bg-ink-300 dark:bg-ink-600',
+  problema:  'bg-red-500',
+  aviso:     'bg-amber-500',
+}
+
+function Stat({ valor, etiqueta, tono = 'neutro', tip }) {
+  return (
+    <div className="rounded-lg border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900/40 overflow-hidden">
+      <div className={`h-0.5 ${ACENTOS[tono] || ACENTOS.neutro}`} />
+      <div className="px-3 py-2.5 text-center">
+        <p className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">
+          {valor}
+        </p>
+        <p className="mt-1 text-[10px] font-medium uppercase tracking-wide text-ink-500 dark:text-ink-400">
+          {etiqueta}{tip && <InfoTip text={tip} placement="bottom" />}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function Panel({ titulo, icon: Icon, tono = 'neutro', children, nota }) {
+  const texto = tono === 'problema'
+    ? 'text-red-700 dark:text-red-400'
+    : tono === 'aviso'
+      ? 'text-amber-700 dark:text-amber-400'
+      : 'text-ink-500 dark:text-ink-400'
+  return (
+    <div className="rounded-lg border border-ink-200 dark:border-ink-800 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-ink-50 dark:bg-ink-900/40 border-b border-ink-200 dark:border-ink-800">
+        <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${ACENTOS[tono] || ACENTOS.neutro}`} />
+        {Icon && <Icon size={13} className={texto} />}
+        <span className={`text-[11px] font-semibold uppercase tracking-wide ${texto}`}>{titulo}</span>
+      </div>
+      <div className="max-h-56 overflow-y-auto divide-y divide-ink-100 dark:divide-ink-800">
+        {children}
+      </div>
+      {nota && (
+        <p className="px-3 py-1.5 text-[11px] text-ink-500 dark:text-ink-400 border-t border-ink-100 dark:border-ink-800">
+          {nota}
+        </p>
+      )}
+    </div>
+  )
+}
 
 export default function ImportarMateriales() {
   const [file, setFile] = useState(null)
@@ -16,6 +71,80 @@ export default function ImportarMateriales() {
   const [confirmCats, setConfirmCats] = useState(null)   // { categorias_ambiguas, categorias_existentes }
   const [catChoices, setCatChoices] = useState({})       // { nombreEnArchivo: existente | '' (crear nueva) }
   const inputRef = useRef(null)
+
+  // ── Destino del stock inicial de la plantilla vacía ───────────────────────
+  // Se elige ANTES de descargar: la plantilla baja con Almacén/Proyecto ya
+  // llenos en cada fila (y con lista desplegable), así nadie teclea un nombre
+  // que no existe — que era el error más común al importar.
+  const [plantillaOpen, setPlantillaOpen] = useState(false)
+  const [almacenes, setAlmacenes] = useState([])
+  const [proyectos, setProyectos] = useState([])
+  const [destAlmacen, setDestAlmacen] = useState('')
+  const [destProyecto, setDestProyecto] = useState('')
+  const [descargando, setDescargando] = useState(false)
+
+  useEffect(() => {
+    getAlmacenes()
+      .then((d) => {
+        const activos = (Array.isArray(d) ? d : []).filter((a) => a.activo !== false)
+        setAlmacenes(activos)
+        // Preseleccionar la primera bodega: el caso normal es una sola.
+        setDestAlmacen((prev) => prev || (activos[0] ? String(activos[0].id) : ''))
+      })
+      .catch(() => setAlmacenes([]))
+    getProyectosInventario()
+      .then((d) => setProyectos(Array.isArray(d) ? d : (d?.items || [])))
+      .catch(() => setProyectos([]))
+  }, [])
+
+  // ── Historial de importaciones + deshacer ────────────────────────────────
+  const [historial, setHistorial] = useState([])
+  const [deshaciendo, setDeshaciendo] = useState(null)   // id en curso
+  const [confirmarUndo, setConfirmarUndo] = useState(null)  // lote a revertir
+
+  const cargarHistorial = () => {
+    getImportaciones(10).then((d) => setHistorial(Array.isArray(d) ? d : [])).catch(() => {})
+  }
+  useEffect(() => { cargarHistorial() }, [])
+
+  const handleDeshacer = async (lote) => {
+    setDeshaciendo(lote.id)
+    try {
+      const r = await deshacerImportacion(lote.id)
+      const partes = []
+      if (r.restaurados) partes.push(`${r.restaurados} restaurado(s)`)
+      if (r.eliminados) partes.push(`${r.eliminados} eliminado(s)`)
+      if (r.desactivados) partes.push(`${r.desactivados} desactivado(s)`)
+      toast.success(`Importación deshecha: ${partes.join(', ') || 'sin cambios'}`, { duration: 6000 })
+      if (r.notas?.length > 0) {
+        toast(r.notas[0], { icon: <Info size={18} />, duration: 9000 })
+      }
+      invalidate('productos')
+      invalidate('movimientos')
+      cargarHistorial()
+      setConfirmarUndo(null)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'No se pudo deshacer la importación')
+    } finally {
+      setDeshaciendo(null)
+    }
+  }
+
+  const handleDescargarPlantilla = async () => {
+    setDescargando(true)
+    try {
+      await descargarPlantillaMateriales({
+        almacenId: destAlmacen ? Number(destAlmacen) : undefined,
+        proyectoId: destProyecto ? Number(destProyecto) : undefined,
+      })
+      setPlantillaOpen(false)
+      toast.success('Plantilla descargada. El almacén y el proyecto ya vienen llenos.')
+    } catch (err) {
+      toast.error(err?.detail || err?.response?.data?.detail || 'Error al descargar la plantilla')
+    } finally {
+      setDescargando(false)
+    }
+  }
 
   // ── Pipeline de imágenes → Cloudflare R2 (WebP) ──────────────────────────
   // Solo se muestra si el backend reporta R2 activo (enabled). En local sin R2
@@ -157,6 +286,7 @@ export default function ImportarMateriales() {
     if (res.exitosos > 0 || res.actualizados > 0) {
       invalidate('productos')
       invalidate('movimientos')
+      cargarHistorial()   // para poder deshacerla desde el historial
     }
     if (res.exitosos > 0) toast.success(`${res.exitosos} productos importados`)
     if (res.actualizados > 0) toast.success(`${res.actualizados} productos actualizados`)
@@ -171,28 +301,39 @@ export default function ImportarMateriales() {
     }
   }
 
+  // ── Previsualización: primero el plan, y solo al confirmar se escribe ─────
+  // Con miles de productos, un archivo mal editado aplicado de golpe no tiene
+  // vuelta atrás fácil. El backend recorre el archivo igual pero sin escribir.
+  const [plan, setPlan] = useState(null)      // respuesta con previsualizacion: true
+  const [mapeoUsado, setMapeoUsado] = useState(null)  // categorías ya resueltas
+
+  const pedirPlan = async (mapeo) => {
+    const res = await importarMateriales(file, mapeo, { previsualizar: true })
+    if (res.necesita_confirmacion) {
+      // Preseleccionar la sugerencia (agregar a la categoría existente parecida).
+      const choices = {}
+      res.categorias_ambiguas.forEach((a) => { choices[a.nombre] = a.sugerencia })
+      setCatChoices(choices)
+      setConfirmCats(res)
+      return
+    }
+    setMapeoUsado(mapeo || null)
+    setPlan(res)
+  }
+
   const handleSubmit = async () => {
     if (!file) return
     setUploading(true)
     try {
-      const res = await importarMateriales(file)
-      if (res.necesita_confirmacion) {
-        // Preseleccionar la sugerencia (agregar a la categoría existente parecida).
-        const choices = {}
-        res.categorias_ambiguas.forEach((a) => { choices[a.nombre] = a.sugerencia })
-        setCatChoices(choices)
-        setConfirmCats(res)
-        return
-      }
-      aplicarResultado(res)
+      await pedirPlan(undefined)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al importar el archivo')
+      toast.error(err?.response?.data?.detail || 'Error al leer el archivo')
     } finally {
       setUploading(false)
     }
   }
 
-  // Reintenta la importación con la decisión del usuario sobre cada categoría.
+  // Con la decisión del usuario sobre cada categoría, vuelve a pedir el plan.
   const handleConfirmCategorias = async () => {
     if (!file || !confirmCats) return
     setUploading(true)
@@ -200,8 +341,22 @@ export default function ImportarMateriales() {
       // Incluir TODAS las ambiguas (valor '' = crear nueva) para que el backend
       // no vuelva a preguntar.
       const mapeo = { ...catChoices }
-      const res = await importarMateriales(file, mapeo)
       setConfirmCats(null)
+      await pedirPlan(mapeo)
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Error al leer el archivo')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // Aplicar de verdad: mismo archivo y mismo mapeo que produjeron el plan.
+  const handleAplicarPlan = async () => {
+    if (!file || !plan) return
+    setUploading(true)
+    try {
+      const res = await importarMateriales(file, mapeoUsado || undefined)
+      setPlan(null)
       aplicarResultado(res)
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Error al importar el archivo')
@@ -253,12 +408,12 @@ export default function ImportarMateriales() {
           </div>
           <div className="text-sm text-ink-500 dark:text-ink-400 flex-1 space-y-2">
             <p>
-              <strong className="text-ink-700 dark:text-ink-200">Plantilla vacía</strong>: para dar de alta productos nuevos desde cero.
-              <InfoTip text="Un Excel en blanco, solo con los encabezados y sus notas de ayuda en cada columna." />
+              <strong className="text-ink-700 dark:text-ink-200">Plantilla vacía</strong>: para dar de alta productos nuevos desde cero. Antes de bajarla eliges a qué bodega y proyecto entra el material.
+              <InfoTip text="Un Excel en blanco, solo con los encabezados y sus notas de ayuda. Las columnas Almacén y Proyecto bajan ya llenas con lo que elijas, y traen lista desplegable: no se puede escribir una bodega o un proyecto que no exista." />
             </p>
             <p>
               <strong className="text-ink-700 dark:text-ink-200">Exportar catálogo actual</strong>: baja TODOS tus productos ya llenos (agrupados por categoría) para editarlos y reimportar.
-              <InfoTip text="Ideal para actualizar en masa precios, descripciones, mínimos o imágenes de productos que YA existen. Editas las celdas, guardas y subes el mismo archivo en «Procesar e Importar»: el sistema aplica SOLO lo que cambiaste (las filas iguales se ignoran) y el stock actual no se toca. No borres la columna del código (SKU) ni las filas grises de categoría." />
+              <InfoTip text="Ideal para actualizar en masa marca, descripción, categoría, unidad, precio, proveedor o imagen de productos que YA existen. Editas las celdas, guardas y subes el mismo archivo en «Procesar e Importar»: el sistema aplica SOLO lo que cambiaste. No trae columnas de stock ni de bodega/proyecto porque en un producto existente no aplican (el stock se mueve en Movimientos y el mínimo en la ficha del producto). No borres la columna del código (SKU) ni las filas grises de categoría." />
             </p>
           </div>
           <Button
@@ -266,9 +421,9 @@ export default function ImportarMateriales() {
             size="sm"
             className="w-full"
             leftIcon={<Download size={15} />}
-            onClick={() => descargarPlantillaMateriales().catch(() => toast.error('Error al descargar plantilla'))}
+            onClick={() => setPlantillaOpen(true)}
           >
-            Plantilla vacía
+            Plantilla vacía…
           </Button>
           <Button
             variant="secondary"
@@ -298,8 +453,12 @@ export default function ImportarMateriales() {
             <li>Stock y Precio: solo números &ge; 0</li>
             <li>Precio y URL Imagen son opcionales (puedes dejarlos vacíos)</li>
             <li>
-              <strong>Almacén</strong> y <strong>Proyecto</strong> del stock inicial (opcionales)
-              <InfoTip text="Solo para productos NUEVOS: indican a qué bodega llega el stock inicial y a qué proyecto se aparta. Vacío = bodega default y General (libre). Usa el nombre de la bodega y el número/nombre del proyecto tal como existen en el sistema." />
+              <strong>Almacén</strong> y <strong>Proyecto</strong> ya vienen llenos (celdas grises)
+              <InfoTip text="Es el destino que elegiste al descargar la plantilla: indican a qué bodega llega el stock inicial y a qué proyecto se aparta. Si una fila va a otro lado, cámbialo con la listita de la celda. Vacío = bodega predeterminada y General (libre). Solo aplica a productos NUEVOS." />
+            </li>
+            <li>
+              <strong>Proveedor</strong> y <strong>Contacto</strong> (opcionales)
+              <InfoTip text="Proveedor habitual del material. Si lo capturas aquí, Compras Express puede agrupar la orden y mandarla por WhatsApp sin que tengas que editar producto por producto." />
             </li>
             <li>
               Cable: llena <strong>Tipo</strong> y <strong>Tamaño mm²/AWG</strong>
@@ -320,8 +479,8 @@ export default function ImportarMateriales() {
             <InfoTip text="Puedes arrastrar el Excel a la zona de abajo o hacer clic para elegirlo. Máximo 5 MB, formato .xlsx o .xls." />
           </div>
           <p className="text-sm text-ink-500 dark:text-ink-400 flex-1">
-            Los productos válidos se guardarán aunque haya filas con errores. Al terminar verás un resumen
-            con cuántos se crearon, actualizaron y cuáles tuvieron problemas.
+            Al subirlo verás <strong>primero el plan</strong>: qué productos se crearían, qué cambiaría
+            en los que ya existen y qué filas se omitirían. Nada se guarda hasta que lo confirmes.
           </p>
         </Card>
       </div>
@@ -438,10 +597,289 @@ export default function ImportarMateriales() {
             loading={uploading}
             onClick={handleSubmit}
           >
-            Procesar e Importar
+            Revisar archivo
           </Button>
+          <p className="text-xs text-center text-ink-500 dark:text-ink-400">
+            Primero verás qué va a pasar. Nada se guarda hasta que lo confirmes.
+          </p>
         </div>
       </Card>
+
+      {/* Historial: qué se importó y cómo deshacerlo */}
+      {historial.length > 0 && (
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={18} className="text-brand-600" />
+            <h3 className="font-semibold text-ink-900 dark:text-ink-100">Importaciones recientes</h3>
+            <InfoTip text="Cada carga queda registrada con lo que le hizo a cada producto. «Deshacer» revierte solo lo que siga tal como lo dejó la importación: si alguien editó algo después, eso se respeta y te lo dice." />
+          </div>
+          <div className="divide-y divide-ink-100 dark:divide-ink-800">
+            {historial.map((h) => (
+              <div key={h.id} className="py-2.5 flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink-800 dark:text-ink-100 truncate">
+                    {h.archivo || 'Sin nombre'}
+                    {h.estado === 'REVERTIDA' && (
+                      <Badge tone="warning" className="ml-2">Deshecha</Badge>
+                    )}
+                  </p>
+                  <p className="text-xs text-ink-500 dark:text-ink-400">
+                    {h.fecha ? new Date(h.fecha).toLocaleString('es-MX') : '—'}
+                    {h.usuario ? ` · ${h.usuario}` : ''}
+                    {' · '}{h.creados} nuevo(s), {h.actualizados} actualizado(s)
+                  </p>
+                  {h.revertida_notas && (
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                      {h.revertida_notas}
+                    </p>
+                  )}
+                </div>
+                {h.puede_deshacerse && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<Undo2 size={15} />}
+                    loading={deshaciendo === h.id}
+                    onClick={() => setConfirmarUndo(h)}
+                  >
+                    Deshacer
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Confirmación de deshacer */}
+      <Modal
+        open={!!confirmarUndo}
+        onClose={() => setConfirmarUndo(null)}
+        title="¿Deshacer esta importación?"
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmarUndo(null)} disabled={!!deshaciendo}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              loading={!!deshaciendo}
+              onClick={() => handleDeshacer(confirmarUndo)}
+            >
+              Sí, deshacer
+            </Button>
+          </>
+        }
+      >
+        {confirmarUndo && (
+          <div className="space-y-4">
+            <div className="flex items-baseline justify-between gap-3 flex-wrap">
+              <p className="text-sm text-ink-700 dark:text-ink-200 font-medium truncate">
+                {confirmarUndo.archivo || 'Importación sin nombre'}
+              </p>
+              <p className="text-xs text-ink-500 dark:text-ink-400">
+                {confirmarUndo.fecha ? new Date(confirmarUndo.fecha).toLocaleString('es-MX') : '—'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <Stat valor={confirmarUndo.actualizados} etiqueta="Vuelven atrás" tono="cambio" />
+              <Stat valor={confirmarUndo.creados} etiqueta="Se eliminan" tono="problema" />
+            </div>
+
+            <Panel titulo="Qué va a pasar" icon={Undo2}>
+              <p className="px-3 py-1.5 text-sm text-ink-600 dark:text-ink-300">
+                Los productos actualizados recuperan los valores que tenían antes.
+              </p>
+              <p className="px-3 py-1.5 text-sm text-ink-600 dark:text-ink-300">
+                Los productos nuevos se borran, junto con el stock inicial que trajeron.
+              </p>
+              <p className="px-3 py-1.5 text-sm text-ink-600 dark:text-ink-300">
+                Lo editado o movido <strong>después</strong> de importar no se toca: si un producto
+                nuevo ya tuvo movimientos, se da de baja en vez de borrarse para conservar su
+                histórico. Al terminar te digo qué quedó fuera.
+              </p>
+            </Panel>
+          </div>
+        )}
+      </Modal>
+
+      {/* Plan de importación — se muestra ANTES de escribir nada */}
+      <Modal
+        open={!!plan}
+        onClose={() => setPlan(null)}
+        title="Revisa antes de aplicar"
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPlan(null)} disabled={uploading}>Cancelar</Button>
+            <Button
+              loading={uploading}
+              disabled={!plan || (plan.exitosos + plan.actualizados) === 0}
+              onClick={handleAplicarPlan}
+            >
+              {plan && (plan.exitosos + plan.actualizados) > 0
+                ? `Aplicar ${plan.exitosos + plan.actualizados} cambio(s)`
+                : 'Nada que aplicar'}
+            </Button>
+          </>
+        }
+      >
+        {plan && (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-600 dark:text-ink-300">
+              Esto es lo que va a pasar con <strong>{file?.name}</strong>. Todavía
+              no se ha guardado nada.
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              <Stat valor={plan.exitosos} etiqueta="Se crean" tono="nuevo" />
+              <Stat valor={plan.actualizados} etiqueta="Se actualizan" tono="cambio" />
+              <Stat valor={plan.sin_cambios} etiqueta="Iguales" />
+              <Stat valor={plan.errores.length} etiqueta="Se omiten"
+                    tono={plan.errores.length > 0 ? 'problema' : 'neutro'} />
+            </div>
+
+            {plan.duplicados?.length > 0 && (
+              <Panel
+                titulo="¿Ya existen con otro código?"
+                icon={AlertTriangle}
+                tono="aviso"
+                nota="Si son el mismo material, cancela y corrige el SKU para no duplicarlo."
+              >
+                {plan.duplicados.map((d, i) => (
+                  <div key={i} className="px-3 py-1.5 text-sm text-ink-700 dark:text-ink-200">
+                    <span className="font-mono text-xs text-ink-900 dark:text-ink-100">{d.codigo}</span>
+                    <span className="text-ink-500 dark:text-ink-400"> “{d.descripcion}” · ya existe como </span>
+                    <span className="font-mono text-xs text-ink-900 dark:text-ink-100">{d.parecido_a}</span>
+                  </div>
+                ))}
+              </Panel>
+            )}
+
+            {plan.nuevos?.length > 0 && (
+              <Panel
+                titulo="Productos nuevos"
+                icon={Plus}
+                tono="nuevo"
+                nota={plan.exitosos > plan.nuevos.length
+                  ? `…y ${plan.exitosos - plan.nuevos.length} más.` : null}
+              >
+                {plan.nuevos.map((n, i) => (
+                  <div key={i} className="px-3 py-1.5 text-sm text-ink-700 dark:text-ink-200">
+                    <span className="font-mono text-xs text-ink-900 dark:text-ink-100">{n.codigo}</span>
+                    <span> · {n.descripcion}</span>
+                    {n.stock_inicial > 0 && (
+                      <span className="text-ink-500 dark:text-ink-400">
+                        {' '}· {n.stock_inicial} {n.unidad} → {n.almacen} / {n.proyecto}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </Panel>
+            )}
+
+            {plan.cambios_detalle?.length > 0 && (
+              <Panel
+                titulo="Cambios que se aplican"
+                icon={ListChecks}
+                tono="cambio"
+                nota={plan.actualizados > plan.cambios_detalle.length
+                  ? `…y ${plan.actualizados - plan.cambios_detalle.length} producto(s) más.` : null}
+              >
+                {plan.cambios_detalle.map((c, i) => (
+                  <div key={i} className="px-3 py-1.5 text-sm text-ink-700 dark:text-ink-200">
+                    <span className="font-mono text-xs text-ink-900 dark:text-ink-100">{c.codigo}</span>
+                    <span className="text-ink-500 dark:text-ink-400"> · {c.cambios.join(' · ')}</span>
+                  </div>
+                ))}
+              </Panel>
+            )}
+
+            {plan.categorias_creadas?.length > 0 && (
+              <Panel titulo="Categorías que se crean" icon={Tags} tono="cambio">
+                <div className="px-3 py-2 flex flex-wrap gap-1.5">
+                  {plan.categorias_creadas.map((c, i) => (
+                    <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-ink-200 dark:border-ink-700 text-ink-600 dark:text-ink-300">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </Panel>
+            )}
+
+            {plan.errores.length > 0 && (
+              <Panel
+                titulo="Filas que se omiten"
+                icon={XCircle}
+                tono="problema"
+                nota="El resto del archivo sí se aplica."
+              >
+                {plan.errores.map((e, i) => (
+                  <div key={i} className="px-3 py-1.5 text-sm text-ink-600 dark:text-ink-300">{e}</div>
+                ))}
+              </Panel>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Destino del stock inicial — se elige antes de bajar la plantilla vacía */}
+      <Modal
+        open={plantillaOpen}
+        onClose={() => setPlantillaOpen(false)}
+        title="¿A dónde entra este material?"
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPlantillaOpen(false)} disabled={descargando}>Cancelar</Button>
+            <Button leftIcon={<Download size={15} />} loading={descargando} onClick={handleDescargarPlantilla}>
+              Descargar plantilla
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ink-600 dark:text-ink-300">
+            La plantilla bajará con estas dos columnas <strong>ya llenas</strong> en cada fila, así solo
+            capturas el material. Si alguna fila va a otro lado, puedes cambiarla con la lista de la celda.
+          </p>
+
+          <Select
+            label="Bodega donde llega el stock inicial"
+            hint={almacenes.length === 0
+              ? 'No hay bodegas activas: el stock inicial quedará sin bodega hasta que crees una.'
+              : 'Es donde se dará de alta la existencia de los productos nuevos.'}
+            value={destAlmacen}
+            onChange={(e) => setDestAlmacen(e.target.value)}
+          >
+            <option value="">Bodega predeterminada</option>
+            {almacenes.map((a) => (
+              <option key={a.id} value={a.id}>{a.nombre}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Proyecto al que se aparta (opcional)"
+            hint="«General (libre)» = disponible para cualquier proyecto. Si eliges uno, el material queda apartado para ese proyecto."
+            value={destProyecto}
+            onChange={(e) => setDestProyecto(e.target.value)}
+          >
+            <option value="">General (libre)</option>
+            {proyectos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
+              </option>
+            ))}
+          </Select>
+
+          <p className="text-xs text-ink-500 dark:text-ink-400">
+            Esto solo aplica a productos <strong>nuevos</strong>. Si un SKU del archivo ya existe, se
+            actualizan sus datos y su stock no se mueve.
+          </p>
+        </div>
+      </Modal>
 
       {/* Confirmación de categorías nuevas parecidas a existentes */}
       <Modal
@@ -578,95 +1016,88 @@ export default function ImportarMateriales() {
         onClose={() => setResultado(null)}
         title="Resultado de la importación"
         size="lg"
-        footer={<Button onClick={() => setResultado(null)}>Cerrar</Button>}
+        footer={
+          <>
+            {resultado?.importacion_id && (
+              <Button
+                variant="secondary"
+                leftIcon={<Undo2 size={15} />}
+                onClick={() => {
+                  const lote = historial.find((h) => h.id === resultado.importacion_id)
+                  setResultado(null)
+                  setConfirmarUndo(lote || {
+                    id: resultado.importacion_id, archivo: file?.name,
+                    creados: resultado.exitosos, actualizados: resultado.actualizados,
+                  })
+                }}
+              >
+                Deshacer esta importación
+              </Button>
+            )}
+            <Button onClick={() => setResultado(null)}>Cerrar</Button>
+          </>
+        }
       >
         {resultado && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 text-center">
-              <CheckCircle2 size={28} className="mx-auto text-emerald-600 mb-1" />
-              <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{resultado.exitosos}</p>
-              <p className="text-sm text-emerald-600 dark:text-emerald-400">Nuevos <InfoTip text="Productos que no existían y se crearon por primera vez." placement="bottom" /></p>
-            </div>
-            <div className="bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 rounded-xl p-4 text-center">
-              <CheckCircle2 size={28} className="mx-auto text-sky-600 mb-1" />
-              <p className="text-2xl font-bold text-sky-700 dark:text-sky-400">{resultado.actualizados ?? 0}</p>
-              <p className="text-sm text-sky-600 dark:text-sky-400">Actualizados <InfoTip text="Productos que ya existían (mismo SKU) y cambió al menos un dato." placement="bottom" /></p>
-            </div>
-            <div className="bg-ink-50 dark:bg-ink-800 border border-ink-200 dark:border-ink-700 rounded-xl p-4 text-center">
-              <MinusCircle size={28} className="mx-auto text-ink-400 mb-1" />
-              <p className="text-2xl font-bold text-ink-500 dark:text-ink-400">{resultado.sin_cambios ?? 0}</p>
-              <p className="text-sm text-ink-500 dark:text-ink-400">Sin cambios <InfoTip text="Productos que ya existían y venían idénticos en el archivo: se ignoraron (no se tocaron)." placement="bottom" /></p>
-            </div>
-            <div className={`border rounded-xl p-4 text-center ${resultado.errores.length > 0 ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' : 'bg-ink-50 dark:bg-ink-800 border-ink-200 dark:border-ink-700'}`}>
-              <XCircle size={28} className={`mx-auto mb-1 ${resultado.errores.length > 0 ? 'text-red-600' : 'text-ink-400'}`} />
-              <p className={`text-2xl font-bold ${resultado.errores.length > 0 ? 'text-red-700 dark:text-red-400' : 'text-ink-500'}`}>{resultado.errores.length}</p>
-              <p className={`text-sm ${resultado.errores.length > 0 ? 'text-red-600 dark:text-red-400' : 'text-ink-500'}`}>Filas con error <InfoTip text="Filas que no se pudieron guardar (falta un dato, SKU inválido, número mal escrito…). El detalle aparece abajo para corregirlas." placement="bottom" /></p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+            <Stat valor={resultado.exitosos} etiqueta="Nuevos" tono="nuevo"
+                  tip="Productos que no existían y se crearon por primera vez." />
+            <Stat valor={resultado.actualizados ?? 0} etiqueta="Actualizados" tono="cambio"
+                  tip="Productos que ya existían (mismo SKU) y cambió al menos un dato." />
+            <Stat valor={resultado.sin_cambios ?? 0} etiqueta="Iguales"
+                  tip="Productos que ya existían y venían idénticos en el archivo: se ignoraron." />
+            <Stat valor={resultado.errores.length} etiqueta="Con error"
+                  tono={resultado.errores.length > 0 ? 'problema' : 'neutro'}
+                  tip="Filas que no se pudieron guardar (falta un dato, SKU inválido, número mal escrito…)." />
           </div>
 
           {resultado.imagenes?.pendientes > 0 && (
-            <div className="bg-brand-50 dark:bg-brand-900/10 border border-brand-200 dark:border-brand-800 rounded-xl p-4 flex items-start gap-3">
-              <Cloud size={18} className="text-brand-600 mt-0.5 flex-shrink-0" />
-              <p className="text-sm text-brand-700 dark:text-brand-300">
-                Descargando <strong>{resultado.imagenes.pendientes}</strong> imagen(es) a la nube (WebP → R2).
-                El progreso aparece en la tarjeta “Imágenes en la nube” al cerrar este aviso.
+            <div className="flex items-start gap-2 rounded-lg border border-ink-200 dark:border-ink-800 px-3 py-2">
+              <Cloud size={14} className="text-brand-600 mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-ink-600 dark:text-ink-300">
+                Descargando <strong>{resultado.imagenes.pendientes}</strong> imagen(es) a la nube
+                (WebP → R2). El progreso aparece en “Imágenes en la nube” al cerrar este aviso.
               </p>
             </div>
           )}
 
           {resultado.categorias_creadas?.length > 0 && (
-            <div className="bg-sky-50 dark:bg-sky-900/10 border border-sky-200 dark:border-sky-800 rounded-xl p-4">
-              <p className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wide mb-2 flex items-center gap-2">
-                <Tags size={14} />
-                Categorías nuevas creadas automáticamente:
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <Panel titulo="Categorías nuevas" icon={Tags} tono="cambio"
+                   nota="Puedes asignarles una imagen desde el catálogo de categorías.">
+              <div className="px-3 py-2 flex flex-wrap gap-1.5">
                 {resultado.categorias_creadas.map((c, i) => (
-                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                  <span key={i} className="text-[11px] px-2 py-0.5 rounded-full border border-ink-200 dark:border-ink-700 text-ink-600 dark:text-ink-300">
                     {c}
                   </span>
                 ))}
               </div>
-              <p className="text-xs text-sky-600 dark:text-sky-400 mt-2 italic">
-                Puedes asignarles una imagen desde el catálogo de categorías.
-              </p>
-            </div>
+            </Panel>
           )}
 
           {resultado.cambios_detalle?.length > 0 && (
-            <div className="bg-sky-50 dark:bg-sky-900/10 border border-sky-200 dark:border-sky-800 rounded-xl p-4 max-h-56 overflow-y-auto">
-              <p className="text-xs font-bold text-sky-700 dark:text-sky-400 uppercase tracking-wide mb-2 flex items-center gap-2">
-                <ListChecks size={14} /> Cambios detectados:
-              </p>
-              <ul className="space-y-1.5">
-                {resultado.cambios_detalle.map((c, i) => (
-                  <li key={i} className="text-sm text-ink-700 dark:text-ink-200">
-                    <span className="font-mono font-semibold text-sky-700 dark:text-sky-300">{c.codigo}</span>
-                    <span className="text-ink-500 dark:text-ink-400"> — {c.cambios.join(' · ')}</span>
-                  </li>
-                ))}
-              </ul>
-              {resultado.actualizados > resultado.cambios_detalle.length && (
-                <p className="text-xs text-ink-500 dark:text-ink-400 mt-2 italic">
-                  …y {resultado.actualizados - resultado.cambios_detalle.length} producto(s) más actualizados.
-                </p>
-              )}
-            </div>
+            <Panel
+              titulo="Cambios aplicados"
+              icon={ListChecks}
+              tono="cambio"
+              nota={resultado.actualizados > resultado.cambios_detalle.length
+                ? `…y ${resultado.actualizados - resultado.cambios_detalle.length} producto(s) más.` : null}
+            >
+              {resultado.cambios_detalle.map((c, i) => (
+                <div key={i} className="px-3 py-1.5 text-sm text-ink-700 dark:text-ink-200">
+                  <span className="font-mono text-xs text-ink-900 dark:text-ink-100">{c.codigo}</span>
+                  <span className="text-ink-500 dark:text-ink-400"> · {c.cambios.join(' · ')}</span>
+                </div>
+              ))}
+            </Panel>
           )}
 
           {resultado.errores.length > 0 && (
-            <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-xl p-4 max-h-48 overflow-y-auto">
-              <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase tracking-wide mb-2">Detalle de errores:</p>
-              <ul className="space-y-1">
-                {resultado.errores.map((e, i) => (
-                  <li key={i} className="text-sm text-red-700 dark:text-red-300 flex gap-2">
-                    <span className="flex-shrink-0">•</span>
-                    <span>{e}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Panel titulo="Filas omitidas" icon={XCircle} tono="problema">
+              {resultado.errores.map((e, i) => (
+                <div key={i} className="px-3 py-1.5 text-sm text-ink-600 dark:text-ink-300">{e}</div>
+              ))}
+            </Panel>
           )}
         </div>
         )}

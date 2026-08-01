@@ -721,8 +721,35 @@ export async function generarEtiquetasPdf({ formato = 'avery_5160', tipo = 'barc
 }
 
 // --- Importar materiales ---
-export async function descargarPlantillaMateriales() {
-  const res = await api.get(`${BASE}/productos/plantilla-importar`, { responseType: 'blob' })
+// Lee el `detail` de un error que viajó como Blob (descargas con responseType
+// blob). Devuelve '' si el cuerpo no era JSON.
+async function _detalleDeBlob(data) {
+  if (!data || typeof data.text !== 'function') return ''
+  try {
+    return JSON.parse(await data.text())?.detail || ''
+  } catch {
+    return ''
+  }
+}
+
+// La plantilla puede bajar con el destino del stock inicial ya resuelto: las
+// columnas Almacén y Proyecto vienen prellenadas con lo que se eligió aquí (y
+// con lista desplegable), así el usuario solo captura el material y no puede
+// escribir una bodega o un proyecto que no existe.
+export async function descargarPlantillaMateriales({ almacenId, proyectoId } = {}) {
+  const params = {}
+  if (almacenId) params.almacen_id = almacenId
+  if (proyectoId) params.proyecto_id = proyectoId
+  let res
+  try {
+    res = await api.get(`${BASE}/productos/plantilla-importar`, { params, responseType: 'blob' })
+  } catch (err) {
+    // Con responseType blob, el 400 del backend también llega como Blob: hay que
+    // leerlo para poder mostrar el motivo real (bodega/proyecto inválido).
+    const detail = await _detalleDeBlob(err?.response?.data)
+    if (detail) { const e = new Error(detail); e.detail = detail; throw e }
+    throw err
+  }
   const blob = new Blob([res.data], { type: res.headers['content-type'] })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -734,7 +761,11 @@ export async function descargarPlantillaMateriales() {
   URL.revokeObjectURL(url)
 }
 
-export async function importarMateriales(file, categoriaMapeo) {
+// `previsualizar` recorre el archivo completo pero NO escribe: devuelve el plan
+// (qué se crearía, qué cambiaría campo por campo, errores y posibles duplicados)
+// para confirmarlo antes de aplicar. Es el mismo endpoint y el mismo recorrido,
+// así que el plan y lo aplicado no se pueden separar.
+export async function importarMateriales(file, categoriaMapeo, { previsualizar = false } = {}) {
   const fd = new FormData()
   fd.append('archivo', file)
   // Mapa {nombreEnArchivo: categoriaExistente} para categorías ambiguas. Vacío
@@ -742,9 +773,50 @@ export async function importarMateriales(file, categoriaMapeo) {
   if (categoriaMapeo && Object.keys(categoriaMapeo).length > 0) {
     fd.append('categoria_mapeo', JSON.stringify(categoriaMapeo))
   }
+  if (previsualizar) fd.append('previsualizar', '1')
   const { data } = await api.post(`${BASE}/productos/importar`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return data
+}
+
+// --- Stock mínimo en masa ---
+// Sugiere el mínimo a partir del consumo real: unidades que salen por día en los
+// últimos `diasConsumo`, por los `diasCobertura` que se quieran aguantar.
+export async function sugerirMinimos({ productoIds, diasConsumo = 30, diasCobertura = 15 }) {
+  const { data } = await api.post(`${BASE}/productos/minimos/sugerencia`, {
+    producto_ids: productoIds,
+    dias_consumo: diasConsumo,
+    dias_cobertura: diasCobertura,
+  })
+  return data  // { dias_consumo, dias_cobertura, items: [...] }
+}
+
+// Aplica el mínimo a varios productos. Acepta un valor único para todos
+// ({productoIds, stockMinimo}) o uno por producto ({items:[{id, stock_minimo}]}).
+export async function actualizarMinimos({ productoIds, stockMinimo, items }) {
+  const payload = items ? { items } : { producto_ids: productoIds, stock_minimo: stockMinimo }
+  const { data } = await api.patch(`${BASE}/productos/minimos`, payload)
+  return data  // { actualizados, sin_cambios, errores }
+}
+
+// --- Historial de importaciones y deshacer ---
+// Cada carga masiva queda registrada con lo que le hizo a cada producto y los
+// valores previos, que es lo que permite revertirla.
+export async function getImportaciones(limit = 20) {
+  const { data } = await api.get(`${BASE}/productos/importaciones`, { params: { limit } })
+  return data
+}
+
+export async function getImportacionDetalle(id) {
+  const { data } = await api.get(`${BASE}/productos/importaciones/${id}`)
+  return data
+}
+
+// Revierte una importación. Solo deshace lo que sigue igual que como lo dejó:
+// lo que se editó después se respeta y viene reportado en `notas`.
+export async function deshacerImportacion(id) {
+  const { data } = await api.post(`${BASE}/productos/importaciones/${id}/deshacer`, {})
   return data
 }
 
@@ -772,15 +844,25 @@ export async function getImagenesErrores() {
   return data
 }
 
-// Exporta TODO el catálogo activo en el mismo formato de la plantilla, ya
-// lleno. Sirve para editar en Excel y reimportar (el import detecta cambios).
-export async function exportarProductos() {
-  const res = await api.get(`${BASE}/productos/exportar`, { responseType: 'blob' })
+// Exporta el catálogo activo ya lleno, para editar en Excel y reimportar (el
+// import detecta y aplica solo los cambios).
+// Acepta los MISMOS filtros del catálogo: sin ellos baja todo; con ellos baja
+// solo esa selección, y reimportarla no afecta a los productos que no venían.
+export async function exportarProductos({ categoria, q, stock, imagen, unidad, compra } = {}) {
+  const params = {}
+  if (categoria) params.categoria = categoria
+  if (q) params.q = q
+  if (stock) params.stock = stock
+  if (imagen) params.imagen = imagen
+  if (unidad) params.unidad = unidad
+  if (compra) params.compra = 'activa'
+  const filtrado = Object.keys(params).length > 0
+  const res = await api.get(`${BASE}/productos/exportar`, { params, responseType: 'blob' })
   const blob = new Blob([res.data], { type: res.headers['content-type'] })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'catalogo_materiales.xlsx'
+  a.download = filtrado ? 'catalogo_filtrado.xlsx' : 'catalogo_materiales.xlsx'
   document.body.appendChild(a)
   a.click()
   a.remove()

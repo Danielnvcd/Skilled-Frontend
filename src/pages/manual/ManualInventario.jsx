@@ -82,15 +82,44 @@ const SECCIONES = [
         type: 'steps',
         items: [
           ['Menú ', { strong: 'Catálogo → Importar' }, '.'],
-          ['Descargar la ', { strong: 'plantilla Excel' }, ' (botón).'],
-          'Llenar las columnas: código, descripción, categoría, unidad, stock_minimo, stock_inicial.',
-          'Subir el archivo. El sistema valida fila por fila.',
+          ['Botón ', { strong: 'Plantilla vacía' }, ' → elegir la ', { strong: 'bodega' }, ' y el ', { strong: 'proyecto' }, ' a los que entra el material, y descargar.'],
+          'Llenar las columnas: código (SKU), descripción, marca, categoría, unidad, stock inicial, stock mínimo, precio y (opcional) proveedor habitual + contacto, que deja el producto listo para Compras Express. Almacén y Proyecto ya vienen llenos (celdas grises) con lo que se eligió al descargar.',
+          'Subir el archivo. El sistema valida fila por fila y muestra el PLAN: qué productos se crearían, qué cambiaría en los que ya existen, qué filas se omitirían y si algún material se parece a uno que ya está en el catálogo. Nada se guarda hasta confirmar.',
           'Si una categoría es nueva, se crea automáticamente con normalización (case/acento-insensitive).',
         ],
       },
       {
         type: 'info', tone: 'green', icon: CheckCircle2,
         text: 'Las filas con código duplicado o vacío se rechazan, pero las demás sí se importan (no aborta todo).',
+      },
+      { type: 'h3', icon: History, text: 'Deshacer una importación' },
+      {
+        type: 'bullets',
+        items: [
+          ['En ', { strong: 'Catálogo → Importar' }, ' aparece el historial de las últimas cargas con un botón ', { strong: 'Deshacer' }, '.'],
+          ['Los productos que la importación ', { strong: 'actualizó' }, ' vuelven a como estaban; los que ', { strong: 'creó' }, ' se eliminan junto con el stock inicial que trajeron.'],
+          ['Lo que se haya editado o movido ', { strong: 'después' }, ' de importar no se toca: se respeta y se avisa. Un producto nuevo que ya tuvo movimientos se da de baja en vez de borrarse, para no perder su histórico.'],
+        ],
+      },
+      { type: 'h3', icon: AlertTriangle, text: 'Stock mínimo en masa' },
+      {
+        type: 'bullets',
+        items: [
+          ['Botón ', { strong: 'Stock mínimo' }, ' en el catálogo: aplica a los productos que tengas filtrados en pantalla.'],
+          [{ strong: 'Sugerido por consumo' }, ': el sistema mira cuánto sale por día (últimos 30 días por defecto) y propone el mínimo para aguantar los días que le digas.'],
+          [{ strong: 'El mismo para todos' }, ': fija un número en toda la selección.'],
+          'Los productos sin movimiento no se tocan: sin consumo no hay base para sugerir. El mínimo solo controla la alerta de Bajo mínimo, no mueve existencias.',
+        ],
+      },
+      { type: 'h3', icon: FileSpreadsheet, text: 'Editar el catálogo en masa (exportar → editar → reimportar)' },
+      {
+        type: 'bullets',
+        items: [
+          ['Botón ', { strong: 'Exportar catálogo actual' }, ': baja todos los productos agrupados por categoría.'],
+          ['Solo trae lo editable de un producto que ya existe: ', { strong: 'marca' }, ', descripción, categoría, unidad, cable, precio e imagen.'],
+          ['No trae stock, stock mínimo, almacén ni proyecto: el stock se mueve en ', { strong: 'Movimientos' }, ' y el mínimo se cambia en la ficha del producto.'],
+          'Al volver a subir el archivo se aplica solo lo que cambió; las filas iguales se ignoran.',
+        ],
       },
       { type: 'h3', icon: Edit3, text: 'Editar un producto' },
       {
