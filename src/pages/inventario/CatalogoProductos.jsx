@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn, AlertTriangle, MoreHorizontal } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn, AlertTriangle, Info, MoreHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -372,7 +372,7 @@ export default function CatalogoProductos() {
       // una vez. Decirlo, porque si no el usuario creería que ya cubrió todo.
       if (ids.length >= TOPE_MINIMOS) {
         toast(`Se tomaron los primeros ${TOPE_MINIMOS}. Filtra por categoría para cubrir el resto.`,
-          { icon: '⚠️', duration: 8000 })
+          { icon: <AlertTriangle size={18} />, duration: 8000 })
       }
       await cargarSugerencias(ids)
     } catch {
@@ -424,7 +424,7 @@ export default function CatalogoProductos() {
         invalidate('productos')
         load()
       } else {
-        toast('No hubo cambios que aplicar', { icon: '👌' })
+        toast('No hubo cambios que aplicar', { icon: <Info size={18} /> })
       }
       if (r.errores?.length > 0) toast.error(`${r.errores.length} producto(s) con problema: ${r.errores[0]}`)
       setMinimosOpen(false)
@@ -1832,39 +1832,64 @@ export default function CatalogoProductos() {
               {minimosCargando ? (
                 <p className="text-sm text-ink-500 dark:text-ink-400 py-6 text-center">Calculando…</p>
               ) : (
-                <div className="max-h-72 overflow-y-auto rounded-lg border border-ink-200 dark:border-ink-800">
+                // `overflow-auto` (no solo -y) + `overflow-hidden` implícito del
+                // recorte: una descripción larga estiraba la tabla `w-full` más
+                // allá del modal y no había forma de llegar a las columnas de la
+                // derecha. Mismo patrón que el componente `Table` del sistema.
+                <div className="max-h-72 overflow-auto scrollbar-thin rounded-lg border border-ink-200 dark:border-ink-800">
                   <table className="w-full text-sm">
-                    <thead className="bg-ink-50 dark:bg-ink-800 sticky top-0">
+                    {/* El sticky va en cada `th`, no en el `thead`: con el
+                        `border-collapse: collapse` que Tailwind aplica a las
+                        tablas, los grupos de fila no admiten `position: sticky`
+                        y el encabezado se iba con el scroll. Cada celda lleva su
+                        propio fondo —el del thead no viaja al pegarse— y `z-10`
+                        para que las filas no le pasen por encima. */}
+                    <thead>
                       <tr className="text-left text-xs text-ink-500 dark:text-ink-400">
-                        <th className="px-3 py-2">Producto</th>
-                        <th className="px-3 py-2 text-right">Consumo/día</th>
-                        <th className="px-3 py-2 text-right">Mínimo hoy</th>
-                        <th className="px-3 py-2 text-right">Sugerido</th>
+                        <th className="sticky top-0 z-10 bg-ink-50 dark:bg-ink-800 px-3 py-2">Producto</th>
+                        <th className="sticky top-0 z-10 bg-ink-50 dark:bg-ink-800 px-3 py-2 text-right whitespace-nowrap">Consumo/día</th>
+                        <th className="sticky top-0 z-10 bg-ink-50 dark:bg-ink-800 px-3 py-2 text-right whitespace-nowrap">Mínimo hoy</th>
+                        <th className="sticky top-0 z-10 bg-ink-50 dark:bg-ink-800 px-3 py-2 text-right">Sugerido</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
-                      {minimosItems.map((i) => (
-                        <tr key={i.id} className={i.sin_consumo ? 'opacity-50' : ''}>
-                          <td className="px-3 py-1.5">
-                            <span className="font-mono text-xs text-brand-700 dark:text-brand-300">{i.codigo}</span>
-                            <span className="text-ink-500 dark:text-ink-400"> — {i.descripcion}</span>
-                          </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums">
-                            {i.sin_consumo ? <span className="text-xs">sin movimiento</span> : i.consumo_diario}
-                          </td>
-                          <td className="px-3 py-1.5 text-right tabular-nums">{i.stock_minimo}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums font-semibold">
-                            {i.sin_consumo ? '—' : i.sugerido}
-                          </td>
-                        </tr>
-                      ))}
+                      {minimosItems.map((i) => {
+                        // Se atenúa TODO lo que no va a cambiar, no solo lo que
+                        // no tiene consumo: el botón dice «Aplicar a N» contando
+                        // solo los que cambian, y sin esto la tabla mostraba
+                        // cientos de filas nítidas junto a un botón que hablaba
+                        // de doce. Ahora lo nítido es exactamente lo que se va
+                        // a tocar.
+                        const sinCambio = !i.sin_consumo && i.sugerido === i.stock_minimo
+                        return (
+                          <tr key={i.id} className={i.sin_consumo || sinCambio ? 'opacity-60' : ''}>
+                            <td className="px-3 py-1.5 max-w-0">
+                              {/* `max-w-0` en la celda es lo que deja al div
+                                  encogerse y truncar; sin eso la columna crece
+                                  con el texto y arrastra la tabla entera. */}
+                              <div className="truncate" title={`${i.codigo} — ${i.descripcion}`}>
+                                <span className="font-mono text-xs text-brand-700 dark:text-brand-300">{i.codigo}</span>
+                                <span className="text-ink-500 dark:text-ink-400"> — {i.descripcion}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
+                              {i.sin_consumo ? <span className="text-xs">sin movimiento</span> : i.consumo_diario}
+                            </td>
+                            <td className="px-3 py-1.5 text-right tabular-nums">{i.stock_minimo}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums font-semibold whitespace-nowrap">
+                              {i.sin_consumo ? '—' : sinCambio ? <span className="font-normal text-xs">sin cambio</span> : i.sugerido}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
               <p className="text-xs text-ink-500 dark:text-ink-400">
-                Los productos <strong>sin movimiento</strong> en el periodo no se tocan: sin consumo no
-                hay forma de sugerir un número, y poner 0 borraría el mínimo que alguien haya puesto a mano.
+                Las filas <strong>atenuadas</strong> no se tocan: o no tuvieron movimiento en el periodo
+                —sin consumo no hay forma de sugerir un número, y poner 0 borraría el mínimo que alguien
+                haya puesto a mano— o su sugerido ya coincide con el mínimo actual.
               </p>
             </>
           )}
