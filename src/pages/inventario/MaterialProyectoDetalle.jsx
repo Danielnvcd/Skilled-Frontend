@@ -267,7 +267,10 @@ export default function MaterialProyectoDetalle() {
                           variant="ghost"
                           size="icon-sm"
                           title="Ver kardex del material"
-                          onClick={() => navigate(`/inventario/productos/${m.producto_id}/kardex`)}
+                          onClick={() => navigate(`/inventario/productos/${m.producto_id}/kardex`, {
+                            state: { volverA: `/inventario/material-proyecto/${id}`,
+                                     volverLabel: 'Volver al proyecto' },
+                          })}
                         >
                           <History size={15} />
                         </Button>

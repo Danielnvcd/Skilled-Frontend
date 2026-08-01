@@ -366,7 +366,10 @@ const FilaBajoMinimo = memo(function FilaBajoMinimo({ p, checked, compra, onTogg
       </TD>
       <TD align="right">
         <div className="inline-flex items-center gap-1">
-          <Link to={`/inventario/productos/${p.id}/kardex`}>
+          <Link
+            to={`/inventario/productos/${p.id}/kardex`}
+            state={{ volverA: '/inventario/bajo-minimo', volverLabel: 'Volver a bajo mínimo' }}
+          >
             <Button variant="ghost" size="icon-sm" title="Ver kardex">
               <History size={14} />
             </Button>

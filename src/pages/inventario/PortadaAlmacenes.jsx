@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
-  Search, Warehouse, PackageCheck, Boxes, FolderOpen, LayoutGrid, ChevronDown, ChevronRight,
-  ArrowLeftRight, ClipboardList, ShoppingCart, ScanLine, Upload, AlertTriangle, Activity,
+  Search, Warehouse, Boxes, Package, ChevronRight,
+  ClipboardList, ScanLine,
+  // Mismos iconos que el menú lateral para los mismos destinos: catálogo, bajo
+  // mínimo, proyectos, movimientos y actividad. Un destino con dos dibujos
+  // distintos según desde dónde se mire es lo que hace ver amateur a una app.
+  PackageSearch, PackageMinus, FolderKanban, ArrowRightLeft, LayoutDashboard,
 } from 'lucide-react'
-import { Skeleton, Pagination } from '../../components/ui'
+import { Skeleton, Pagination, Modal } from '../../components/ui'
 import {
   getAlmacenesResumen, getAlmacenStock, getCategorias, getProyectosInventario,
   getResumenProyectos, getProductosBajoMinimo,
@@ -91,13 +95,14 @@ function SectionHeader({ Icon, title, titleExtra, subtitle, action }) {
 
 // ── Acciones rápidas de la portada: accesos directos a las tareas diarias del
 // almacenista. La primera (Registrar movimiento) es la acción primaria. ───────
+// Solo lo que se hace TODOS los días. Eran seis y varios repetían algo que ya
+// está en la página o en el menú: "Bajo mínimo" es además un indicador (con su
+// cuenta, que dice más que un botón) e "Importar" es una tarea ocasional que
+// vive en el catálogo. Seis botones iguales no se leen; tres sí.
 const QUICK_ACTIONS = [
-  { to: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', Icon: ArrowLeftRight, primary: true },
-  { to: '/inventario/solicitudes',       label: 'Solicitudes',           Icon: ClipboardList },
-  { to: '/inventario/solicitudes-compra', label: 'Compras',              Icon: ShoppingCart },
-  { to: '/inventario/bajo-minimo',       label: 'Bajo mínimo',           Icon: AlertTriangle },
-  { to: '/inventario/scanner',           label: 'Escanear',              Icon: ScanLine },
-  { to: '/inventario/importar',          label: 'Importar',              Icon: Upload },
+  { to: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', Icon: ArrowRightLeft, primary: true },
+  { to: '/inventario/solicitudes',       label: 'Solicitudes',          Icon: ClipboardList },
+  { to: '/inventario/scanner',           label: 'Escanear',             Icon: ScanLine },
 ]
 
 function QuickActions() {
@@ -122,29 +127,49 @@ function QuickActions() {
 }
 
 // ── Tarjeta de almacén (selector) ───────────────────────────────────────────
+// BUG QUE SE ARREGLÓ AQUÍ: al cambiar de almacén, las tarjetas "brincaban".
+// La etiqueta "En vista" solo existía en la tarjeta seleccionada, y al aparecer
+// le robaba ancho al título — que tiene `truncate`. Resultado: al hacer clic, el
+// nombre de la tarjeta nueva se cortaba de golpe y el de la anterior se estiraba,
+// los dos animados por `transition-all`, que también anima cambios de tamaño.
+//
+// Ahora el estado seleccionado NO altera el layout: solo cambian colores (chip,
+// borde, fondo) y la transición se limita a `colors`. Nada se mueve de lugar.
 function AlmacenCard({ almacen, selected, onSelect }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
+      title={almacen.nombre}
       onClick={() => onSelect(almacen.almacen_id)}
-      className={`text-left rounded-xl border px-4 py-3.5 transition-all focus-ring ${
+      className={`text-left rounded-xl border px-4 py-3.5 transition-colors focus-ring ${
         selected
           ? 'border-brand-500 dark:border-brand-500 bg-brand-50/50 dark:bg-brand-900/15'
-          : 'border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm'
+          : 'border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 hover:border-ink-300 dark:hover:border-ink-700'
       }`}
     >
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{almacen.nombre}</h3>
-        {selected && (
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-300 flex-shrink-0">
-            En vista
-          </span>
-        )}
+      <div className="flex items-start gap-2.5">
+        <div className={`h-9 w-9 rounded-lg inline-flex items-center justify-center flex-shrink-0 transition-colors ${
+          selected
+            ? 'bg-brand-600 text-white'
+            : 'bg-ink-100 text-ink-700 dark:bg-ink-800 dark:text-ink-200'
+        }`}>
+          <Warehouse size={17} strokeWidth={1.8} />
+        </div>
+        <div className="min-w-0 flex-1">
+          {/* Sin insignia condicional: el almacén en vista se reconoce por el
+              chip azul y el borde, que no ocupan espacio del título. */}
+          <h3 className={`text-sm font-semibold truncate transition-colors ${
+            selected ? 'text-brand-800 dark:text-brand-200' : 'text-ink-900 dark:text-ink-100'
+          }`}>
+            {almacen.nombre}
+          </h3>
+          <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400 truncate">
+            {almacen.ubicacion || 'Sin ubicación registrada'}
+          </p>
+        </div>
       </div>
-      <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400 truncate">
-        {almacen.ubicacion || 'Sin ubicación registrada'}
-      </p>
+
       <div className="mt-3 pt-3 border-t border-ink-100 dark:border-ink-800/80 grid grid-cols-2 gap-3">
         <div>
           <p className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">
@@ -169,28 +194,40 @@ function ProductoCard({ p, contextoLabel = 'En este almacén' }) {
   // catálogo): compara el stock total contra el mínimo, no la existencia de
   // este único almacén, para no marcar falsos positivos con stock repartido.
   const bajoStock = p.stock_minimo > 0 && p.stock_actual <= p.stock_minimo
+  // Una URL rota dejaba un cuadro gris vacío: se ocultaba la imagen y el rótulo
+  // "Sin imagen" solo se pintaba cuando el producto NO tenía URL. Pasa seguido
+  // con imágenes importadas por Excel que apuntan a un sitio caído. El estado se
+  // reinicia solo al cambiar de producto porque la lista va con `key`.
+  const [imagenRota, setImagenRota] = useState(false)
+  const hayImagen = !!p.imagen_url && !imagenRota
   return (
     <Link
       to={`/inventario/productos/${p.producto_id}/kardex`}
+      // De dónde viene: sin esto el kardex regresaba siempre al catálogo, así
+      // que abrir un producto desde Inicio dejaba al usuario en otra pantalla.
+      state={{ volverA: '/', volverLabel: 'Volver al inicio' }}
       title={`${p.codigo} — ${p.descripcion}`}
       className="group flex flex-col rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 overflow-hidden hover:border-ink-300 dark:hover:border-ink-700 hover:shadow-sm transition-all focus-ring"
     >
       <div className="relative aspect-square bg-ink-50 dark:bg-ink-800/50 border-b border-ink-200 dark:border-ink-800 overflow-hidden">
-        {p.imagen_url ? (
+        {hayImagen ? (
           <img
             src={p.imagen_url}
             alt={p.descripcion}
             loading="lazy"
             className="w-full h-full object-cover"
-            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            onError={() => setImagenRota(true)}
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-[10px] uppercase tracking-wide text-ink-400 dark:text-ink-600">Sin imagen</span>
           </div>
         )}
+        {/* Un solo lenguaje de alerta en toda la portada: ámbar, igual que el KPI
+            de Bajo mínimo. El bloque rojo sólido gritaba más que el propio dato
+            y competía con la foto del producto. */}
         {bajoStock && (
-          <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-semibold uppercase tracking-wider">
+          <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-md bg-white/95 dark:bg-ink-900/95 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 text-[9px] font-semibold uppercase tracking-wider backdrop-blur-sm">
             Bajo mínimo
           </span>
         )}
@@ -200,7 +237,7 @@ function ProductoCard({ p, contextoLabel = 'En este almacén' }) {
         <p className="text-sm font-semibold text-ink-900 dark:text-ink-100 leading-snug line-clamp-2">{p.descripcion}</p>
         <p className="text-[11px] text-ink-500 dark:text-ink-400 truncate">{p.categoria}</p>
         <div className="mt-auto pt-2 border-t border-ink-100 dark:border-ink-800/70">
-          <p className={`text-lg font-semibold tabular-nums leading-none ${bajoStock ? 'text-red-600 dark:text-red-400' : 'text-ink-900 dark:text-ink-100'}`}>
+          <p className={`text-lg font-semibold tabular-nums leading-none ${bajoStock ? 'text-amber-700 dark:text-amber-300' : 'text-ink-900 dark:text-ink-100'}`}>
             {fmtNum(p.cantidad)} <span className="text-xs font-medium text-ink-500 dark:text-ink-400">{p.unidad}</span>
           </p>
           <p className={`mt-1.5 ${LABEL} truncate`} title={contextoLabel}>{contextoLabel}</p>
@@ -210,169 +247,19 @@ function ProductoCard({ p, contextoLabel = 'En este almacén' }) {
   )
 }
 
-// ── Tarjeta de un proyecto ───────────────────────────────────────────────────
-// Total dominante + desglose por almacén como filas limpias monocromas (almacén ·
-// unidades · %), clickeables: al hacer clic se abre la galería de ese almacén
-// filtrada por el proyecto. El almacén que alimenta la galería activa queda
-// resaltado en color de marca. Sin colores por almacén, para que la sección se
-// lea con el mismo lenguaje que el resto de la portada.
-function ProyectoCard({ f, cardKey, projTotal, segs, onCell, activeAlmacenId, activeProyecto }) {
-  const isActiveProj = activeProyecto !== '' && String(activeProyecto) === String(cardKey)
-
-  return (
-    <div className="rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 p-4 hover:shadow-sm hover:border-ink-300 dark:hover:border-ink-700 transition-all">
-      {/* Cabecera: nombre del proyecto + total de unidades dominante */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <h3
-              className={`text-sm font-semibold truncate ${f.es_general ? 'text-ink-600 dark:text-ink-300' : 'text-ink-900 dark:text-ink-100'}`}
-              title={f.proyecto_descripcion || f.proyecto_nombre}
-            >
-              {f.es_general ? 'General' : f.proyecto_nombre}
-            </h3>
-            {f.es_general && (
-              <span className="flex-shrink-0 text-[9px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border border-ink-200 dark:border-ink-700 text-ink-500 dark:text-ink-400">
-                Libre
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-ink-500 dark:text-ink-400 mt-0.5 truncate">
-            {f.total_productos} producto{f.total_productos === 1 ? '' : 's'}
-            {!f.es_general && f.proyecto_descripcion ? ` · ${f.proyecto_descripcion}` : ''}
-          </p>
-        </div>
-        <div className="text-right flex-shrink-0">
-          <p className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">
-            {fmtNum(projTotal)}
-          </p>
-          <p className={`mt-1 ${LABEL}`}>Unidades</p>
-        </div>
-      </div>
-
-      {segs.length > 0 && (
-        /* Desglose por almacén — filas limpias monocromas, clickeables (drill-down) */
-        <div className="mt-3 pt-3 border-t border-ink-100 dark:border-ink-800/80 space-y-0.5">
-          {segs.map((s) => {
-            const active = isActiveProj && s.id === activeAlmacenId
-            return (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => onCell(s.id, cardKey)}
-                aria-label={`${s.nombre}: ${fmtNum(s.unidades)} unidades (${Math.round(s.pct)}%) — ver en galería`}
-                title={`Ver ${s.productos} producto(s) de ${f.es_general ? 'General' : f.proyecto_nombre} en ${s.nombre}`}
-                className={`group w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors focus-ring ${
-                  active
-                    ? 'bg-brand-50 dark:bg-brand-900/25 ring-1 ring-brand-200 dark:ring-brand-800'
-                    : 'hover:bg-ink-50 dark:hover:bg-ink-800/60'
-                }`}
-              >
-                <span className={`flex-1 min-w-0 truncate text-[12px] ${active ? 'text-brand-700 dark:text-brand-300 font-medium' : 'text-ink-700 dark:text-ink-200 group-hover:text-brand-600 dark:group-hover:text-brand-300'}`}>
-                  {s.nombre}
-                </span>
-                <span className="flex-shrink-0 tabular-nums text-[12px] font-semibold text-ink-900 dark:text-ink-100">
-                  {fmtNum(s.unidades)}
-                  <span className="ml-0.5 font-normal text-ink-400 dark:text-ink-500">u</span>
-                </span>
-                <span className="flex-shrink-0 w-9 text-right tabular-nums text-[11px] text-ink-400 dark:text-ink-500">
-                  {Math.round(s.pct)}%
-                </span>
-                <ChevronRight size={13} className={`flex-shrink-0 transition-colors ${active ? 'text-brand-500' : 'text-ink-300 dark:text-ink-600 group-hover:text-brand-500'}`} />
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Materiales por proyecto (tarjetas) ───────────────────────────────────────
-// Cada proyecto (General = stock libre) es una tarjeta con su total dominante,
-// nº de productos y una barra que reparte las unidades entre almacenes; cada
-// almacén de la leyenda enlaza a la galería filtrada. Reutiliza el endpoint
-// /almacenes/resumen-proyectos y la paleta navy de las gráficas del Dashboard.
-function ResumenProyectos({ data, onCell, activeAlmacenId, activeProyecto }) {
-  const [open, setOpen] = useState(true)
-  const almacenes = data?.almacenes || []
-  const filas = data?.filas || []
-  const granTotal = Number(data?.total_unidades || 0)
-
-  // Proyectos ordenados por volumen (mayor arriba) — ranking corporativo. Cada
-  // tarjeta trae ya calculados sus segmentos por almacén (con % de reparto).
-  const cards = useMemo(() => (
-    [...filas]
-      .sort((a, b) => Number(b.total_unidades || 0) - Number(a.total_unidades || 0))
-      .map((f) => {
-        const key = f.proyecto_id ?? 'general'
-        const projTotal = Number(f.total_unidades || 0)
-        const segs = almacenes
-          .map((a) => {
-            const celda = f.celdas?.[String(a.id)]
-            const u = Number(celda?.unidades || 0)
-            return {
-              id: a.id, nombre: a.nombre, unidades: u,
-              productos: Number(celda?.productos || 0),
-              pct: projTotal > 0 ? (u / projTotal) * 100 : 0,
-            }
-          })
-          .filter((s) => s.unidades > 0)
-          .sort((a, b) => b.unidades - a.unidades)
-        return { f, key, projTotal, segs }
-      })
-  ), [filas, almacenes])
-
-  return (
-    <section className="space-y-3">
-      {/* Encabezado corporativo (chip + título + subtítulo + toggle) — compartido */}
-      <SectionHeader
-        Icon={LayoutGrid}
-        title="Materiales por proyecto"
-        subtitle={
-          `${filas.length} proyecto${filas.length === 1 ? '' : 's'} con existencia · ${fmtNum(granTotal)} unidades`
-          + (almacenes.length ? ` · ${almacenes.length} almacén${almacenes.length === 1 ? '' : 'es'}` : '')
-        }
-        action={
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-ink-500 dark:text-ink-400 hover:text-brand-600 dark:hover:text-brand-300 transition-colors flex-shrink-0 focus-ring rounded px-1.5 py-1"
-          >
-            {open ? 'Ocultar' : 'Mostrar'}
-            <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-          </button>
-        }
-      />
-
-      {open && (
-        filas.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-ink-300 dark:border-ink-700 px-6 py-8 text-center text-sm text-ink-500 dark:text-ink-400">
-            Aún no hay materiales con existencia. Registra entradas para verlos aquí.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {cards.map(({ f, key, projTotal, segs }) => (
-              <ProyectoCard
-                key={key}
-                f={f}
-                cardKey={key}
-                projTotal={projTotal}
-                segs={segs}
-                onCell={onCell}
-                activeAlmacenId={activeAlmacenId}
-                activeProyecto={activeProyecto}
-              />
-            ))}
-          </div>
-        )
-      )}
-    </section>
-  )
-}
 
 export default function PortadaAlmacenes() {
+  // ── La ventana sirve para ELEGIR; el material se ve en la página ────────
+  // Clic en una bodega → se abre una ventana con los proyectos que tienen
+  // material ahí → al elegir uno, la ventana se cierra y el material aparece
+  // abajo, en la página, como siempre.
+  //
+  // Por eso hay dos cosas separadas: lo que se está eligiendo en la ventana
+  // (`modalAlmacenId`) y lo que la página está mostrando (`selectedId` +
+  // `proyecto`). Si abres la ventana y la cierras sin elegir, lo que ya estabas
+  // viendo se queda como estaba.
+  const [modalAbierto, setModalAbierto] = useState(false)
+  const [modalAlmacenId, setModalAlmacenId] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [page, setPage] = useState(0)               // 0-based (Pagination)
   const [search, setSearch] = useState('')
@@ -418,33 +305,95 @@ export default function PortadaAlmacenes() {
   )
   const bajoMinimo = useMemo(() => rawBajoMinimo ?? [], [rawBajoMinimo])
 
-  // Ref a la galería para desplazarse al hacer clic en una celda del resumen.
-  const galleryRef = useRef(null)
-  const handleResumenCell = (almacenId, proyId) => {
-    setSelectedId(almacenId)
-    setProyecto(proyId === 'general' ? 'general' : String(proyId))
-    setTimeout(() => galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60)
+  // ── Cambiar de almacén o de filtro vuelve a la página 1, EN EL MISMO evento ──
+  // Antes esto vivía en un useEffect y llegaba tarde: entre el clic y el efecto
+  // había un render con el almacén NUEVO y la página VIEJA, así que se pedía al
+  // servidor una página que a veces no existe en ese almacén. Eso disparaba una
+  // consulta de más y, si el almacén nuevo tenía menos páginas, la galería
+  // parpadeaba (o mostraba "Sin existencias") antes de saltar sola a la primera.
+  const cambiarFiltro = (setter) => (valor) => { setter(valor); setPage(0) }
+  const limpiarFiltros = () => {
+    setSearch(''); setCategoria(''); setImagen(''); setPage(0)
+  }
+
+  // Al cambiar lo que se muestra, la búsqueda y los filtros de la galería se
+  // reinician: eran de la selección anterior.
+  const limpiarBusqueda = () => { setPage(0); setSearch(''); setCategoria(''); setImagen('') }
+
+  // Abrir la ventana NO cambia lo que la página muestra: solo propone.
+  const abrirSelector = (almacenId) => { setModalAlmacenId(almacenId); setModalAbierto(true) }
+  const cerrarSelector = () => setModalAbierto(false)
+
+  // Elegir sí aplica: cierra la ventana y la galería de abajo pasa a ese
+  // almacén y proyecto. `''` = todo el material del almacén.
+  const elegir = (claveProyecto) => {
+    setSelectedId(modalAlmacenId)
+    setProyecto(claveProyecto)
+    limpiarBusqueda()
+    setModalAbierto(false)
   }
 
   useEffect(() => {
     if (errResumen) toast.error(extractApiError(errResumen, 'Error al cargar los almacenes'))
   }, [errResumen])
 
-  // Autoselección del primer almacén; si el seleccionado desaparece, cae al primero.
+  // Si la bodega que se está mostrando desaparece (la borraron u otro usuario la
+  // desactivó), se limpia en vez de quedar con datos fantasma. El efecto de
+  // abajo se encarga de volver a llenar la página.
   useEffect(() => {
-    if (!resumen.length) return
-    if (selectedId == null || !resumen.some((a) => a.almacen_id === selectedId)) {
-      setSelectedId(resumen[0].almacen_id)
+    if (selectedId == null || !resumen.length) return
+    if (!resumen.some((a) => a.almacen_id === selectedId)) {
+      setSelectedId(null); setProyecto(''); limpiarBusqueda()
     }
+  }, [resumen, selectedId])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Al entrar, la página muestra el almacén PRINCIPAL para no abrir en blanco.
+  // "Principal" = el que más unidades tiene, no el primero de la lista (que va
+  // por orden alfabético y bien podría estar vacío, que es justo lo que se
+  // quiere evitar). Solo aplica cuando no hay nada elegido; en cuanto el usuario
+  // elige algo, manda su elección.
+  useEffect(() => {
+    if (selectedId != null || resumen.length === 0) return
+    const principal = resumen.reduce((mayor, a) => (
+      Number(a.total_unidades || 0) > Number(mayor.total_unidades || 0) ? a : mayor
+    ), resumen[0])
+    if (principal) { setSelectedId(principal.almacen_id); setProyecto('') }
   }, [resumen, selectedId])
 
-  // Reinicia a la primera página al cambiar de almacén o de filtros.
-  useEffect(() => { setPage(0) }, [selectedId, debounced, categoria, imagen, proyecto])
+  // Red de seguridad: el reinicio real se hace al navegar y al filtrar; si la
+  // página ya es 0, React ni re-renderiza.
+  useEffect(() => { setPage(0) }, [debounced, categoria, imagen])
+
+  // Proyectos CON material en la bodega que se está eligiendo en la ventana.
+  // Sale del mismo resumen que ya se carga para la página: sin consultas extra.
+  const proyectosDelAlmacen = useMemo(() => {
+    const filas = rawResumenProy?.filas || []
+    return filas
+      .map((f) => {
+        const celda = f.celdas?.[String(modalAlmacenId)]
+        const unidades = Number(celda?.unidades || 0)
+        if (unidades <= 0) return null
+        return {
+          clave: f.es_general ? 'general' : String(f.proyecto_id),
+          nombre: f.es_general ? 'General' : f.proyecto_nombre,
+          detalle: f.es_general
+            ? 'Material libre, sin apartar a ningún proyecto'
+            : (f.proyecto_descripcion || ''),
+          esGeneral: !!f.es_general,
+          unidades,
+          productos: Number(celda?.productos || 0),
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.unidades - a.unidades)
+  }, [rawResumenProy, modalAlmacenId])
 
   // Galería del almacén seleccionado (paginada, server-side).
   const { data: rawStock, loading: loadingStock, error: errStock } = useResource(
     ['almacen-stock', { id: selectedId, page, q: debounced, categoria, imagen, proyecto }],
     () => getAlmacenStock(selectedId, { page: page + 1, perPage: PAGE_SIZE, q: debounced, categoria, imagen, proyecto }),
+    // Solo se pide el catálogo cuando hay una selección aplicada (es decir,
+    // cuando la galería de abajo está en pantalla).
     { enabled: selectedId != null, staleMs: 30_000, invalidateOn: ALMACEN_EVENTS },
   )
   useEffect(() => {
@@ -453,8 +402,13 @@ export default function PortadaAlmacenes() {
 
   const stock = rawStock ?? { items: [], total: 0, pages: 1, total_unidades: 0 }
   const selected = resumen.find((a) => a.almacen_id === selectedId) || null
+  // El almacén que se está eligiendo en la ventana (puede no ser el que se está
+  // mostrando abajo: abrir la ventana no cambia la galería hasta que eliges).
+  const almacenDelModal = resumen.find((a) => a.almacen_id === modalAlmacenId) || null
   const buscando = search.trim() !== debounced
-  const nFiltros = (categoria ? 1 : 0) + (imagen ? 1 : 0) + (proyecto ? 1 : 0)
+  // El proyecto ya no es un filtro suelto: es el paso en el que estás, y se ve
+  // en la ruta de arriba. Aquí solo cuentan los filtros de la galería.
+  const nFiltros = (categoria ? 1 : 0) + (imagen ? 1 : 0)
   const proyectoLabel = proyecto === 'general'
     ? 'General (sin proyecto)'
     : (proyectos.find((p) => String(p.id) === String(proyecto))?.numero_proyecto || null)
@@ -465,10 +419,12 @@ export default function PortadaAlmacenes() {
   const nProyectos = (rawResumenProy?.filas || []).filter((f) => !f.es_general).length
   const kpis = [
     { label: 'Almacenes', value: loadingResumen ? '—' : resumen.length.toLocaleString('es-MX'), Icon: Warehouse, to: '/inventario/almacenes' },
-    { label: 'Productos con existencia', value: rawResumenProy ? Number(rawResumenProy.total_productos || 0).toLocaleString('es-MX') : '—', Icon: PackageCheck, to: '/inventario/catalogo' },
-    { label: 'Unidades en inventario', value: rawResumenProy ? fmtNum(rawResumenProy.total_unidades) : '—', Icon: Boxes },
-    { label: 'Proyectos con material', value: rawResumenProy ? nProyectos.toLocaleString('es-MX') : '—', Icon: FolderOpen, to: '/inventario/proyectos' },
-    { label: 'Bajo mínimo', value: rawBajoMinimo ? bajoMinimo.length.toLocaleString('es-MX') : '—', Icon: AlertTriangle, to: '/inventario/bajo-minimo', tone: bajoMinimo.length > 0 ? 'alert' : 'default' },
+    { label: 'Productos con existencia', value: rawResumenProy ? Number(rawResumenProy.total_productos || 0).toLocaleString('es-MX') : '—', Icon: PackageSearch, to: '/inventario/catalogo' },
+    // `Package` y no `Boxes`: este KPI cuenta unidades sueltas, y `Boxes` es el
+    // icono de "material por proyecto" (menú y sección de abajo).
+    { label: 'Unidades en inventario', value: rawResumenProy ? fmtNum(rawResumenProy.total_unidades) : '—', Icon: Package },
+    { label: 'Proyectos con material', value: rawResumenProy ? nProyectos.toLocaleString('es-MX') : '—', Icon: FolderKanban, to: '/inventario/proyectos' },
+    { label: 'Bajo mínimo', value: rawBajoMinimo ? bajoMinimo.length.toLocaleString('es-MX') : '—', Icon: PackageMinus, to: '/inventario/bajo-minimo', tone: bajoMinimo.length > 0 ? 'alert' : 'default' },
   ]
 
   return (
@@ -483,14 +439,15 @@ export default function PortadaAlmacenes() {
               </h1>
             </div>
             <p className="text-sm text-ink-500 dark:text-ink-400 mt-1.5 max-w-2xl">
-              Control de materiales por almacén y por proyecto. Selecciona un almacén para consultar su catálogo.
+              Abajo se muestra el material del almacén principal. Abre otro almacén para ver
+              sus proyectos y cambiar lo que se lista.
             </p>
           </div>
           <Link
             to="/inventario/actividad"
             className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-700 dark:text-ink-200 hover:border-ink-300 dark:hover:border-ink-600 transition-colors flex-shrink-0"
           >
-            <Activity size={15} className="text-ink-400" /> Actividad y auditoría <ChevronRight size={15} className="text-ink-400" />
+            <LayoutDashboard size={15} className="text-ink-400" /> Actividad y auditoría <ChevronRight size={15} className="text-ink-400" />
           </Link>
         </div>
 
@@ -498,34 +455,14 @@ export default function PortadaAlmacenes() {
         <QuickActions />
       </div>
 
-      {/* KPIs — StatCards del Dashboard (clickeables; Bajo mínimo con alerta) */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {kpis.map((k) => (
-          <StatCard key={k.label} value={k.value} label={k.label} Icon={k.Icon} to={k.to} tone={k.tone} />
-        ))}
-      </div>
-
-      {/* La tira de alerta de bajo mínimo se movió a la navbar (BajoMinimoBell)
-          para que acompañe al almacenista por toda la app. Aquí queda el KPI. */}
-
-      {/* Resumen de materiales por proyecto y almacén */}
-      {rawResumenProy && (
-        <ResumenProyectos
-          data={rawResumenProy}
-          onCell={handleResumenCell}
-          activeAlmacenId={selectedId}
-          activeProyecto={proyecto}
-        />
-      )}
-
-      {/* Almacenes */}
+      {/* ── La página: las bodegas, siempre a la vista ─────────────────────── */}
       <section className="space-y-3">
         <SectionHeader
           Icon={Warehouse}
           title="Almacenes"
           subtitle={loadingResumen
             ? 'Cargando…'
-            : `${resumen.length} almacén${resumen.length === 1 ? '' : 'es'} · elige uno para ver su catálogo`}
+            : `${resumen.length} almacén${resumen.length === 1 ? '' : 'es'} · abre uno para ver su material`}
         />
         {loadingResumen ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -551,27 +488,125 @@ export default function PortadaAlmacenes() {
                 key={a.almacen_id}
                 almacen={a}
                 selected={a.almacen_id === selectedId}
-                onSelect={setSelectedId}
+                onSelect={abrirSelector}
               />
             ))}
           </div>
         )}
       </section>
 
-      {/* Galería del almacén seleccionado */}
-      {selected && (
-        <section className="space-y-4 pt-5 border-t border-ink-200 dark:border-ink-800" ref={galleryRef}>
+      {/* ── La ventana: solo para elegir qué mostrar abajo ─────────────────── */}
+      <Modal
+        open={modalAbierto}
+        onClose={cerrarSelector}
+        size="lg"
+        title={almacenDelModal?.nombre || 'Almacén'}
+        description={almacenDelModal?.ubicacion || 'Elige qué material quieres ver'}
+        footer={
+          <button
+            type="button"
+            onClick={cerrarSelector}
+            className="inline-flex items-center h-9 px-3.5 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-700 dark:text-ink-200 hover:border-ink-300 dark:hover:border-ink-600 transition-colors"
+          >
+            Cancelar
+          </button>
+        }
+      >
+        <section className="space-y-3">
           <SectionHeader
             Icon={Boxes}
+            title="Proyectos con material aquí"
+            subtitle={proyectosDelAlmacen.length === 0
+              ? 'Este almacén no tiene material registrado'
+              : `${proyectosDelAlmacen.length} proyecto${proyectosDelAlmacen.length === 1 ? '' : 's'} · elige uno para verlo abajo`}
+            action={
+              <button
+                type="button"
+                onClick={() => elegir('')}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 transition-colors flex-shrink-0"
+              >
+                Ver todo el material <ChevronRight size={15} />
+              </button>
+            }
+          />
+          {proyectosDelAlmacen.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-ink-300 dark:border-ink-700 px-6 py-10 text-center">
+              <h3 className="text-base font-semibold text-ink-900 dark:text-ink-100">Sin existencias</h3>
+              <p className="text-sm text-ink-500 dark:text-ink-400 mt-1 max-w-sm mx-auto">
+                Todavía no hay material registrado en este almacén.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {proyectosDelAlmacen.map((p) => (
+                <button
+                  key={p.clave}
+                  type="button"
+                  onClick={() => elegir(p.clave)}
+                  className="group text-left rounded-xl border border-ink-200 dark:border-ink-800 bg-white dark:bg-ink-900 px-4 py-3.5 hover:border-brand-300 dark:hover:border-brand-700 transition-colors focus-ring"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div className={`h-9 w-9 rounded-lg inline-flex items-center justify-center flex-shrink-0 ${
+                      p.esGeneral
+                        ? 'bg-ink-100 text-ink-600 dark:bg-ink-800 dark:text-ink-300'
+                        : 'bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300'
+                    }`}>
+                      {p.esGeneral ? <Package size={17} strokeWidth={1.8} /> : <FolderKanban size={17} strokeWidth={1.8} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-100 truncate">{p.nombre}</h3>
+                      <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400 truncate">
+                        {p.detalle || 'Material apartado a este proyecto'}
+                      </p>
+                    </div>
+                    <ChevronRight size={15} className="text-ink-300 dark:text-ink-600 group-hover:text-brand-500 flex-shrink-0 transition-colors" />
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-ink-100 dark:border-ink-800/80 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">
+                        {p.productos.toLocaleString('es-MX')}
+                      </p>
+                      <p className={`mt-1.5 ${LABEL}`}>Productos</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100 leading-none">
+                        {fmtNum(p.unidades)}
+                      </p>
+                      <p className={`mt-1.5 ${LABEL}`}>Unidades</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      </Modal>
+
+      {/* ── El material, en la página (como siempre) ───────────────────────── */}
+      {selected && (
+        <section className="space-y-4 pt-5 border-t border-ink-200 dark:border-ink-800">
+          <SectionHeader
+            // Esta sección lista PRODUCTOS (con buscador y filtros), por eso el
+            // mismo icono que el catálogo.
+            Icon={PackageSearch}
             title={selected.nombre}
-            titleExtra={proyectoLabel && (
+            titleExtra={
               <span className="px-2 py-0.5 rounded border border-brand-300 dark:border-brand-700 text-brand-700 dark:text-brand-300 text-[10px] font-semibold uppercase tracking-wide flex-shrink-0">
-                {proyectoLabel}
+                {proyecto === '' ? 'Todo el material' : (proyectoLabel || 'Proyecto')}
               </span>
-            )}
+            }
             subtitle={
-              `${stock.total.toLocaleString('es-MX')} producto${stock.total === 1 ? '' : 's'} con existencia · ${fmtNum(stock.total_unidades)} unidades`
-              + (proyectoLabel ? ' · apartadas a este proyecto' : '')
+              `${stock.total.toLocaleString('es-MX')} producto${stock.total === 1 ? '' : 's'} · ${fmtNum(stock.total_unidades)} unidades`
+              + (proyecto !== '' ? ' apartadas a este proyecto' : ' en este almacén')
+            }
+            action={
+              <button
+                type="button"
+                onClick={() => abrirSelector(selectedId)}
+                className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-700 dark:text-ink-200 hover:border-ink-300 dark:hover:border-ink-600 transition-colors flex-shrink-0"
+              >
+                Cambiar proyecto
+              </button>
             }
           />
 
@@ -583,13 +618,13 @@ export default function PortadaAlmacenes() {
                 type="text"
                 placeholder="Buscar por código o descripción..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => cambiarFiltro(setSearch)(e.target.value)}
                 className="block w-full h-9 pl-9 pr-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
               />
             </div>
             <select
               value={categoria}
-              onChange={(e) => setCategoria(e.target.value)}
+              onChange={(e) => cambiarFiltro(setCategoria)(e.target.value)}
               className="h-9 px-3 w-full sm:w-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-ink-700 dark:text-ink-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
             >
               <option value="">Todas las categorías</option>
@@ -597,33 +632,21 @@ export default function PortadaAlmacenes() {
             </select>
             <select
               value={imagen}
-              onChange={(e) => setImagen(e.target.value)}
+              onChange={(e) => cambiarFiltro(setImagen)(e.target.value)}
               className="h-9 px-3 w-full sm:w-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-ink-700 dark:text-ink-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
             >
               <option value="">Con y sin foto</option>
               <option value="con">Con foto</option>
               <option value="sin">Sin foto</option>
             </select>
-            {/* Filtro por proyecto (feature stock por proyecto): sin selección se
-                muestra el total del almacén; con proyecto, solo ese bucket. */}
-            <select
-              value={proyecto}
-              onChange={(e) => setProyecto(e.target.value)}
-              title="Filtrar existencias por proyecto"
-              className="h-9 px-3 w-full sm:w-auto rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm text-ink-700 dark:text-ink-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-            >
-              <option value="">Todos los proyectos</option>
-              <option value="general">General (sin proyecto)</option>
-              {proyectos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.numero_proyecto}{p.nombre ? ` — ${p.nombre}` : ''}
-                </option>
-              ))}
-            </select>
+            {/* El selector de proyecto desapareció a propósito: el proyecto es
+                el paso en el que estás (se ve en la ruta de arriba y se cambia
+                volviendo). Tenerlo aquí además del recorrido era la segunda
+                forma de hacer lo mismo. */}
             {(nFiltros > 0 || search) && (
               <button
                 type="button"
-                onClick={() => { setSearch(''); setCategoria(''); setImagen(''); setProyecto('') }}
+                onClick={limpiarFiltros}
                 className="inline-flex items-center h-9 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm font-medium text-ink-600 dark:text-ink-300 hover:border-ink-300 dark:hover:border-ink-600 transition-colors flex-shrink-0"
               >
                 Limpiar filtros
@@ -667,6 +690,19 @@ export default function PortadaAlmacenes() {
           )}
         </section>
       )}
+
+      {/* ── Panorama ────────────────────────────────────────────────────────
+          Los totales del inventario. La matriz proyectos × almacenes salió de
+          aquí: hacía lo mismo que el recorrido y era el segundo selector de
+          almacén. Vive en su pantalla del menú (Material por proyecto). */}
+      <section className="space-y-3 pt-5 border-t border-ink-200 dark:border-ink-800">
+        <h2 className="text-sm font-semibold text-ink-800 dark:text-ink-200">Panorama del inventario</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {kpis.map((k) => (
+            <StatCard key={k.label} value={k.value} label={k.label} Icon={k.Icon} to={k.to} tone={k.tone} />
+          ))}
+        </div>
+      </section>
 
       <div className="pt-4 text-xs text-ink-400 dark:text-ink-500 border-t border-ink-200 dark:border-ink-800">
         Skilled &middot; Sistema de inventario &copy; {new Date().getFullYear()}

@@ -206,7 +206,10 @@ export default function MaterialGeneral() {
                         variant="ghost"
                         size="icon-sm"
                         title="Ver kardex del material"
-                        onClick={() => navigate(`/inventario/productos/${m.producto_id}/kardex`)}
+                        onClick={() => navigate(`/inventario/productos/${m.producto_id}/kardex`, {
+                          state: { volverA: '/inventario/material-proyecto/general',
+                                   volverLabel: 'Volver a material general' },
+                        })}
                       >
                         <History size={15} />
                       </Button>

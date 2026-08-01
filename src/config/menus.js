@@ -2,10 +2,15 @@ import {
   Home, User, Users, UserCog, FolderOpen, FolderKanban, Clock, CalendarClock,
   DollarSign, HandCoins,
   Settings2, IdCard, PieChart, FileClock, History,
-  Package, Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine, PlusSquare,
+  Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  LineChart, MonitorSmartphone, ShieldAlert, PackageOpen,
+  MonitorSmartphone, ShieldAlert,
+  // Módulo de inventario: iconos que dicen QUÉ es cada pantalla en vez de
+  // genéricos (una bodega, un faltante de material…). Los de Herramientas van
+  // en orden de ciclo de vida: Wrench → Layers → Handshake → Cog → Bandage.
+  LayoutDashboard, PackageSearch, PackageMinus, Warehouse, CircleUser,
+  Layers, Handshake, Cog, Bandage,
   // Panel de sistemas: iconos propios, sin reutilizar los de otros módulos
   // (Wrench, por ejemplo, ES el catálogo de herramientas en este sistema).
   Gauge, Network, LockKeyhole, DatabaseZap, UserRoundCog,
@@ -141,26 +146,46 @@ export const MENUS = {
     {
       label: 'Cuenta',
       items: [
+        // Para este rol, Inicio abre la portada de almacenes. `Home` se queda:
+        // es la convención de "inicio" y cambiarla lo haría menos reconocible,
+        // no más fino.
         { path: '/', label: 'Inicio', icon: Home, end: true },
-        { path: '/inventario/actividad', label: 'Actividad y auditoría', icon: LineChart },
-        { path: '/perfil', label: 'Mi perfil', icon: User },
+        // La pantalla es un tablero: gráficas por categoría, movimientos por
+        // tipo y solicitudes recientes. `Activity` sugería un feed en vivo y
+        // `LineChart` se confundía con Reportes, otra entrada de este menú.
+        // `Gauge` tampoco: ese ya es "Estado del servidor" en el menú de
+        // sistemas, y aquí cada módulo usa iconos propios.
+        { path: '/inventario/actividad', label: 'Actividad y auditoría', icon: LayoutDashboard },
+        // Perfil personal, con contorno: se distingue del `Users` del directorio
+        // y del `UserCog` de empleados en los otros menús.
+        { path: '/perfil', label: 'Mi perfil', icon: CircleUser },
       ],
     },
     {
       label: 'Materiales',
       items: [
-        { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
-        { path: '/inventario/bajo-minimo', label: 'Bajo mínimo', icon: AlertTriangle },
-        { path: '/inventario/almacenes', label: 'Almacenes', icon: Boxes },
-        { path: '/inventario/material-proyecto', label: 'Material por proyecto', icon: PackageOpen },
+        // Mismo icono que el encabezado de la pantalla de Catálogo: el menú y la
+        // página se reconocen como lo mismo.
+        { path: '/inventario/catalogo', label: 'Catálogo', icon: PackageSearch },
+        // Faltante de material, no un triángulo de peligro genérico (que además
+        // se repetía tres veces en este mismo menú).
+        { path: '/inventario/bajo-minimo', label: 'Bajo mínimo', icon: PackageMinus },
+        // Un almacén es una bodega: lucide tiene el icono exacto.
+        { path: '/inventario/almacenes', label: 'Almacenes', icon: Warehouse },
+        // Lotes de material agrupados por obra (Boxes queda libre al pasar
+        // Almacenes a Warehouse).
+        { path: '/inventario/material-proyecto', label: 'Material por proyecto', icon: Boxes },
         { path: '/inventario/etiquetas', label: 'Etiquetas', icon: Tag },
       ],
     },
     {
       label: 'Movimientos',
       items: [
-        { path: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', icon: PlusSquare },
-        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: ArrowRightLeft, end: true },
+        // El par cuenta la misma historia: las flechas son el acto de mover
+        // material; el reloj, lo que ya pasó. Antes "registrar" era un genérico
+        // "+" y las flechas estaban en el historial.
+        { path: '/inventario/movimientos/nuevo', label: 'Registrar movimiento', icon: ArrowRightLeft },
+        { path: '/inventario/movimientos', label: 'Historial movimientos', icon: History, end: true },
         { path: '/inventario/tomas', label: 'Tomas físicas', icon: ClipboardCheck },
         { path: '/inventario/scanner', label: 'Escáner QR', icon: ScanLine, mobileOnly: true },
       ],
@@ -176,18 +201,28 @@ export const MENUS = {
     {
       label: 'Proyectos y reportes',
       items: [
-        { path: '/inventario/proyectos', label: 'Proyectos', icon: FolderOpen },
+        // Un proyecto de obra, no una carpeta cualquiera.
+        { path: '/inventario/proyectos', label: 'Proyectos', icon: FolderKanban },
         { path: '/inventario/reportes', label: 'Reportes', icon: FileSpreadsheet },
       ],
     },
     {
       label: 'Herramientas',
+      // Los cinco iconos cuentan el ciclo de vida de una herramienta, en orden:
+      // existe → tiene ejemplares → se entrega → se le da servicio → se daña.
+      // Leídos en fila se entienden sin abrir ninguna pantalla.
       items: [
         { path: '/inventario/herramientas', label: 'Catálogo', icon: Wrench, end: true },
-        { path: '/inventario/herramientas/unidades', label: 'Unidades', icon: Hammer },
-        { path: '/inventario/herramientas/asignaciones', label: 'Asignaciones', icon: HardHat },
-        { path: '/inventario/herramientas/mantenimientos', label: 'Mantenimientos', icon: Settings2 },
-        { path: '/inventario/herramientas/incidencias', label: 'Incidencias y bajas', icon: AlertTriangle },
+        // Ejemplares del mismo modelo apilados. Un segundo dibujo de herramienta
+        // (martillo, taladro) haría creer que es otro catálogo distinto.
+        { path: '/inventario/herramientas/unidades', label: 'Unidades', icon: Layers },
+        // La entrega en mano a un trabajador, que es lo que registra la pantalla.
+        { path: '/inventario/herramientas/asignaciones', label: 'Asignaciones', icon: Handshake },
+        // Engrane = servicio mecánico. `Settings2` decía "ajustes" y además es el
+        // icono de Ajustes Inbursa en el menú de admin.
+        { path: '/inventario/herramientas/mantenimientos', label: 'Mantenimientos', icon: Cog },
+        // Herramienta lastimada: daño, pérdida o baja.
+        { path: '/inventario/herramientas/incidencias', label: 'Incidencias y bajas', icon: Bandage },
       ],
     },
     {
@@ -265,7 +300,9 @@ export const BOTTOM_NAV = {
   inventario: [
     { path: '/', label: 'Inicio', icon: Home, end: true },
     { path: '/inventario/scanner', label: 'Escanear', icon: ScanLine },
-    { path: '/inventario/catalogo', label: 'Catálogo', icon: Package },
+    // Mismo icono que en el sidebar: la barra inferior no debe nombrar la misma
+    // pantalla con otro dibujo.
+    { path: '/inventario/catalogo', label: 'Catálogo', icon: PackageSearch },
     { path: '/inventario/solicitudes', label: 'Solicitudes', icon: ClipboardList },
     { path: '/perfil', label: 'Cuenta', icon: User },
   ],

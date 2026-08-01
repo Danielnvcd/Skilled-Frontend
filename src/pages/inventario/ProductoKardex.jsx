@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, useLocation, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   ArrowLeft, History, TrendingUp, TrendingDown, Activity, ArrowRightLeft,
@@ -10,6 +10,34 @@ import {
 } from '../../components/ui'
 import { getProductoKardex } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
+import { safeRedirectPath } from '../../utils/safeRedirect'
+
+// ── ¿A dónde regresa el "volver"? ────────────────────────────────────────────
+// Al kardex se llega desde seis pantallas distintas (inicio, catálogo, bajo
+// mínimo, material general, material por proyecto…). El enlace estaba fijo al
+// catálogo, así que quien entraba desde Inicio terminaba en una pantalla que no
+// había pedido y sin forma obvia de volver.
+//
+// El origen viaja en el `state` de la navegación (no en la URL, para no
+// ensuciarla) y se sanea con `safeRedirectPath`: aunque el state lo pone la
+// propia app, ese valor termina en `navigate()`, que es justo el borde que
+// safeRedirect existe para proteger en react-router 6.x.
+const VUELTA_DEFAULT = { path: '/inventario/catalogo', label: 'Volver al catálogo' }
+
+function resolverVuelta(state) {
+  const destino = state?.volverA
+  if (typeof destino !== 'string') return VUELTA_DEFAULT
+  const path = safeRedirectPath(destino, VUELTA_DEFAULT.path)
+  // Si no sobrevivió el saneo, el rótulo que venía con él tampoco vale.
+  if (path === VUELTA_DEFAULT.path) return VUELTA_DEFAULT
+  const rotulo = state?.volverLabel
+  return {
+    path,
+    label: (typeof rotulo === 'string' && rotulo.trim() && rotulo.length <= 40)
+      ? rotulo.trim()
+      : 'Volver',
+  }
+}
 
 const TIPO_META = {
   ENTRADA:  { Icon: TrendingUp,    color: 'emerald', label: 'Entrada' },
@@ -52,6 +80,8 @@ function defaultRango() {
 export default function ProductoKardex() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
+  const vuelta = useMemo(() => resolverVuelta(location.state), [location.state])
   const def = useMemo(defaultRango, [])
   const [desde, setDesde] = useState(def.desde)
   const [hasta, setHasta] = useState(def.hasta)
@@ -66,7 +96,8 @@ export default function ProductoKardex() {
       .then(setData)
       .catch((err) => {
         toast.error(extractApiError(err, 'Error al cargar kardex'))
-        navigate('/inventario/catalogo')
+        // Si el producto no carga, se devuelve a donde estaba, no al catálogo.
+        navigate(vuelta.path)
       })
       .finally(() => setLoading(false))
   }
@@ -126,8 +157,8 @@ export default function ProductoKardex() {
           </span>
         }
         breadcrumb={
-          <Link to="/inventario/catalogo" className="hover:underline inline-flex items-center gap-1">
-            <ArrowLeft size={12} /> Volver al catálogo
+          <Link to={vuelta.path} className="hover:underline inline-flex items-center gap-1">
+            <ArrowLeft size={12} /> {vuelta.label}
           </Link>
         }
       />
