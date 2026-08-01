@@ -321,14 +321,19 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
 
   const asignadosIds = useMemo(() => new Set(asignados.map((p) => p.id)), [asignados])
 
-  const agregar = (p) => setAsignados((prev) => {
-    if (prev.some((x) => x.id === p.id)) return prev
-    if (prev.length >= TOPE_TOTAL) {
+  // El aviso va FUERA del updater de estado. React 18 en StrictMode invoca los
+  // updaters dos veces a propósito —para delatar los que no son funciones puras—
+  // así que un `toast` dentro salía duplicado. El updater se queda solo con el
+  // cálculo del nuevo estado, y conserva su guarda de duplicados porque es lo
+  // único que puede decidir con el `prev` de verdad.
+  const agregar = (p) => {
+    if (asignadosIds.has(p.id)) return
+    if (asignados.length >= TOPE_TOTAL) {
       toast.error(`Máximo ${TOPE_TOTAL} productos por PDF. Genera el resto en otra tanda.`)
-      return prev
+      return
     }
-    return [...prev, p]
-  })
+    setAsignados((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]))
+  }
   const quitar = (id) => setAsignados((prev) => prev.filter((p) => p.id !== id))
   const limpiar = () => setAsignados([])
 
@@ -339,23 +344,30 @@ function ProductosEtiquetaModal({ open, onClose, seleccionInicial, onConfirm }) 
     setSeleccionandoTodos(true)
     try {
       const todos = await fetchTodosProductos({ q: q.trim(), categoria: cat || undefined })
+      // Mismo motivo que en `agregar`: el reparto se decide aquí, con avisos
+      // incluidos, y al updater solo le llega la lista ya resuelta. Dentro del
+      // updater estos cuatro toasts se disparaban por duplicado.
+      const candidatos = todos.filter((p) => !asignadosIds.has(p.id))
+      const espacio = TOPE_TOTAL - asignados.length
+      if (espacio <= 0) {
+        toast.error(`Ya tienes el máximo de ${TOPE_TOTAL} productos. Genera el resto en otra tanda.`)
+        return
+      }
+      const nuevos = candidatos.slice(0, espacio)
+      if (nuevos.length === 0) {
+        toast('No hay productos nuevos que agregar')
+        return
+      }
+      if (candidatos.length > nuevos.length) {
+        toast(`Se agregaron ${nuevos.length} (tope de ${TOPE_TOTAL} por PDF). Genera el resto en otra tanda.`)
+      } else {
+        toast.success(`${nuevos.length} producto(s) agregado(s)`)
+      }
+      // La guarda de duplicados se repite contra `prev`: entre el `await` y este
+      // punto el usuario pudo haber marcado alguno a mano.
       setAsignados((prev) => {
         const yaIds = new Set(prev.map((p) => p.id))
-        const candidatos = todos.filter((p) => !yaIds.has(p.id))
-        const espacio = TOPE_TOTAL - prev.length
-        if (espacio <= 0) {
-          toast.error(`Ya tienes el máximo de ${TOPE_TOTAL} productos. Genera el resto en otra tanda.`)
-          return prev
-        }
-        const nuevos = candidatos.slice(0, espacio)
-        if (nuevos.length === 0) {
-          toast('No hay productos nuevos que agregar')
-        } else if (candidatos.length > nuevos.length) {
-          toast(`Se agregaron ${nuevos.length} (tope de ${TOPE_TOTAL} por PDF). Genera el resto en otra tanda.`)
-        } else {
-          toast.success(`${nuevos.length} producto(s) agregado(s)`)
-        }
-        return [...prev, ...nuevos]
+        return [...prev, ...nuevos.filter((p) => !yaIds.has(p.id))]
       })
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudieron cargar los productos'))

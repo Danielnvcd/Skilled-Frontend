@@ -373,11 +373,15 @@ function CrearSolicitudModal({ open, seed, onClose, onCreated }) {
   }, [open, seed])
 
   const agregarProducto = (p) => {
+    // El aviso va fuera del updater: React 18 en StrictMode los invoca dos veces
+    // para delatar los que no son puros, y el toast salía duplicado.
+    if (lineas.some((l) => l.producto_id === p.id)) {
+      toast('Ese producto ya está en la lista', { icon: <Info size={18} /> })
+      setBusq('')
+      return
+    }
     setLineas((prev) => {
-      if (prev.some((l) => l.producto_id === p.id)) {
-        toast('Ese producto ya está en la lista', { icon: <Info size={18} /> })
-        return prev
-      }
+      if (prev.some((l) => l.producto_id === p.id)) return prev
       return [...prev, {
         key: `p-${p.id}`, producto_id: p.id, codigo: p.codigo, descripcion: p.descripcion,
         unidad: p.unidad || '', cantidad: '1', precio: p.precio_unitario != null ? String(p.precio_unitario) : '', es_libre: false,

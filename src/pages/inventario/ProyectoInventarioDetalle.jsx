@@ -178,11 +178,14 @@ export default function ProyectoInventarioDetalle() {
   )
 
   const agregarProducto = (p) => {
+    // El aviso va fuera del updater: React 18 en StrictMode los invoca dos veces
+    // para delatar los que no son puros, y el toast salía duplicado.
+    if (plan[p.id]) {
+      toast('Ese material ya está en el plan')
+      return
+    }
     setPlan((prev) => {
-      if (prev[p.id]) {
-        toast('Ese material ya está en el plan')
-        return prev
-      }
+      if (prev[p.id]) return prev
       return {
         ...prev,
         [p.id]: {
