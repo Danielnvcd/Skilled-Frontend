@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   PackageCheck, Trash2, Plus, Minus, Save, User, Search,
@@ -119,8 +120,24 @@ export default function EntregaDirecta() {
   const [nombreLibre, setNombreLibre] = useState('')
   const [notas, setNotas] = useState('')
 
-  // Carrito de materiales: [{ producto, cantidad }]
-  const [items, setItems] = useState([])
+  // Carrito de materiales: [{ producto, cantidad }].
+  // Puede llegar precargado desde el catálogo (`state.productos`): ahí el
+  // almacenista ya eligió el material, y obligarlo a buscarlo otra vez en el
+  // modal de "Agregar material" era rehacer el trabajo que acababa de hacer.
+  const { pathname, state: precarga } = useLocation()
+  const navigate = useNavigate()
+  const [items, setItems] = useState(
+    () => (precarga?.productos ?? []).map((p) => ({ producto: p, cantidad: '1' })),
+  )
+
+  // La precarga se consume UNA vez y se borra del history. El state sobrevive a
+  // un F5 y al botón «atrás»: sin esto, entregar y recargar volvía a llenar el
+  // carrito con el material que se acababa de entregar —ya descontado del
+  // stock— listo para descontarlo otra vez sin que nada avisara.
+  useEffect(() => {
+    if (precarga) navigate(pathname, { replace: true, state: null })
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [])
 
   // Modales
   const [datosOpen, setDatosOpen] = useState(false)

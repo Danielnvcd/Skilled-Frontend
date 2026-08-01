@@ -227,9 +227,30 @@ export async function createMovimientoRapido(payload) {
   return data
 }
 
-// Vale (PDF) de un movimiento ya registrado; se abre en una pestaña nueva.
+// Comprobante (PDF) de un movimiento ya registrado; se abre en una pestaña nueva.
 export async function imprimirMovimiento(movId) {
   const res = await api.get(`${BASE}/movimientos/${movId}/pdf`, { responseType: 'blob' })
+  _openBlobInTab(res)
+}
+
+// N movimientos del MISMO tipo, bodega, proyecto y partes, en UNA transacción.
+// payload: { tipo, almacen_origen_id?, almacen_destino_id?, proyecto_id?,
+//            motivo?, entrega_*?, recibe_*?, items: [{producto_id, cantidad}] }
+// Es todo-o-nada: con 409 no se registró ninguno y `errores` dice cuáles
+// fallaron. Mandar N veces createMovimiento no es equivalente — ahí un fallo a
+// media lista deja stock movido y el resto no.
+export async function createMovimientosLote(payload) {
+  const { data } = await api.post(`${BASE}/movimientos/lote`, payload)
+  return data
+}
+
+// Comprobante (PDF) que cubre varios movimientos en UN documento — lo que se
+// imprime tras una tanda. Con un solo id sale igual que el de siempre.
+export async function imprimirValeMovimientos(ids) {
+  if (!ids?.length) return
+  const res = await api.get(`${BASE}/movimientos/vale`, {
+    params: { ids: ids.join(',') }, responseType: 'blob',
+  })
   _openBlobInTab(res)
 }
 

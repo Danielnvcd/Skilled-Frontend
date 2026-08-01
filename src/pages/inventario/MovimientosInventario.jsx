@@ -299,7 +299,7 @@ export default function MovimientosInventario() {
                     <THSort field="cantidad" sort={sort} dir={dir} onSort={onSort} align="right">Cantidad</THSort>
                     <TH>Entrega / Recibe</TH>
                     <TH>Motivo</TH>
-                    <TH align="right">Vale</TH>
+                    <TH align="right">Comprobante</TH>
                   </THead>
                   <TBody>
                     {sortedMovs.map((m) => {
@@ -342,8 +342,8 @@ export default function MovimientosInventario() {
                           <TD align="right">
                             <button
                               type="button"
-                              onClick={() => imprimirMovimiento(m.id).catch((err) => toast.error(extractApiError(err, 'No se pudo abrir el vale')))}
-                              title="Imprimir vale PDF"
+                              onClick={() => imprimirMovimiento(m.id).catch((err) => toast.error(extractApiError(err, 'No se pudo abrir el comprobante')))}
+                              title="Imprimir comprobante PDF"
                               className="inline-flex items-center justify-center w-8 h-8 rounded-md text-ink-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20"
                             >
                               <Printer size={15} />

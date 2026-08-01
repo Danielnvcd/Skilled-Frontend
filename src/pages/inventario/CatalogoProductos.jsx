@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn, AlertTriangle } from 'lucide-react'
+import { Package, PackageSearch, Plus, Search, Trash2, Edit2, Image as ImageIcon, Warehouse, History, SlidersHorizontal, X, Cable, ChevronRight, ChevronLeft, LayoutGrid, List, ZoomIn, AlertTriangle, MoreHorizontal } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   Button, Card, PageHeader, Modal, ConfirmDialog,
@@ -21,7 +21,34 @@ import { esCategoriaCable, CABLE_UNIDAD } from '../../utils/cable'
 import { useResource } from '../../hooks/useResource'
 import { invalidate } from '../../utils/resourceCache'
 import { useSocket } from '../../context/SocketContext'
+import AccionesProductoModal from '../../components/AccionesProductoModal'
 import { Upload, FileDown } from 'lucide-react'
+
+// Casilla de selección: una sola definición para galería, tabla y móvil, así
+// las tres vistas no se van separando visualmente con el tiempo.
+const CHECKBOX_CLS = 'h-4 w-4 rounded border-ink-300 dark:border-ink-600 text-brand-600 focus:ring-brand-500 cursor-pointer'
+
+// Dónde te quedaste la última vez: cuadrícula de categorías, dentro de una
+// categoría, o "ver todos". Se guarda aparte de `catalogo_vista` (galería vs
+// tabla) porque son dos cosas distintas: una es QUÉ estás mirando y la otra
+// CÓMO. Sin esto el catálogo siempre abría en la cuadrícula y había que volver
+// a navegar a la misma categoría cada vez.
+//
+// A propósito NO se guardan la búsqueda ni los filtros avanzados: restaurar un
+// filtro que no está a la vista deja el catálogo recortado sin explicación.
+const UBICACION_KEY = 'catalogo_ubicacion'
+
+function ubicacionInicial() {
+  try {
+    const u = JSON.parse(localStorage.getItem(UBICACION_KEY) || 'null')
+    return {
+      verTodos: !!u?.verTodos,
+      categoria: typeof u?.categoria === 'string' ? u.categoria : '',
+    }
+  } catch {
+    return { verTodos: false, categoria: '' }
+  }
+}
 
 // ── Campo (label + valor) de la ficha de detalle del producto ────────────────
 // Se usa en el modal que se abre al hacer click en la imagen de un producto.
@@ -228,13 +255,17 @@ function BucketEditor({ productoId, unidad, almacenes, proyectos, onSaved }) {
 }
 
 export default function CatalogoProductos() {
+  // Se lee una sola vez, al montar: a partir de ahí manda lo que haga el usuario.
+  const [ubicacion] = useState(ubicacionInicial)
+
   const [search, setSearch] = useState('')
-  const [categoriaFiltro, setCategoriaFiltro] = useState('')
+  const [categoriaFiltro, setCategoriaFiltro] = useState(ubicacion.categoria)
   const [categorias, setCategorias] = useState([])
 
   // "Ver todos los materiales": lista el catálogo completo (todas las categorías)
-  // sin entrar a una. La cuadrícula de categorías es la vista por defecto.
-  const [verTodos, setVerTodos] = useState(false)
+  // sin entrar a una. La cuadrícula de categorías es el arranque por defecto,
+  // salvo que la última vez te hubieras quedado en otro sitio.
+  const [verTodos, setVerTodos] = useState(ubicacion.verTodos)
   // Modo de vista de la lista: 'galeria' (fotos grandes) o 'tabla'. Se recuerda.
   const [vista, setVista] = useState(() => {
     try { return localStorage.getItem('catalogo_vista') || 'galeria' } catch { return 'galeria' }
@@ -242,6 +273,15 @@ export default function CatalogoProductos() {
   useEffect(() => {
     try { localStorage.setItem('catalogo_vista', vista) } catch { /* ignore */ }
   }, [vista])
+
+  // Guarda la ubicación en cuanto cambia. Volver a la cuadrícula con
+  // `volverACategorias` guarda el estado vacío, así que "quiero empezar en
+  // categorías" también se respeta.
+  useEffect(() => {
+    try {
+      localStorage.setItem(UBICACION_KEY, JSON.stringify({ verTodos, categoria: categoriaFiltro }))
+    } catch { /* ignore */ }
+  }, [verTodos, categoriaFiltro])
 
   // Filtros avanzados del catálogo (server-side, combinables con categoría/búsqueda).
   const [stockFiltro, setStockFiltro] = useState('')   // '' | 'bajo' | 'sin'
@@ -438,6 +478,25 @@ export default function CatalogoProductos() {
   const [imgModal, setImgModal] = useState(null)  // producto completo | null
   const verImagen = (p) => { if (p) setImgModal(p) }
 
+  // ── Acciones de inventario sobre el producto (entrada/salida/ajuste, entrega,
+  // traspaso…). `null` = cerrado; si no, la lista de productos sobre los que se
+  // va a actuar. Antes, mover material que ya tenías en pantalla obligaba a ir
+  // a "Registrar movimiento" y buscarlo de nuevo ahí.
+  const [accionesProductos, setAccionesProductos] = useState(null)
+
+  // Selección múltiple para actuar sobre varios a la vez. Se guarda el producto
+  // COMPLETO y no solo el id: el modal necesita unidad, código y stock, y la
+  // selección tiene que sobrevivir al cambio de página o de filtro, donde el
+  // producto ya no está en `filtered` para poder buscarlo.
+  const [seleccion, setSeleccion] = useState(() => new Map())
+  const toggleSeleccion = (p) => setSeleccion((prev) => {
+    const m = new Map(prev)
+    if (m.has(p.id)) m.delete(p.id)
+    else m.set(p.id, p)
+    return m
+  })
+  const limpiarSeleccion = () => setSeleccion(new Map())
+
   const [confirmDel, setConfirmDel] = useState(null)
   const [deleting, setDeleting] = useState(false)
 
@@ -537,6 +596,18 @@ export default function CatalogoProductos() {
     (p) => esCategoriaCable(p.categoria) || p.cable_tipo || p.cable_calibre,
   )
 
+  // "Toda la página", no "todo el catálogo": marcar 5 000 productos que no
+  // están cargados sería prometer una acción en lote que el servidor no acepta.
+  const todosEnPagina = filtered.length > 0 && filtered.every((p) => seleccion.has(p.id))
+  const toggleSeleccionPagina = () => setSeleccion((prev) => {
+    const m = new Map(prev)
+    for (const p of filtered) {
+      if (todosEnPagina) m.delete(p.id)
+      else m.set(p.id, p)
+    }
+    return m
+  })
+
   // Productos con solicitud de compra activa (PENDIENTE/ORDENADA) → badge "En compra".
   const { data: comprasActivas } = useResource(
     ['solicitudes-compra', 'productos-activos'],
@@ -583,6 +654,20 @@ export default function CatalogoProductos() {
   useEffect(() => {
     loadCategorias()
   }, [])
+
+  // Una categoría restaurada puede haberse borrado o renombrado desde la última
+  // visita. Sin esto el catálogo abriría en una lista vacía sin decir por qué,
+  // así que se descarta y se cae a la cuadrícula.
+  // Corre UNA sola vez, en cuanto llegan las categorías: después el usuario ya
+  // es dueño del filtro y pisárselo sería un salto inexplicable.
+  const ubicacionValidada = useRef(false)
+  useEffect(() => {
+    if (ubicacionValidada.current || categorias.length === 0) return
+    ubicacionValidada.current = true
+    if (ubicacion.categoria && !categorias.includes(ubicacion.categoria)) {
+      setCategoriaFiltro('')
+    }
+  }, [categorias, ubicacion.categoria])
 
   // Cuando termina la sincronización de imágenes a R2, refresca las imágenes de
   // categoría (imagen_url pasó a apuntar a R2). Websockets-first.
@@ -1000,24 +1085,38 @@ export default function CatalogoProductos() {
                 {totalProductos} producto{totalProductos === 1 ? '' : 's'}
               </span>
             </div>
-            {/* Toggle Galería / Tabla */}
-            <div className="inline-flex rounded-md border border-ink-200 dark:border-ink-700 overflow-hidden shrink-0">
-              <button
-                type="button"
-                onClick={() => setVista('galeria')}
-                title="Vista de galería (fotos)"
-                className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium transition-colors ${vista === 'galeria' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
-              >
-                <LayoutGrid size={14} /> <span className="hidden sm:inline">Galería</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setVista('tabla')}
-                title="Vista de tabla"
-                className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium border-l border-ink-200 dark:border-ink-700 transition-colors ${vista === 'tabla' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
-              >
-                <List size={14} /> <span className="hidden sm:inline">Tabla</span>
-              </button>
+            <div className="flex items-center gap-3 shrink-0">
+              {/* Seleccionar la página: sirve a las tres vistas, así la casilla
+                  no se duplica con una lógica distinta en cada una. */}
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-ink-600 dark:text-ink-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={todosEnPagina}
+                  onChange={toggleSeleccionPagina}
+                  className={CHECKBOX_CLS}
+                  aria-label="Seleccionar todos los productos de esta página"
+                />
+                <span className="hidden sm:inline">Seleccionar página</span>
+              </label>
+              {/* Toggle Galería / Tabla */}
+              <div className="inline-flex rounded-md border border-ink-200 dark:border-ink-700 overflow-hidden shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setVista('galeria')}
+                  title="Vista de galería (fotos)"
+                  className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium transition-colors ${vista === 'galeria' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
+                >
+                  <LayoutGrid size={14} /> <span className="hidden sm:inline">Galería</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVista('tabla')}
+                  title="Vista de tabla"
+                  className={`h-8 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium border-l border-ink-200 dark:border-ink-700 transition-colors ${vista === 'tabla' ? 'bg-brand-600 text-white' : 'bg-white dark:bg-ink-900 text-ink-600 dark:text-ink-300 hover:bg-ink-50 dark:hover:bg-ink-800'}`}
+                >
+                  <List size={14} /> <span className="hidden sm:inline">Tabla</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1028,7 +1127,12 @@ export default function CatalogoProductos() {
                 const bajoStock = p.stock_actual <= p.stock_minimo
                 const compra = compraPorProducto.get(p.id)
                 return (
-                  <Card key={p.id} className="group overflow-hidden flex flex-col">
+                  <Card
+                    key={p.id}
+                    className={`group overflow-hidden flex flex-col ${
+                      seleccion.has(p.id) ? 'ring-2 ring-brand-500 border-brand-500' : ''
+                    }`}
+                  >
                     <div className="relative aspect-square bg-ink-50 dark:bg-ink-800/50 border-b border-ink-200 dark:border-ink-800 overflow-hidden">
                       {p.imagen_url ? (
                         <>
@@ -1095,13 +1199,24 @@ export default function CatalogoProductos() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-end gap-0.5 px-1.5 py-1 border-t border-ink-100 dark:border-ink-800 bg-ink-50/50 dark:bg-ink-900/30">
-                      <Link to={`/inventario/productos/${p.id}/kardex`}>
-                        <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={14} /></Button>
-                      </Link>
-                      <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={14} /></Button>
-                      <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={14} /></Button>
-                      <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={14} /></Button>
+                    <div className="flex items-center justify-between gap-0.5 px-1.5 py-1 border-t border-ink-100 dark:border-ink-800 bg-ink-50/50 dark:bg-ink-900/30">
+                      <label className="pl-1.5 inline-flex items-center cursor-pointer" title="Seleccionar para acciones">
+                        <input
+                          type="checkbox"
+                          checked={seleccion.has(p.id)}
+                          onChange={() => toggleSeleccion(p)}
+                          className={CHECKBOX_CLS}
+                          aria-label={`Seleccionar ${p.descripcion}`}
+                        />
+                      </label>
+                      <div className="flex items-center gap-0.5">
+                        <Link to={`/inventario/productos/${p.id}/kardex`}>
+                          <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={14} /></Button>
+                        </Link>
+                        <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={14} /></Button>
+                        <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={14} /></Button>
+                        <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={14} /></Button>
+                      </div>
                     </div>
                   </Card>
                 )
@@ -1113,6 +1228,15 @@ export default function CatalogoProductos() {
           <div className="hidden md:block overflow-x-auto">
           <Table>
             <THead>
+              <TH className="!px-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={todosEnPagina}
+                  onChange={toggleSeleccionPagina}
+                  className={CHECKBOX_CLS}
+                  aria-label="Seleccionar todos los productos de esta página"
+                />
+              </TH>
               <TH>Foto</TH>
               <TH>Código</TH>
               <TH>Descripción</TH>
@@ -1126,7 +1250,16 @@ export default function CatalogoProductos() {
             </THead>
             <TBody>
               {filtered.map((p) => (
-                <TR key={p.id}>
+                <TR key={p.id} className={seleccion.has(p.id) ? 'bg-brand-50/60 dark:bg-brand-900/20' : ''}>
+                  <TD className="!px-3">
+                    <input
+                      type="checkbox"
+                      checked={seleccion.has(p.id)}
+                      onChange={() => toggleSeleccion(p)}
+                      className={CHECKBOX_CLS}
+                      aria-label={`Seleccionar ${p.descripcion}`}
+                    />
+                  </TD>
                   <TD>
                     {p.imagen_url ? (
                       <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-10 h-10 rounded-md object-cover bg-ink-100 cursor-zoom-in hover:ring-2 hover:ring-brand-400 transition-all" />
@@ -1224,7 +1357,10 @@ export default function CatalogoProductos() {
               const bajoStock = p.stock_actual <= p.stock_minimo
               const compra = compraPorProducto.get(p.id)
               return (
-                <Card key={p.id} className="!p-3">
+                <Card
+                  key={p.id}
+                  className={`!p-3 ${seleccion.has(p.id) ? 'ring-2 ring-brand-500 border-brand-500' : ''}`}
+                >
                   <div className="flex gap-3">
                     {p.imagen_url ? (
                       <img src={p.imagen_url} alt={p.descripcion} onClick={() => verImagen(p)} title="Ver imagen" className="w-12 h-12 rounded-md object-cover bg-ink-100 flex-shrink-0 cursor-zoom-in" />
@@ -1263,13 +1399,24 @@ export default function CatalogoProductos() {
                           {(Number(p.precio_unitario) || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                         </span>
                       </div>
-                      <div className="flex items-center justify-end gap-1 mt-2 border-t border-ink-100 dark:border-ink-800 pt-2">
-                        <Link to={`/inventario/productos/${p.id}/kardex`}>
-                          <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={15} /></Button>
-                        </Link>
-                        <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={15} /></Button>
-                        <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={15} /></Button>
-                        <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={15} /></Button>
+                      <div className="flex items-center justify-between gap-1 mt-2 border-t border-ink-100 dark:border-ink-800 pt-2">
+                        <label className="inline-flex items-center cursor-pointer" title="Seleccionar para acciones">
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(p.id)}
+                            onChange={() => toggleSeleccion(p)}
+                            className={CHECKBOX_CLS}
+                            aria-label={`Seleccionar ${p.descripcion}`}
+                          />
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <Link to={`/inventario/productos/${p.id}/kardex`}>
+                            <Button variant="ghost" size="icon-sm" title="Ver kardex (historial)"><History size={15} /></Button>
+                          </Link>
+                          <Button variant="ghost" size="icon-sm" title="Ver stock por bodega" onClick={() => setStocksModal(p)}><Warehouse size={15} /></Button>
+                          <Button variant="ghost" size="icon-sm" title="Editar" onClick={() => openEdit(p)}><Edit2 size={15} /></Button>
+                          <Button variant="danger-ghost" size="icon-sm" title="Eliminar" onClick={() => setConfirmDel({ id: p.id, name: p.descripcion })}><Trash2 size={15} /></Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1286,6 +1433,31 @@ export default function CatalogoProductos() {
             size={PROD_PAGE_SIZE}
             onChange={setPageProd}
           />
+        </div>
+      )}
+
+      {/* Barra de selección: flota sobre la lista para no empujar el contenido
+          ni desaparecer al hacer scroll. En móvil se levanta por encima de la
+          barra de navegación inferior, que vive pegada al borde. */}
+      {seleccion.size > 0 && (
+        <div className="fixed bottom-[4.5rem] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] sm:w-auto">
+          <div className="flex items-center gap-3 rounded-xl border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 shadow-lg px-3 py-2">
+            <span className="text-sm font-semibold text-ink-900 dark:text-ink-100 tabular-nums whitespace-nowrap">
+              {seleccion.size} seleccionado{seleccion.size === 1 ? '' : 's'}
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                size="sm"
+                leftIcon={<MoreHorizontal size={15} />}
+                onClick={() => setAccionesProductos([...seleccion.values()])}
+              >
+                Acciones
+              </Button>
+              <Button variant="ghost" size="sm" leftIcon={<X size={14} />} onClick={limpiarSeleccion}>
+                Limpiar
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1758,7 +1930,17 @@ export default function CatalogoProductos() {
                   <DetalleCampo label="Contacto" value={imgModal.proveedor_default_contacto} />
                 )}
               </dl>
-              <div className="pt-1">
+              <div className="pt-1 flex flex-wrap gap-2">
+                {/* La ficha es donde el almacenista confirma que ESTE es el
+                    material que buscaba; es también donde tiene sentido
+                    ofrecerle moverlo, sin volver a buscarlo en otra pantalla. */}
+                <Button
+                  size="sm"
+                  leftIcon={<MoreHorizontal size={14} />}
+                  onClick={() => { const p = imgModal; setImgModal(null); setAccionesProductos([p]) }}
+                >
+                  Acciones
+                </Button>
                 <Button
                   variant="secondary"
                   size="sm"
@@ -1865,6 +2047,30 @@ export default function CatalogoProductos() {
           </div>
         )}
       </Modal>
+
+      {/* Acciones de inventario sobre el producto o sobre la selección.
+          El catálogo ya carga bodegas y proyectos para el editor de buckets,
+          así que se los pasa en vez de hacer que el modal los vuelva a pedir. */}
+      <AccionesProductoModal
+        open={!!accionesProductos}
+        onClose={() => setAccionesProductos(null)}
+        productos={accionesProductos ?? []}
+        almacenes={almacenesLista}
+        proyectos={proyectosLista}
+        onVerStock={(p) => setStocksModal(p)}
+        onDone={(idsMovidos) => {
+          load()
+          // Lo que ya se movió sale de la selección: dejarlo marcado es como se
+          // registra dos veces la misma salida. Los que se dejaron en 0 siguen
+          // marcados a propósito — no se movieron, y quitarlos de la selección
+          // daba a entender que sí.
+          setSeleccion((prev) => {
+            const m = new Map(prev)
+            for (const id of idsMovidos ?? []) m.delete(id)
+            return m
+          })
+        }}
+      />
 
     </div>
   )

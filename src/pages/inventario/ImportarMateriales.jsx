@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import toast from 'react-hot-toast'
-import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, ListChecks, Plus, FolderInput, Cloud, RefreshCw, Info, AlertTriangle, History, Undo2 } from 'lucide-react'
+import { Upload, Download, CheckCircle2, XCircle, FileSpreadsheet, ArrowLeft, Tags, FileDown, ListChecks, Plus, FolderInput, RefreshCw, Info, AlertTriangle, History, Undo2 } from 'lucide-react'
+import CloudflareIcon from '../../components/CloudflareIcon'
 import { Link } from 'react-router-dom'
 import { Button, Card, PageHeader, Modal, Select, InfoTip, Badge } from '../../components/ui'
 import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes, getImagenesErrores, updateProducto, upsertCategoriaConfig, getAlmacenes, getProyectosInventario, getImportaciones, deshacerImportacion } from '../../api/inventario'
@@ -490,7 +491,7 @@ export default function ImportarMateriales() {
         <Card className="p-5 space-y-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-start gap-2.5">
-              <Cloud size={20} className="text-brand-600 mt-0.5 flex-shrink-0" />
+              <CloudflareIcon size={20} className="mt-0.5 flex-shrink-0" />
               <div>
                 <h3 className="font-semibold text-ink-900 dark:text-ink-100 flex items-center gap-1.5">
                   Imágenes en la nube (Cloudflare R2)
@@ -1054,7 +1055,7 @@ export default function ImportarMateriales() {
 
           {resultado.imagenes?.pendientes > 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-ink-200 dark:border-ink-800 px-3 py-2">
-              <Cloud size={14} className="text-brand-600 mt-0.5 flex-shrink-0" />
+              <CloudflareIcon size={14} className="mt-0.5 flex-shrink-0" />
               <p className="text-sm text-ink-600 dark:text-ink-300">
                 Descargando <strong>{resultado.imagenes.pendientes}</strong> imagen(es) a la nube
                 (WebP → R2). El progreso aparece en “Imágenes en la nube” al cerrar este aviso.

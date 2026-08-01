@@ -17,7 +17,7 @@
  *   'ninguna'       el movimiento no consume: ENTRADA, AJUSTE+.
  *
  * Referencia en el backend: `_consumir_proyecto_luego_general` y
- * `_consumir_bucket_exacto` en app/routes/inventario_api/_core.py
+ * `_consumir_bucket_exacto` en app/routes/inventario_api/_core/stock.py
  */
 
 export const REGLA_CON_FALLBACK = 'con_fallback'

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import DisponibilidadBucket from '../../components/DisponibilidadBucket'
 import {
@@ -8,7 +8,7 @@ import {
 import {
   ArrowRightLeft, TrendingUp, TrendingDown, Activity, Package,
   Plus, Minus, AlertTriangle, CheckCircle2, Info, ChevronLeft, Save,
-  Warehouse, Layers, FolderSync, User, X, Printer,
+  Warehouse, Layers, FolderSync, Printer,
 } from 'lucide-react'
 import {
   Button, Card, PageHeader, Select, Skeleton,
@@ -19,66 +19,7 @@ import {
 } from '../../api/inventario'
 import { extractApiError } from '../../utils/apiError'
 import ProductoPicker from '../../components/ProductoPicker'
-import TrabajadorPicker from '../../components/TrabajadorPicker'
-
-// Selector de una parte (Entrega o Recibe): toggle Trabajador | Nombre libre.
-function PartePicker({ label, modo, setModo, trabajador, setTrabajador, nombre, setNombre }) {
-  return (
-    <div>
-      <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400 mb-1.5">
-        <User size={12} className="inline mr-1 -mt-0.5" /> {label}
-      </label>
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <button
-          type="button"
-          onClick={() => setModo('trabajador')}
-          className={`py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${
-            modo === 'trabajador'
-              ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300'
-              : 'border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-500'
-          }`}
-        >
-          Trabajador
-        </button>
-        <button
-          type="button"
-          onClick={() => setModo('libre')}
-          className={`py-1.5 rounded-lg border-2 text-xs font-bold transition-all ${
-            modo === 'libre'
-              ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300'
-              : 'border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-ink-500'
-          }`}
-        >
-          Nombre libre
-        </button>
-      </div>
-      {modo === 'trabajador' ? (
-        trabajador ? (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-ink-200 dark:border-ink-700 bg-ink-50 dark:bg-ink-800/50 px-3 py-2">
-            <span className="text-sm font-medium text-ink-900 dark:text-ink-100 truncate">
-              {trabajador.nombre_completo}
-              <span className="text-ink-400 font-normal ml-1">· #{trabajador.no_empleado}</span>
-            </span>
-            <button type="button" onClick={() => setTrabajador(null)} title="Cambiar" className="text-ink-400 hover:text-ink-700 dark:hover:text-ink-200">
-              <X size={16} />
-            </button>
-          </div>
-        ) : (
-          <TrabajadorPicker value={trabajador} onSelect={setTrabajador} />
-        )
-      ) : (
-        <input
-          type="text"
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-          maxLength={200}
-          placeholder="Nombre (no está en el sistema)"
-          className="block w-full h-10 px-3 rounded-md border border-ink-200 dark:border-ink-700 bg-white dark:bg-ink-900 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none"
-        />
-      )}
-    </div>
-  )
-}
+import PartePicker from '../../components/PartePicker'
 
 const TIPOS = [
   {
@@ -166,14 +107,30 @@ const esReasignacionTipo = (t) => t === 'REASIGNACION'
 
 export default function RegistrarMovimiento() {
   const navigate = useNavigate()
+  // Se puede llegar aquí desde el catálogo con el producto (y el tipo) ya
+  // elegidos: `navigate(..., { state: { producto, tipo } })`. Sin esto, el
+  // almacenista que ya encontró el material tenía que volver a buscarlo aquí.
+  const { pathname, state: precarga } = useLocation()
+
+  // Se consume una sola vez: el state del history sobrevive a un F5 y al botón
+  // «atrás», y volver a sembrar el formulario con un producto que ya se movió
+  // invita a repetir el movimiento.
+  useEffect(() => {
+    if (precarga) navigate(pathname, { replace: true, state: null })
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [])
 
   const [almacenes, setAlmacenes] = useState([])
   const [proyectos, setProyectos] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
-  const [tipo, setTipo] = useState('ENTRADA')
-  const [productoSel, setProductoSel] = useState(null)
+  // El tipo que llega por navegación se valida contra la lista: un state
+  // manipulado no debe dejar el formulario en un tipo que no existe.
+  const [tipo, setTipo] = useState(
+    () => (TIPOS.some((t) => t.key === precarga?.tipo) ? precarga.tipo : 'ENTRADA'),
+  )
+  const [productoSel, setProductoSel] = useState(() => precarga?.producto ?? null)
   const [cantidad, setCantidad] = useState('')
   // Dirección del ajuste — solo aplica si tipo=AJUSTE. '+' suma, '-' resta.
   const [ajusteDir, setAjusteDir] = useState('+')
@@ -188,7 +145,7 @@ export default function RegistrarMovimiento() {
   const [proyectoDestinoId, setProyectoDestinoId] = useState('')
   const [motivo, setMotivo] = useState('')
 
-  // Partes del vale (feature "vale de movimiento"): quién entrega / quién recibe.
+  // Partes del comprobante: quién entrega / quién recibe.
   // Cada parte = trabajador del sistema o nombre libre (igual que entrega directa).
   const [entregaModo, setEntregaModo] = useState('libre')
   const [entregaTrabajador, setEntregaTrabajador] = useState(null)
@@ -296,7 +253,7 @@ export default function RegistrarMovimiento() {
   const esReasignacion = tipo === 'REASIGNACION'
   // El bucket de proyecto aplica a ENTRADA/SALIDA/AJUSTE/TRASPASO (uno solo).
   const necesitaProyecto = ['ENTRADA', 'SALIDA', 'AJUSTE', 'TRASPASO'].includes(tipo)
-  // Las partes del vale (entrega/recibe) aplican a movimientos con contraparte
+  // Las partes del comprobante (entrega/recibe) aplican a movimientos con contraparte
   // física: ENTRADA/SALIDA/TRASPASO. AJUSTE/REASIGNACION son internos.
   const necesitaPartes = ['ENTRADA', 'SALIDA', 'TRASPASO'].includes(tipo)
   const necesitaDestino = tipo === 'ENTRADA' || tipo === 'TRASPASO' ||
@@ -349,7 +306,7 @@ export default function RegistrarMovimiento() {
         // Bucket de proyecto del movimiento ('' = general/sin proyecto).
         payload.proyecto_id = proyectoId ? Number(proyectoId) : null
       }
-      // Partes del vale (opcionales): trabajador o nombre libre, por parte.
+      // Partes del comprobante (opcionales): trabajador o nombre libre, por parte.
       if (necesitaPartes) {
         if (entregaModo === 'trabajador' && entregaTrabajador) payload.entrega_trabajador_id = entregaTrabajador.id
         else if (entregaNombre.trim()) payload.entrega_nombre = entregaNombre.trim()
@@ -358,7 +315,7 @@ export default function RegistrarMovimiento() {
       }
       const mov = await createMovimiento(payload)
       toast.success(`${tipoCfg.label} registrada correctamente`)
-      // Vale PDF: se abre al registrar movimientos con contraparte (como entrega directa).
+      // Comprobante PDF: se abre al registrar movimientos con contraparte (como entrega directa).
       if (necesitaPartes && mov?.id) imprimirMovimiento(mov.id).catch(() => {})
       navigate('/inventario/movimientos')
     } catch (err) {
@@ -672,12 +629,12 @@ export default function RegistrarMovimiento() {
             </Card>
           )}
 
-          {/* Partes del movimiento (feature "vale de movimiento"): quién entrega
-              y quién recibe. Se imprime el vale PDF al registrar. */}
+          {/* Partes del movimiento: quién entrega y quién recibe. Se imprime el
+              comprobante PDF al registrar. */}
           {necesitaPartes && (
             <div className="rounded-lg border border-ink-200 dark:border-ink-700 bg-ink-50/50 dark:bg-ink-800/30 p-3 space-y-3">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Partes del vale</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-ink-500">Partes del comprobante</span>
                 <span className="text-[10px] text-ink-400">(opcional · se imprime el comprobante)</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -695,7 +652,7 @@ export default function RegistrarMovimiento() {
                 />
               </div>
               <p className="text-[11px] text-ink-500 inline-flex items-center gap-1">
-                <Printer size={11} /> Al registrar se abre el vale PDF con ambos nombres para firmar.
+                <Printer size={11} /> Al registrar se abre el comprobante PDF con ambos nombres para firmar.
               </p>
             </div>
           )}
