@@ -223,7 +223,12 @@ export default function Etiquetas() {
         {items.length === 0 ? (
           <p className="text-sm text-ink-500 py-3">Usa “Agregar productos” para elegir qué etiquetar.</p>
         ) : (
-          <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
+          // `overflow-x-auto` y no `overflow-hidden`: las descripciones de
+          // material eléctrico son largas y estiraban la tabla más allá de la
+          // tarjeta; al recortar sin scroll, la cantidad de etiquetas y el botón
+          // de quitar quedaban fuera de alcance y la fila no se podía usar.
+          // Mismo envoltorio que el componente `Table` del sistema.
+          <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm">
               <thead className="bg-ink-50 dark:bg-ink-900 text-xs text-ink-500 uppercase">
                 <tr>

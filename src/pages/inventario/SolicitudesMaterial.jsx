@@ -1081,10 +1081,15 @@ function EntregaModal({ solicitud, onClose, onDone }) {
         </div>
 
         {lineasMaterial.length > 0 && (
+          // El scroll horizontal va en la tabla, no en el bloque: con
+          // descripciones largas la tabla se estiraba y el recorte dejaba el
+          // input de «cantidad a entregar» fuera de alcance, sin scroll con el
+          // que llegar a él.
           <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
             <div className="bg-ink-50 dark:bg-ink-800/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-300 border-b border-ink-200 dark:border-ink-800">
               Materiales
             </div>
+            <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm">
               <thead className="bg-ink-50 dark:bg-ink-900 text-xs text-ink-500 uppercase">
                 <tr>
@@ -1179,14 +1184,18 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
         {lineasHerramienta.length > 0 && (
+          // Mismo caso que la tabla de Materiales de arriba: sin scroll
+          // horizontal, el input de cantidad quedaba recortado y sin alcance.
           <div className="border border-ink-200 dark:border-ink-800 rounded-lg overflow-hidden">
             <div className="bg-ink-50 dark:bg-ink-800/50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-600 dark:text-ink-300 border-b border-ink-200 dark:border-ink-800">
               Herramientas — se asignan al trabajador del solicitante
             </div>
+            <div className="overflow-x-auto scrollbar-thin">
             <table className="w-full text-sm">
               <thead className="bg-ink-50 dark:bg-ink-900 text-xs text-ink-500 uppercase">
                 <tr>
@@ -1238,6 +1247,7 @@ function EntregaModal({ solicitud, onClose, onDone }) {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 

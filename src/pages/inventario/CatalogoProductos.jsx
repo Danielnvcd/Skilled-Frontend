@@ -203,11 +203,23 @@ function BucketEditor({ productoId, unidad, almacenes, proyectos, onSaved }) {
         <div className="space-y-1.5">
           {rows.map((r, idx) => {
             const objetivoNum = Number(r.objetivo)
-            const delta = r.objetivo === '' || isNaN(objetivoNum) ? 0 : objetivoNum - r.actual
+            // Redondeado a 2 decimales: la resta de flotantes convierte
+            // `10.5 − 10.2` en `0.2999999999999998`, que no cabe en la columna y
+            // además hacía que un bucket sin cambio real se pintara como
+            // cambiado por un residuo de 1e-17. Los productos por metro (cable)
+            // son justo los que caen aquí.
+            const delta = r.objetivo === '' || isNaN(objetivoNum)
+              ? 0
+              : Math.round((objetivoNum - r.actual) * 100) / 100
             return (
               <div key={claveDe(r.almacen_id, r.proyecto_id)} className="flex items-center gap-2 text-sm">
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium text-ink-800 dark:text-ink-100 truncate">{r.almacen_nombre}</span>
+                {/* El `truncate` va en el contenedor, no en el `span`: en un
+                    elemento inline `overflow:hidden` no aplica, así que el
+                    recorte no ocurría y un nombre de bodega largo se desbordaba
+                    sobre el input en vez de cortarse. Aquí trunca la línea
+                    entera (bodega · proyecto), que es como se lee. */}
+                <div className="flex-1 min-w-0 truncate" title={`${r.almacen_nombre} · ${r.proyecto_nombre}`}>
+                  <span className="font-medium text-ink-800 dark:text-ink-100">{r.almacen_nombre}</span>
                   <span className="text-ink-400"> · </span>
                   <span className="text-ink-500">{r.proyecto_nombre}</span>
                 </div>
