@@ -50,8 +50,9 @@ export default function EstadoServidor() {
                   Defensas degradadas
                 </h2>
                 <p className="mt-1 text-xs text-red-800/80 dark:text-red-300/80">
-                  Estas protecciones dependen de Redis y ahora mismo no están activas.
-                  La aplicación sigue funcionando; la seguridad está reducida.
+                  Estas protecciones dependen de servicios que ahora mismo no responden
+                  (Redis, antivirus). La aplicación sigue funcionando; la seguridad
+                  está reducida.
                 </p>
                 <ul className="mt-2 space-y-1">
                   {data.defensas_degradadas.map((d) => (
@@ -63,9 +64,15 @@ export default function EstadoServidor() {
               </div>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Indicador ok={data.redis?.ok} titulo="Redis" detalle={data.redis?.detalle} />
               <Indicador ok={data.base_datos?.ok} titulo="Base de datos" detalle={data.base_datos?.detalle} />
+              {/* En gris cuando no está configurado: apagado a propósito ≠ caído. */}
+              <Indicador
+                ok={data.antivirus?.ok}
+                titulo={`Antivirus${data.antivirus?.fail_closed ? ' (bloqueante)' : ''}`}
+                detalle={data.antivirus?.detalle}
+              />
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">

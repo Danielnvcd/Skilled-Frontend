@@ -174,19 +174,23 @@ export function EstadoCarga({ error, loading, children, skeleton = null }) {
 }
 
 /** Semáforo de un componente de infraestructura. */
+/**
+ * Semáforo de un servicio.
+ *
+ * `ok` admite tres valores: true (verde), false (rojo) y **null/undefined
+ * (gris)**. El gris es para lo que está apagado a propósito —un antivirus que
+ * no instalaste no es una falla—; sin él, "no configurado" se pintaba de rojo
+ * y parecía una alarma.
+ */
 export function Indicador({ ok, titulo, detalle }) {
+  const color = ok == null ? 'bg-ink-300 dark:bg-ink-600' : ok ? 'bg-emerald-500' : 'bg-red-500'
   return (
     <div className="flex items-center gap-3 rounded-lg border border-ink-200 bg-white px-4 py-3 dark:border-ink-800 dark:bg-ink-900">
-      <span
-        className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${
-          ok ? 'bg-emerald-500' : 'bg-red-500'
-        }`}
-        aria-hidden="true"
-      />
+      <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${color}`} aria-hidden="true" />
       <div className="min-w-0">
         <p className="text-sm font-medium text-ink-900 dark:text-ink-100">{titulo}</p>
-        <p className="truncate text-xs text-ink-500 dark:text-ink-400">
-          {ok ? detalle : detalle || 'sin respuesta'}
+        <p className="truncate text-xs text-ink-500 dark:text-ink-400" title={detalle || ''}>
+          {detalle || (ok ? '' : 'sin respuesta')}
         </p>
       </div>
     </div>
