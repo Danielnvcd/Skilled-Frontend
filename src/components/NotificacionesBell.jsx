@@ -202,11 +202,28 @@ export default function NotificacionesBell() {
                   const clickable = Boolean(n.url) || !n.leida
                   return (
                     <li key={n.id}>
-                      <button
-                        onClick={() => handleClickItem(n)}
-                        disabled={!clickable}
+                      {/*
+                        Fila como <div role="button"> y no como <button>: dentro
+                        vive el botón "Leída", y un <button> anidado en otro es
+                        HTML inválido (React lo avisa y los lectores de pantalla
+                        se pierden el control interior). Se replican a mano las
+                        teclas Enter/Espacio para no perder el manejo por teclado
+                        que daba el botón nativo.
+                      */}
+                      <div
+                        role="button"
+                        tabIndex={clickable ? 0 : -1}
+                        aria-disabled={!clickable}
+                        onClick={() => { if (clickable) handleClickItem(n) }}
+                        onKeyDown={(e) => {
+                          if (!clickable) return
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleClickItem(n)
+                          }
+                        }}
                         className={`w-full text-left flex gap-3 px-4 py-3 transition-colors ${
-                          clickable ? 'hover:bg-ink-50 dark:hover:bg-ink-800/60' : 'cursor-default'
+                          clickable ? 'hover:bg-ink-50 dark:hover:bg-ink-800/60 cursor-pointer' : 'cursor-default'
                         } ${!n.leida ? 'bg-brand-50/40 dark:bg-brand-950/20' : ''}`}
                       >
                         <span className={`flex-shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-lg ${tone}`}>
@@ -233,6 +250,7 @@ export default function NotificacionesBell() {
                             )}
                             {!n.leida && (
                               <button
+                                type="button"
                                 onClick={(e) => handleMarcarLeida(n.id, e)}
                                 className="ml-auto text-[11px] text-ink-500 dark:text-ink-400 hover:text-brand-700 dark:hover:text-brand-300 inline-flex items-center gap-0.5"
                               >
@@ -241,7 +259,7 @@ export default function NotificacionesBell() {
                             )}
                           </div>
                         </div>
-                      </button>
+                      </div>
                     </li>
                   )
                 })}

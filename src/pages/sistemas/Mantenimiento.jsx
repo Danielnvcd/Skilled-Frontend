@@ -1,14 +1,17 @@
 /**
- * Mantenimiento: crecimiento de las tablas, purga de bitácora e imágenes a R2.
+ * Mantenimiento: crecimiento de las tablas, purga de bitácora, imágenes del
+ * catálogo a R2 y archivos privados a R2.
  *
- * Las dos acciones de esta pantalla son las únicas del panel que modifican
- * datos de forma irreversible, así que ambas piden confirmación explicando qué
- * va a pasar — no un "¿estás seguro?" genérico.
+ * La purga y el reintento de imágenes son las únicas acciones del panel que
+ * modifican datos de forma irreversible, así que ambas piden confirmación
+ * explicando qué va a pasar — no un "¿estás seguro?" genérico. Sincronizar
+ * archivos NO la pide: solo copia a la nube, no borra nada y es idempotente.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   DatabaseZap, RefreshCw, Database, ImageOff, Trash2, RotateCw, CheckCircle2,
+  CloudUpload, FileWarning,
 } from 'lucide-react'
 import {
   PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog, Select,
@@ -17,8 +20,10 @@ import {
 import { useResource } from '../../hooks/useResource'
 import {
   getAlmacenamiento, purgarBitacora, getImagenes, reintentarImagenes,
+  getArchivos, sincronizarArchivos,
 } from '../../api/sistemas'
 import { extractApiError } from '../../utils/apiError'
+import { useSocket } from '../../context/SocketContext'
 import { EstadoCarga, useRefrescar, BotonActualizar } from './PanelLayout'
 
 function fmtNumero(n) {
@@ -29,8 +34,11 @@ function fmtNumero(n) {
 export default function Mantenimiento() {
   const almacen = useResource('sistemas:almacenamiento', getAlmacenamiento, { staleMs: 60_000 })
   const imagenes = useResource('sistemas:imagenes', getImagenes, { staleMs: 30_000 })
+  const archivos = useResource('sistemas:archivos', getArchivos, { staleMs: 30_000 })
 
-  const { refrescando, refrescar } = useRefrescar(almacen.refetch, imagenes.refetch)
+  const { refrescando, refrescar } = useRefrescar(
+    almacen.refetch, imagenes.refetch, archivos.refetch,
+  )
 
   const [mesesPurga, setMesesPurga] = useState(12)
   const [confirmPurga, setConfirmPurga] = useState(false)
@@ -73,13 +81,71 @@ export default function Mantenimiento() {
     }
   }
 
+  // ── Sincronización de archivos privados a R2 ──────────────────────────────
+  // Mismo patrón que el pipeline de imágenes del catálogo: la petición solo
+  // encola, y el progreso real llega por socket al usuario que lo lanzó.
+  const { on } = useSocket()
+  const [progreso, setProgreso] = useState(null)   // { total, hechas, ok, error, estado, actual }
+  const [sincronizando, setSincronizando] = useState(false)
+  // Job lanzado por ESTA pantalla; en ref para que el listener lea el valor
+  // actual sin volver a suscribirse. Ignoramos eventos de otros trabajos para
+  // que la barra no salte entre ellos.
+  const jobIdRef = useRef(null)
+
+  useEffect(() => {
+    const off = on('archivo:sync_progreso', (p) => {
+      if (!jobIdRef.current || p?.job_id !== jobIdRef.current) return
+      setProgreso(p)
+      if (p?.estado === 'done') {
+        jobIdRef.current = null
+        archivos.refetch()
+        if (p.error > 0) {
+          toast(`${p.error} archivo(s) no se pudieron subir. Vuelve a sincronizar para reintentar.`, {
+            icon: <FileWarning size={18} />, duration: 7000,
+          })
+        }
+      }
+    })
+    return off
+  }, [on])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  const ejecutarSyncArchivos = async () => {
+    setSincronizando(true)
+    try {
+      const res = await sincronizarArchivos()
+      if (res.encolados > 0) {
+        jobIdRef.current = res.job_id || null
+        setProgreso({ total: res.encolados, hechas: 0, ok: 0, error: 0, estado: 'running', actual: null })
+        toast.success(`Subiendo ${res.encolados} archivo(s) a R2…`)
+        if (res.restantes > 0) {
+          toast(`Quedan ${res.restantes} para la próxima corrida.`, { duration: 6000 })
+        }
+      } else {
+        toast.success('Todos los archivos ya están en R2')
+      }
+    } catch (err) {
+      // 409: otro administrador ya la lanzó. No es un fallo — se informa y se
+      // refresca para que se vean los conteos que esa corrida vaya dejando.
+      if (err?.response?.status === 409) {
+        toast(extractApiError(err, 'Ya hay una sincronización en curso'))
+        archivos.refetch()
+      } else {
+        toast.error(extractApiError(err, 'No se pudo iniciar la sincronización'))
+      }
+    } finally {
+      setSincronizando(false)
+    }
+  }
+
   const datosImg = imagenes.data
+  const datosArch = archivos.data
+  const pctArch = progreso?.total ? Math.round((progreso.hechas / progreso.total) * 100) : 0
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Mantenimiento"
-        description="Crecimiento de la base de datos y estado del procesado de imágenes."
+        description="Crecimiento de la base de datos, procesado de imágenes y archivos en la nube."
         icon={DatabaseZap}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/almacenamiento" />
@@ -250,6 +316,157 @@ export default function Mantenimiento() {
                   title="Sin imágenes en error"
                   description="Todas las imágenes se procesaron correctamente."
                 />
+              )}
+            </>
+          )}
+        </EstadoCarga>
+      </section>
+
+      {/* ── Archivos privados a R2 ───────────────────────────────────────── */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900 dark:text-ink-100">
+            <CloudUpload size={16} className="text-ink-400" />
+            Archivos privados en la nube
+          </h2>
+          <p className="mt-0.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+            Fotos de perfil, documentos de trabajadores y fotos de herramientas. Van a
+            un bucket <strong className="font-medium">privado</strong> de Cloudflare R2,
+            distinto al del catálogo: se siguen sirviendo con sesión iniciada, nadie los
+            abre con solo tener el enlace.
+          </p>
+        </div>
+
+        <EstadoCarga
+          error={archivos.error}
+          loading={archivos.loading}
+          skeleton={<Skeleton className="h-32" />}
+        >
+          {datosArch && !datosArch.enabled && (
+            <EmptyState
+              icon={CloudUpload}
+              title="Almacenamiento en la nube sin configurar"
+              description="Los archivos se están guardando en el disco del servidor y la aplicación funciona con normalidad. Para activarlo, define R2_PRIVADO_BUCKET en el .env de este entorno."
+            />
+          )}
+
+          {datosArch?.enabled && datosArch.error && (
+            <div className="rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-900/20">
+              <h3 className="flex items-center gap-2 text-sm font-medium text-ink-900 dark:text-ink-100">
+                <FileWarning size={15} className="text-red-600 dark:text-red-400" />
+                No se puede contactar el bucket privado
+              </h3>
+              <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+                {datosArch.error}
+              </p>
+              <p className="mt-1.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+                Mientras tanto los archivos se guardan y se sirven desde el disco del
+                servidor: la aplicación funciona con normalidad y no se pierde nada.
+              </p>
+            </div>
+          )}
+
+          {datosArch?.enabled && !datosArch.error && (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <Tarjeta etiqueta="En la nube" valor={datosArch.en_r2} />
+                <Tarjeta etiqueta="Por subir" valor={datosArch.pendientes} />
+                <Tarjeta etiqueta="Sin archivo" valor={datosArch.faltantes} alerta={datosArch.faltantes > 0} />
+                <Tarjeta etiqueta="Total" valor={datosArch.total} />
+              </div>
+
+              {progreso && (
+                <div className="space-y-1.5">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+                    <div
+                      className={`h-full transition-all duration-300 ${progreso.estado === 'done' ? 'bg-emerald-500' : 'bg-brand-600'}`}
+                      style={{ width: `${pctArch}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-ink-500 dark:text-ink-400">
+                    <span className="truncate">
+                      {progreso.estado === 'done'
+                        ? `Listo · ${progreso.ok} subido(s)${progreso.error ? `, ${progreso.error} con error` : ''}`
+                        : `Subiendo ${progreso.hechas}/${progreso.total}${progreso.actual ? ` · ${progreso.actual}` : ''}`}
+                    </span>
+                    <span className="ml-2 flex-shrink-0 tabular-nums">{pctArch}%</span>
+                  </div>
+                </div>
+              )}
+
+              {datosArch.pendientes > 0 ? (
+                <div className="rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
+                  <h3 className="text-sm font-medium text-ink-900 dark:text-ink-100">
+                    Subir los que faltan
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+                    {fmtNumero(datosArch.pendientes)} archivo(s) siguen solo en el disco del
+                    servidor. Subirlos no borra la copia local ni interrumpe la aplicación:
+                    mientras tanto se siguen sirviendo desde el disco. Repetir la operación
+                    es seguro.
+                  </p>
+                  <div className="mt-3 flex justify-end">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      leftIcon={<RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />}
+                      loading={sincronizando}
+                      disabled={progreso?.estado === 'running'}
+                      onClick={ejecutarSyncArchivos}
+                    >
+                      Sincronizar {fmtNumero(datosArch.pendientes)}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={CheckCircle2}
+                  title="Todo sincronizado"
+                  description="Cada archivo referenciado por la base de datos ya está en la nube."
+                />
+              )}
+
+              <Table>
+                <THead>
+                  <TH>Tipo de archivo</TH>
+                  <TH align="right">En la nube</TH>
+                  <TH align="right">Por subir</TH>
+                  <TH align="right">Sin archivo</TH>
+                </THead>
+                <TBody>
+                  {datosArch.familias.map((f) => (
+                    <TR key={f.clave}>
+                      <TD><span className="font-medium">{f.etiqueta}</span></TD>
+                      <TD align="right" className="tabular-nums">{fmtNumero(f.en_r2)}</TD>
+                      <TD align="right" className="tabular-nums">{fmtNumero(f.pendientes)}</TD>
+                      <TD align="right" className="tabular-nums">{fmtNumero(f.faltantes)}</TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+
+              {datosArch.faltantes > 0 && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
+                  <h3 className="flex items-center gap-2 text-sm font-medium text-ink-900 dark:text-ink-100">
+                    <FileWarning size={15} className="text-amber-600 dark:text-amber-400" />
+                    {fmtNumero(datosArch.faltantes)} referencia(s) sin archivo
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+                    La base de datos apunta a estos archivos pero no están ni en la nube ni
+                    en el disco. Es dato roto de antes de la migración, no lo causa
+                    sincronizar. Se corrigen volviendo a subir el archivo desde su pantalla.
+                  </p>
+                  <ul className="mt-2 space-y-0.5">
+                    {datosArch.detalle_faltantes.map((f) => (
+                      <li key={f.key} className="flex flex-wrap items-center gap-2 text-xs">
+                        <Badge tone="neutral">{f.familia}</Badge>
+                        <span className="truncate font-mono text-ink-500 dark:text-ink-400" title={f.key}>
+                          {f.key}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </>
           )}

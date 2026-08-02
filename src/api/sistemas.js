@@ -58,6 +58,22 @@ export async function reintentarImagenes() {
   return data
 }
 
+// ── Archivos privados en R2 ─────────────────────────────────────────────────
+// Fotos de perfil (usuario y trabajador), documentos de RRHH y fotos de
+// herramientas. Van a un bucket PRIVADO, distinto al del catálogo de productos.
+
+export async function getArchivos() {
+  const { data } = await api.get('/sistemas/archivos')
+  return data
+}
+
+// Sube a R2 lo que siga en disco. No borra la copia local; el progreso llega
+// por el socket `archivo:sync_progreso`.
+export async function sincronizarArchivos() {
+  const { data } = await api.post('/sistemas/archivos/sincronizar')
+  return data
+}
+
 export async function getSesiones() {
   const { data } = await api.get('/sistemas/sesiones')
   return data
