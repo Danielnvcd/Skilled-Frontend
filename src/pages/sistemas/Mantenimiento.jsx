@@ -23,8 +23,8 @@ import {
 import { PageHeader, Skeleton, ConfirmDialog } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import {
-  getAlmacenamiento, purgarBitacora, getImagenes, reintentarImagenes,
-  getArchivos, sincronizarArchivos,
+  getAlmacenamiento, getTablasPurgables, purgarTabla, getImagenes,
+  reintentarImagenes, getArchivos, sincronizarArchivos,
 } from '../../api/sistemas'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
@@ -47,24 +47,29 @@ export default function Mantenimiento() {
   // Qué modal está abierto: 'bd' | 'imagenes' | 'archivos' | null
   const [abierto, setAbierto] = useState(null)
 
-  const [mesesPurga, setMesesPurga] = useState(12)
-  const [confirmPurga, setConfirmPurga] = useState(false)
+  // Catálogo de tablas purgables con su política. Viene del backend, que es
+  // donde vive la regla de verdad; aquí solo se muestra.
+  const purgables = useResource('sistemas:purgables', getTablasPurgables, { staleMs: 300_000 })
+
+  // Purga pendiente de confirmar: { tabla, meses, previa, politica }
+  const [purga, setPurga] = useState(null)
   const [confirmReintento, setConfirmReintento] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   const ejecutarPurga = async () => {
+    if (!purga) return
     setEnviando(true)
     try {
-      const res = await purgarBitacora(mesesPurga)
+      const res = await purgarTabla(purga.tabla, purga.meses)
       toast.success(
         res.borrados
-          ? `${fmtNumero(res.borrados)} entradas eliminadas`
-          : 'No había entradas anteriores a esa fecha',
+          ? `${fmtNumero(res.borrados)} fila(s) eliminadas de ${res.etiqueta}`
+          : 'No había filas que cumplieran esos criterios',
       )
-      setConfirmPurga(false)
+      setPurga(null)
       almacen.refetch()
     } catch (err) {
-      toast.error(extractApiError(err, 'No se pudo purgar la bitácora'))
+      toast.error(extractApiError(err, 'No se pudo completar la purga'))
     } finally {
       setEnviando(false)
     }
@@ -237,9 +242,8 @@ export default function Mantenimiento() {
         open={abierto === 'bd'}
         onClose={() => setAbierto(null)}
         datos={datosBd}
-        mesesPurga={mesesPurga}
-        setMesesPurga={setMesesPurga}
-        onPurgar={() => setConfirmPurga(true)}
+        tablasPurgables={purgables.data?.tablas || []}
+        onPurgar={setPurga}
       />
 
       <ModalImagenes
@@ -258,13 +262,24 @@ export default function Mantenimiento() {
         onSincronizar={ejecutarSyncArchivos}
       />
 
+      {/* La confirmación repite la CIFRA EXACTA de la previa, no un "¿estás
+          seguro?" genérico: es la última oportunidad de notar que el número no
+          es el que esperabas. */}
       <ConfirmDialog
-        open={confirmPurga}
-        onClose={() => setConfirmPurga(false)}
+        open={Boolean(purga)}
+        onClose={() => setPurga(null)}
         onConfirm={ejecutarPurga}
         loading={enviando}
-        title="¿Purgar la bitácora?"
-        description={`Se eliminarán de forma irreversible las entradas con más de ${mesesPurga} meses. La purga queda registrada en la propia bitácora con tu nombre.`}
+        title={`¿Purgar ${purga?.politica?.etiqueta || 'la tabla'}?`}
+        description={
+          purga
+            ? `Se eliminarán de forma irreversible ${fmtNumero(purga.previa?.borrables)} fila(s) `
+              + `anteriores al ${new Date(`${purga.previa?.corte}T12:00:00`).toLocaleDateString('es-MX')}. `
+              + `Quedarán ${fmtNumero(purga.previa?.conservadas)}. `
+              + `${purga.politica?.riesgo === 'alto' ? 'ATENCIÓN: esta tabla es de alto impacto. ' : ''}`
+              + 'La purga queda registrada en la bitácora con tu nombre.'
+            : ''
+        }
         confirmLabel="Purgar"
         tone="danger"
       />

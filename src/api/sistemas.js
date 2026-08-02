@@ -48,6 +48,23 @@ export async function purgarBitacora(meses) {
   return data
 }
 
+// Catálogo de tablas purgables con su política (piso de antigüedad, nota, riesgo).
+export async function getTablasPurgables() {
+  const { data } = await api.get('/sistemas/purgar/previa')
+  return data
+}
+
+// Cuántas filas borraría, SIN borrar. Es lo que evita confirmar a ciegas.
+export async function previaPurga(tabla, meses) {
+  const { data } = await api.get('/sistemas/purgar/previa', { params: { tabla, meses } })
+  return data
+}
+
+export async function purgarTabla(tabla, meses) {
+  const { data } = await api.post('/sistemas/purgar', { tabla, meses })
+  return data
+}
+
 export async function getImagenes() {
   const { data } = await api.get('/sistemas/imagenes')
   return data

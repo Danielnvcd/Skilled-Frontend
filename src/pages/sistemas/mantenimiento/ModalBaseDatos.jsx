@@ -1,18 +1,16 @@
 /**
- * Detalle de la base de datos: tablas que crecen sin límite y purga de bitácora.
+ * Detalle de la base de datos: tablas que crecen sin límite y purga.
  *
  * La purga es la única acción IRREVERSIBLE del panel. Por eso vive al fondo del
  * modal, en un bloque de color de advertencia y separada de la tabla informativa:
  * no debe quedar al alcance de un clic distraído mientras se consultan cifras.
  */
-import { Trash2 } from 'lucide-react'
-import {
-  Modal, Button, Select, Table, THead, TH, TBody, TR, TD,
-} from '../../../components/ui'
+import { Modal, Table, THead, TH, TBody, TR, TD } from '../../../components/ui'
 import { fmtNumero } from '../PanelLayout'
+import PurgaTabla from './PurgaTabla'
 
 export default function ModalBaseDatos({
-  open, onClose, datos, mesesPurga, setMesesPurga, onPurgar,
+  open, onClose, datos, tablasPurgables, onPurgar,
 }) {
   return (
     <Modal
@@ -55,44 +53,16 @@ export default function ModalBaseDatos({
             </p>
           )}
 
-          <div className="rounded-xl border border-red-200 bg-red-50/60 p-4 dark:border-red-900/40 dark:bg-red-900/10">
-            <h3 className="text-sm font-medium text-ink-900 dark:text-ink-100">
-              Purgar bitácora antigua
-            </h3>
-            <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-              Elimina entradas anteriores al periodo elegido.{' '}
-              {datos.bitacora_desde && (
-                <>
-                  El registro más antiguo es del{' '}
-                  <strong className="font-medium">
-                    {new Date(datos.bitacora_desde).toLocaleDateString('es-MX')}
-                  </strong>.{' '}
-                </>
-              )}
-              Es irreversible, y por eso no se permite tocar los últimos 3 meses:
-              son los que sirven para investigar un incidente.
+          {datos.bitacora_desde && (
+            <p className="text-xs text-ink-500 dark:text-ink-400">
+              La entrada más antigua de la bitácora es del{' '}
+              <strong className="font-medium">
+                {new Date(datos.bitacora_desde).toLocaleDateString('es-MX')}
+              </strong>.
             </p>
-            <div className="mt-3 flex flex-wrap items-end gap-2">
-              <Select
-                label="Conservar"
-                value={String(mesesPurga)}
-                onChange={(e) => setMesesPurga(Number(e.target.value))}
-                wrapperClassName="w-48"
-              >
-                <option value="6">Últimos 6 meses</option>
-                <option value="12">Últimos 12 meses</option>
-                <option value="24">Últimos 24 meses</option>
-              </Select>
-              <Button
-                variant="danger"
-                size="md"
-                leftIcon={<Trash2 size={15} />}
-                onClick={onPurgar}
-              >
-                Purgar
-              </Button>
-            </div>
-          </div>
+          )}
+
+          <PurgaTabla tablas={tablasPurgables} onPurgar={onPurgar} />
         </div>
       )}
     </Modal>
