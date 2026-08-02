@@ -1,22 +1,26 @@
 /**
- * Mantenimiento: crecimiento de las tablas, purga de bitácora, imágenes del
- * catálogo a R2 y archivos privados a R2.
+ * Mantenimiento del sistema — TABLERO.
  *
- * La purga y el reintento de imágenes son las únicas acciones del panel que
- * modifican datos de forma irreversible, así que ambas piden confirmación
- * explicando qué va a pasar — no un "¿estás seguro?" genérico. Sincronizar
- * archivos NO la pide: solo copia a la nube, no borra nada y es idempotente.
+ * Tres tarjetas que dicen de un vistazo si algo necesita atención (base de
+ * datos, imágenes del catálogo, archivos en la nube). El detalle y las acciones
+ * viven en un modal por tema, en `./mantenimiento/`. Antes todo estaba apilado
+ * en una sola página larga y no se distinguía lo urgente de lo rutinario.
+ *
+ * Esta pantalla solo ORQUESTA: carga los tres recursos, decide el tono de cada
+ * tarjeta y abre el modal correspondiente. La lógica de cada tema vive en su
+ * propio archivo.
+ *
+ * Las acciones destructivas (purgar bitácora) o costosas (reintentar imágenes)
+ * piden confirmación con un texto que explica qué va a pasar, no un "¿estás
+ * seguro?" genérico. Sincronizar archivos NO la pide: solo copia a la nube, no
+ * borra nada y es idempotente.
  */
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
-  DatabaseZap, RefreshCw, Database, ImageOff, Trash2, RotateCw, CheckCircle2,
-  CloudUpload, FileWarning,
+  DatabaseZap, Database, ImageOff, CloudUpload, FileWarning,
 } from 'lucide-react'
-import {
-  PageHeader, Button, Skeleton, Badge, EmptyState, ConfirmDialog, Select,
-  Table, THead, TH, TBody, TR, TD,
-} from '../../components/ui'
+import { PageHeader, Skeleton, ConfirmDialog } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import {
   getAlmacenamiento, purgarBitacora, getImagenes, reintentarImagenes,
@@ -24,12 +28,12 @@ import {
 } from '../../api/sistemas'
 import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
-import { EstadoCarga, useRefrescar, BotonActualizar } from './PanelLayout'
-
-function fmtNumero(n) {
-  if (n === null || n === undefined) return '—'
-  return new Intl.NumberFormat('es-MX').format(n)
-}
+import {
+  EstadoCarga, useRefrescar, BotonActualizar, TarjetaTema, fmtNumero,
+} from './PanelLayout'
+import ModalBaseDatos from './mantenimiento/ModalBaseDatos'
+import ModalImagenes from './mantenimiento/ModalImagenes'
+import ModalArchivos from './mantenimiento/ModalArchivos'
 
 export default function Mantenimiento() {
   const almacen = useResource('sistemas:almacenamiento', getAlmacenamiento, { staleMs: 60_000 })
@@ -39,6 +43,9 @@ export default function Mantenimiento() {
   const { refrescando, refrescar } = useRefrescar(
     almacen.refetch, imagenes.refetch, archivos.refetch,
   )
+
+  // Qué modal está abierto: 'bd' | 'imagenes' | 'archivos' | null
+  const [abierto, setAbierto] = useState(null)
 
   const [mesesPurga, setMesesPurga] = useState(12)
   const [confirmPurga, setConfirmPurga] = useState(false)
@@ -82,14 +89,13 @@ export default function Mantenimiento() {
   }
 
   // ── Sincronización de archivos privados a R2 ──────────────────────────────
-  // Mismo patrón que el pipeline de imágenes del catálogo: la petición solo
-  // encola, y el progreso real llega por socket al usuario que lo lanzó.
+  // Mismo patrón que el pipeline de imágenes: la petición solo encola, y el
+  // progreso real llega por socket al usuario que lo lanzó.
   const { on } = useSocket()
-  const [progreso, setProgreso] = useState(null)   // { total, hechas, ok, error, estado, actual }
+  const [progreso, setProgreso] = useState(null)
   const [sincronizando, setSincronizando] = useState(false)
   // Job lanzado por ESTA pantalla; en ref para que el listener lea el valor
-  // actual sin volver a suscribirse. Ignoramos eventos de otros trabajos para
-  // que la barra no salte entre ellos.
+  // actual sin volver a suscribirse.
   const jobIdRef = useRef(null)
 
   useEffect(() => {
@@ -124,8 +130,7 @@ export default function Mantenimiento() {
         toast.success('Todos los archivos ya están en R2')
       }
     } catch (err) {
-      // 409: otro administrador ya la lanzó. No es un fallo — se informa y se
-      // refresca para que se vean los conteos que esa corrida vaya dejando.
+      // 409: otro administrador ya la lanzó. No es un fallo.
       if (err?.response?.status === 409) {
         toast(extractApiError(err, 'Ya hay una sincronización en curso'))
         archivos.refetch()
@@ -137,341 +142,121 @@ export default function Mantenimiento() {
     }
   }
 
+  const datosBd = almacen.data
   const datosImg = imagenes.data
   const datosArch = archivos.data
-  const pctArch = progreso?.total ? Math.round((progreso.hechas / progreso.total) * 100) : 0
+
+  const cargando = almacen.loading || imagenes.loading || archivos.loading
+  const errorGlobal = almacen.error || imagenes.error || archivos.error
+
+  const filasBd = datosBd?.tablas?.length || 0
+  const totalFilasBd = (datosBd?.tablas || []).reduce((acc, t) => acc + (t.filas || 0), 0)
+  const imgError = datosImg?.total_error || 0
+  const imgPendiente = datosImg?.total_pendiente || 0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Mantenimiento"
-        description="Crecimiento de la base de datos, procesado de imágenes y archivos en la nube."
+        description="Estado de la base de datos, del procesado de imágenes y de los archivos en la nube."
         icon={DatabaseZap}
         actions={
           <BotonActualizar onClick={refrescar} refrescando={refrescando} ruta="/sistemas/almacenamiento" />
         }
       />
 
-      {/* ── Almacenamiento ───────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900 dark:text-ink-100">
-            <Database size={16} className="text-ink-400" />
-            Tablas que crecen sin límite
-          </h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-            Estas tablas suman una fila por evento y nada las poda. El resto crece con
-            el negocio y se autolimita.
-          </p>
+      <EstadoCarga
+        error={errorGlobal}
+        loading={cargando}
+        skeleton={
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Skeleton className="h-44" /><Skeleton className="h-44" /><Skeleton className="h-44" />
+          </div>
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <TarjetaTema
+            icono={Database}
+            titulo="Base de datos"
+            valor={fmtNumero(totalFilasBd)}
+            unidad="filas vigiladas"
+            detalle={`${filasBd} tabla(s) que crecen sin límite`}
+            tono="neutral"
+            etiqueta="Rutina"
+            accion="Administrar"
+            onClick={() => setAbierto('bd')}
+          />
+
+          <TarjetaTema
+            icono={ImageOff}
+            titulo="Imágenes del catálogo"
+            valor={fmtNumero(imgError)}
+            unidad={imgError === 1 ? 'imagen en error' : 'imágenes en error'}
+            detalle={
+              imgPendiente > 0
+                ? `${fmtNumero(imgPendiente)} pendiente(s) de procesar`
+                : 'Sin pendientes de procesar'
+            }
+            tono={imgError > 0 ? 'alerta' : 'ok'}
+            etiqueta={imgError > 0 ? 'Requiere atención' : 'Al día'}
+            accion={imgError > 0 ? `Revisar ${imgError}` : 'Ver detalle'}
+            onClick={() => setAbierto('imagenes')}
+          />
+
+          <TarjetaTema
+            icono={CloudUpload}
+            titulo="Archivos en la nube"
+            valor={datosArch?.enabled ? fmtNumero(datosArch?.en_r2) : '—'}
+            unidad="en el bucket privado"
+            detalle={
+              !datosArch?.enabled
+                ? 'Sin configurar: se guardan en el servidor'
+                : datosArch?.error
+                  ? 'No se puede contactar el bucket'
+                  : datosArch?.pendientes > 0
+                    ? `${fmtNumero(datosArch.pendientes)} por subir`
+                    : 'Todo sincronizado'
+            }
+            tono={
+              !datosArch?.enabled ? 'neutral'
+                : datosArch?.error ? 'alerta'
+                  : datosArch?.pendientes > 0 ? 'aviso' : 'ok'
+            }
+            etiqueta={
+              !datosArch?.enabled ? 'Inactivo'
+                : datosArch?.error ? 'Requiere atención'
+                  : datosArch?.pendientes > 0 ? 'Pendiente' : 'Al día'
+            }
+            accion="Administrar"
+            onClick={() => setAbierto('archivos')}
+          />
         </div>
+      </EstadoCarga>
 
-        <EstadoCarga
-          error={almacen.error}
-          loading={almacen.loading}
-          skeleton={<Skeleton className="h-40" />}
-        >
-          {almacen.data && (
-            <>
-              <Table>
-                <THead>
-                  <TH>Tabla</TH>
-                  <TH align="right">Filas</TH>
-                  <TH align="right">Tamaño</TH>
-                </THead>
-                <TBody>
-                  {almacen.data.tablas.map((t) => (
-                    <TR key={t.tabla}>
-                      <TD>
-                        <span className="font-medium">{t.etiqueta}</span>
-                        <span className="ml-2 font-mono text-xs text-ink-500 dark:text-ink-400">
-                          {t.tabla}
-                        </span>
-                      </TD>
-                      <TD align="right" className="tabular-nums">{fmtNumero(t.filas)}</TD>
-                      <TD align="right" className="whitespace-nowrap tabular-nums">
-                        {t.tamano || '—'}
-                      </TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
+      <ModalBaseDatos
+        open={abierto === 'bd'}
+        onClose={() => setAbierto(null)}
+        datos={datosBd}
+        mesesPurga={mesesPurga}
+        setMesesPurga={setMesesPurga}
+        onPurgar={() => setConfirmPurga(true)}
+      />
 
-              {!almacen.data.tamano_disponible && (
-                <p className="text-xs text-ink-500 dark:text-ink-400">
-                  El tamaño en disco solo está disponible en PostgreSQL
-                  (motor actual: {almacen.data.motor}).
-                </p>
-              )}
+      <ModalImagenes
+        open={abierto === 'imagenes'}
+        onClose={() => setAbierto(null)}
+        datos={datosImg}
+        onReintentar={() => setConfirmReintento(true)}
+      />
 
-              <div className="rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
-                <h3 className="text-sm font-medium text-ink-900 dark:text-ink-100">
-                  Purgar bitácora antigua
-                </h3>
-                <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                  Elimina entradas anteriores al periodo elegido.{' '}
-                  {almacen.data.bitacora_desde && (
-                    <>
-                      El registro más antiguo es del{' '}
-                      <strong className="font-medium">
-                        {new Date(almacen.data.bitacora_desde).toLocaleDateString('es-MX')}
-                      </strong>.{' '}
-                    </>
-                  )}
-                  Es irreversible, y por eso no se permite tocar los últimos 3 meses:
-                  son los que sirven para investigar un incidente.
-                </p>
-                <div className="mt-3 flex flex-wrap items-end gap-2">
-                  <Select
-                    label="Conservar"
-                    value={String(mesesPurga)}
-                    onChange={(e) => setMesesPurga(Number(e.target.value))}
-                    wrapperClassName="w-48"
-                  >
-                    <option value="6">Últimos 6 meses</option>
-                    <option value="12">Últimos 12 meses</option>
-                    <option value="24">Últimos 24 meses</option>
-                  </Select>
-                  <Button
-                    variant="danger"
-                    size="md"
-                    leftIcon={<Trash2 size={15} />}
-                    onClick={() => setConfirmPurga(true)}
-                  >
-                    Purgar
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </EstadoCarga>
-      </section>
-
-      {/* ── Imágenes a R2 ────────────────────────────────────────────────── */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900 dark:text-ink-100">
-            <ImageOff size={16} className="text-ink-400" />
-            Procesado de imágenes
-          </h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-            Las imágenes de productos y categorías se convierten a WebP y se suben a
-            Cloudflare R2 en segundo plano. Las que fallan no se reintentan solas ni
-            avisan: aquí es donde se ven.
-          </p>
-        </div>
-
-        <EstadoCarga
-          error={imagenes.error}
-          loading={imagenes.loading}
-          skeleton={<Skeleton className="h-32" />}
-        >
-          {datosImg && (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Tarjeta etiqueta="En error" valor={datosImg.total_error} alerta={datosImg.total_error > 0} />
-                <Tarjeta etiqueta="Pendientes" valor={datosImg.total_pendiente} />
-                <Tarjeta etiqueta="Productos OK" valor={datosImg.productos?.OK || 0} />
-                <Tarjeta etiqueta="Categorías OK" valor={datosImg.categorias?.OK || 0} />
-              </div>
-
-              {datosImg.total_error > 0 ? (
-                <>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={<RotateCw size={14} />}
-                      onClick={() => setConfirmReintento(true)}
-                    >
-                      Reintentar {datosImg.total_error}
-                    </Button>
-                  </div>
-                  <Table>
-                    <THead>
-                      <TH>Tipo</TH>
-                      <TH>Elemento</TH>
-                      <TH>Origen de la imagen</TH>
-                    </THead>
-                    <TBody>
-                      {datosImg.fallidos.map((f) => (
-                        <TR key={`${f.tipo}-${f.id}`}>
-                          <TD>
-                            <Badge tone="neutral">{f.tipo}</Badge>
-                          </TD>
-                          <TD>{f.nombre}</TD>
-                          <TD>
-                            <span className="block max-w-[24rem] truncate font-mono text-xs text-ink-500 dark:text-ink-400"
-                                  title={f.imagen_url || ''}>
-                              {f.imagen_url || '—'}
-                            </span>
-                          </TD>
-                        </TR>
-                      ))}
-                    </TBody>
-                  </Table>
-                </>
-              ) : (
-                <EmptyState
-                  icon={CheckCircle2}
-                  title="Sin imágenes en error"
-                  description="Todas las imágenes se procesaron correctamente."
-                />
-              )}
-            </>
-          )}
-        </EstadoCarga>
-      </section>
-
-      {/* ── Archivos privados a R2 ───────────────────────────────────────── */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-ink-900 dark:text-ink-100">
-            <CloudUpload size={16} className="text-ink-400" />
-            Archivos privados en la nube
-          </h2>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-            Fotos de perfil, documentos de trabajadores y fotos de herramientas. Van a
-            un bucket <strong className="font-medium">privado</strong> de Cloudflare R2,
-            distinto al del catálogo: se siguen sirviendo con sesión iniciada, nadie los
-            abre con solo tener el enlace.
-          </p>
-        </div>
-
-        <EstadoCarga
-          error={archivos.error}
-          loading={archivos.loading}
-          skeleton={<Skeleton className="h-32" />}
-        >
-          {datosArch && !datosArch.enabled && (
-            <EmptyState
-              icon={CloudUpload}
-              title="Almacenamiento en la nube sin configurar"
-              description="Los archivos se están guardando en el disco del servidor y la aplicación funciona con normalidad. Para activarlo, define R2_PRIVADO_BUCKET en el .env de este entorno."
-            />
-          )}
-
-          {datosArch?.enabled && datosArch.error && (
-            <div className="rounded-xl border border-red-300 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-900/20">
-              <h3 className="flex items-center gap-2 text-sm font-medium text-ink-900 dark:text-ink-100">
-                <FileWarning size={15} className="text-red-600 dark:text-red-400" />
-                No se puede contactar el bucket privado
-              </h3>
-              <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                {datosArch.error}
-              </p>
-              <p className="mt-1.5 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                Mientras tanto los archivos se guardan y se sirven desde el disco del
-                servidor: la aplicación funciona con normalidad y no se pierde nada.
-              </p>
-            </div>
-          )}
-
-          {datosArch?.enabled && !datosArch.error && (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Tarjeta etiqueta="En la nube" valor={datosArch.en_r2} />
-                <Tarjeta etiqueta="Por subir" valor={datosArch.pendientes} />
-                <Tarjeta etiqueta="Sin archivo" valor={datosArch.faltantes} alerta={datosArch.faltantes > 0} />
-                <Tarjeta etiqueta="Total" valor={datosArch.total} />
-              </div>
-
-              {progreso && (
-                <div className="space-y-1.5">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
-                    <div
-                      className={`h-full transition-all duration-300 ${progreso.estado === 'done' ? 'bg-emerald-500' : 'bg-brand-600'}`}
-                      style={{ width: `${pctArch}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-ink-500 dark:text-ink-400">
-                    <span className="truncate">
-                      {progreso.estado === 'done'
-                        ? `Listo · ${progreso.ok} subido(s)${progreso.error ? `, ${progreso.error} con error` : ''}`
-                        : `Subiendo ${progreso.hechas}/${progreso.total}${progreso.actual ? ` · ${progreso.actual}` : ''}`}
-                    </span>
-                    <span className="ml-2 flex-shrink-0 tabular-nums">{pctArch}%</span>
-                  </div>
-                </div>
-              )}
-
-              {datosArch.pendientes > 0 ? (
-                <div className="rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
-                  <h3 className="text-sm font-medium text-ink-900 dark:text-ink-100">
-                    Subir los que faltan
-                  </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                    {fmtNumero(datosArch.pendientes)} archivo(s) siguen solo en el disco del
-                    servidor. Subirlos no borra la copia local ni interrumpe la aplicación:
-                    mientras tanto se siguen sirviendo desde el disco. Repetir la operación
-                    es seguro.
-                  </p>
-                  <div className="mt-3 flex justify-end">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      leftIcon={<RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />}
-                      loading={sincronizando}
-                      disabled={progreso?.estado === 'running'}
-                      onClick={ejecutarSyncArchivos}
-                    >
-                      Sincronizar {fmtNumero(datosArch.pendientes)}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState
-                  icon={CheckCircle2}
-                  title="Todo sincronizado"
-                  description="Cada archivo referenciado por la base de datos ya está en la nube."
-                />
-              )}
-
-              <Table>
-                <THead>
-                  <TH>Tipo de archivo</TH>
-                  <TH align="right">En la nube</TH>
-                  <TH align="right">Por subir</TH>
-                  <TH align="right">Sin archivo</TH>
-                </THead>
-                <TBody>
-                  {datosArch.familias.map((f) => (
-                    <TR key={f.clave}>
-                      <TD><span className="font-medium">{f.etiqueta}</span></TD>
-                      <TD align="right" className="tabular-nums">{fmtNumero(f.en_r2)}</TD>
-                      <TD align="right" className="tabular-nums">{fmtNumero(f.pendientes)}</TD>
-                      <TD align="right" className="tabular-nums">{fmtNumero(f.faltantes)}</TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-
-              {datosArch.faltantes > 0 && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-900/20">
-                  <h3 className="flex items-center gap-2 text-sm font-medium text-ink-900 dark:text-ink-100">
-                    <FileWarning size={15} className="text-amber-600 dark:text-amber-400" />
-                    {fmtNumero(datosArch.faltantes)} referencia(s) sin archivo
-                  </h3>
-                  <p className="mt-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
-                    La base de datos apunta a estos archivos pero no están ni en la nube ni
-                    en el disco. Es dato roto de antes de la migración, no lo causa
-                    sincronizar. Se corrigen volviendo a subir el archivo desde su pantalla.
-                  </p>
-                  <ul className="mt-2 space-y-0.5">
-                    {datosArch.detalle_faltantes.map((f) => (
-                      <li key={f.key} className="flex flex-wrap items-center gap-2 text-xs">
-                        <Badge tone="neutral">{f.familia}</Badge>
-                        <span className="truncate font-mono text-ink-500 dark:text-ink-400" title={f.key}>
-                          {f.key}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </>
-          )}
-        </EstadoCarga>
-      </section>
+      <ModalArchivos
+        open={abierto === 'archivos'}
+        onClose={() => setAbierto(null)}
+        datos={datosArch}
+        progreso={progreso}
+        sincronizando={sincronizando}
+        onSincronizar={ejecutarSyncArchivos}
+      />
 
       <ConfirmDialog
         open={confirmPurga}
@@ -494,23 +279,6 @@ export default function Mantenimiento() {
         confirmLabel="Reintentar"
         tone="default"
       />
-    </div>
-  )
-}
-
-function Tarjeta({ etiqueta, valor, alerta }) {
-  return (
-    <div
-      className={`rounded-xl border p-3 ${
-        alerta
-          ? 'border-red-300 bg-red-50 dark:border-red-900/50 dark:bg-red-900/20'
-          : 'border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900'
-      }`}
-    >
-      <p className="text-xs text-ink-500 dark:text-ink-400">{etiqueta}</p>
-      <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100">
-        {valor ?? 0}
-      </p>
     </div>
   )
 }

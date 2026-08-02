@@ -7,8 +7,8 @@
  */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ShieldAlert, AlertTriangle, RefreshCw, Timer } from 'lucide-react'
-import { Button } from '../../components/ui'
+import { ShieldAlert, AlertTriangle, RefreshCw, Timer, ChevronRight } from 'lucide-react'
+import { Button, Badge } from '../../components/ui'
 import { esFalta2fa } from '../../api/sistemas'
 import { getCupo, suscribirCupo } from '../../api/rateLimit'
 
@@ -211,6 +211,77 @@ export function Indicador({ ok, titulo, detalle }) {
  * válida en vez de saltar a la primera — así una revalidación de fondo no te
  * mueve la vista mientras estás leyendo.
  */
+export function fmtNumero(n) {
+  if (n === null || n === undefined) return '—'
+  return new Intl.NumberFormat('es-MX').format(n)
+}
+
+/**
+ * Contador compacto: la unidad mínima de todos los tableros del panel.
+ *
+ * `tono="alerta"` lo tiñe de rojo — se usa para que un conteo de errores > 0
+ * salte a la vista sin tener que leer la etiqueta. `pie` es la letra chica
+ * (un porcentaje, un "aproximado") que matiza el número sin robarle peso.
+ */
+export function TarjetaDato({ etiqueta, valor, tono, pie }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        tono === 'alerta'
+          ? 'border-red-300 bg-red-50 dark:border-red-900/50 dark:bg-red-900/20'
+          : 'border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900'
+      }`}
+    >
+      <p className="text-xs text-ink-500 dark:text-ink-400">{etiqueta}</p>
+      <p className="mt-0.5 text-xl font-semibold tabular-nums text-ink-900 dark:text-ink-100">
+        {valor ?? 0}
+      </p>
+      {pie && <p className="text-[11px] text-ink-500 dark:text-ink-400">{pie}</p>}
+    </div>
+  )
+}
+
+/**
+ * Tarjeta-resumen de un tema, clicable entera: el objetivo de clic es grande y
+ * no hay que apuntarle a un enlace chico. Es la pieza con la que los tableros
+ * del panel (Mantenimiento, Peticiones) abren el detalle en un modal.
+ */
+const TONOS_TEMA = { ok: 'success', aviso: 'warning', alerta: 'danger', neutral: 'neutral' }
+
+export function TarjetaTema({
+  icono: Icono, titulo, valor, unidad, detalle, tono, etiqueta, accion, onClick,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex flex-col rounded-xl border border-ink-200 bg-white p-4 text-left transition-colors hover:border-ink-300 hover:bg-ink-50/60 focus-ring dark:border-ink-800 dark:bg-ink-900 dark:hover:border-ink-700 dark:hover:bg-ink-800/40"
+    >
+      <div className="flex items-center gap-2">
+        <Icono size={16} className="flex-shrink-0 text-ink-400" />
+        <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900 dark:text-ink-100">
+          {titulo}
+        </h2>
+        <Badge tone={TONOS_TEMA[tono] || 'neutral'} dot>{etiqueta}</Badge>
+      </div>
+
+      <p className="mt-3 text-2xl font-semibold tabular-nums text-ink-900 dark:text-ink-100">
+        {valor}
+      </p>
+      <p className="text-xs text-ink-500 dark:text-ink-400">{unidad}</p>
+
+      <p className="mt-2 flex-1 text-xs leading-relaxed text-ink-500 dark:text-ink-400">
+        {detalle}
+      </p>
+
+      <span className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-700 group-hover:gap-1.5 dark:text-brand-300">
+        {accion}
+        <ChevronRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </button>
+  )
+}
+
 export function usePaginacionLocal(items, porPagina = 25) {
   const [pagina, setPagina] = useState(0) // 0-based, como espera <Pagination>
 
