@@ -1,4 +1,5 @@
 import api from './axios'
+import { progresoAxios } from '../utils/subida'
 
 const BASE = '/trabajadores'
 
@@ -69,16 +70,18 @@ export async function eliminarNota(id, notaId) {
   return data
 }
 
-export async function crearTrabajador(formData) {
+export async function crearTrabajador(formData, onProgress) {
   const { data } = await api.post(BASE, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }
 
-export async function actualizarTrabajador(id, formData) {
+export async function actualizarTrabajador(id, formData, onProgress) {
   const { data } = await api.post(`${BASE}/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }
@@ -126,7 +129,9 @@ export async function subirFoto(id, file) {
   return data
 }
 
-export async function subirDocumento(id, { file, tipo_documento, fecha_inicio, fecha_fin }) {
+// `onProgress` es opcional: recibe 0-100 mientras el archivo viaja. Se usa con
+// `subirConProgreso` (utils/subida.jsx) para la barra de los archivos grandes.
+export async function subirDocumento(id, { file, tipo_documento, fecha_inicio, fecha_fin }, onProgress) {
   const fd = new FormData()
   fd.append('documento', file)
   if (tipo_documento) fd.append('tipo_documento', tipo_documento)
@@ -134,6 +139,7 @@ export async function subirDocumento(id, { file, tipo_documento, fecha_inicio, f
   if (fecha_fin) fd.append('fecha_fin', fecha_fin)
   const { data } = await api.post(`${BASE}/${id}/documentos`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }

@@ -16,6 +16,7 @@ import DocumentosManager from '../../components/empleados/DocumentosManager'
 import FotoUploader from '../../components/empleados/FotoUploader'
 import { useAuth } from '../../context/AuthContext'
 import useUnsavedChanges, { confirmIfDirty } from '../../hooks/useUnsavedChanges'
+import { subirConProgreso } from '../../utils/subida'
 
 const TABS = [
   { id: 'datos',    label: 'Datos personales', icon: User },
@@ -162,14 +163,22 @@ export default function EmpleadoForm({ modo }) {
       fd.append('credenciales_json', JSON.stringify(credenciales))
       if (foto) fd.append('foto_perfil', foto)
 
-      const res = editando
-        ? await actualizarTrabajador(id, fd)
-        : await crearTrabajador(fd)
+      // La foto viaja dentro de este mismo FormData, así que el progreso (y el
+      // toast de éxito) los lleva `subirConProgreso`: con foto grande se ve la
+      // barra, y sin foto se comporta igual que antes.
+      const res = await subirConProgreso(
+        (onProgress) => (editando
+          ? actualizarTrabajador(id, fd, onProgress)
+          : crearTrabajador(fd, onProgress)),
+        {
+          archivo: foto,
+          exito: editando ? 'Empleado actualizado' : 'Empleado creado',
+        },
+      )
 
       if (res.warnings?.length) {
         res.warnings.forEach((w) => toast(w, { icon: <AlertTriangle size={18} /> }))
       }
-      toast.success(editando ? 'Empleado actualizado' : 'Empleado creado')
       if (!editando) {
         navigate(`/empleados/${res.id}/editar`, { replace: true })
       } else {

@@ -9,6 +9,7 @@ import {
 } from '../components/ui'
 import UserAvatar from '../components/UserAvatar'
 import { extractApiError } from '../utils/apiError'
+import { subirConProgreso } from '../utils/subida'
 import { useAuth } from '../context/AuthContext'
 import {
   listarUsuarios, crearUsuario, eliminarUsuario, reactivarUsuario, cambiarPasswordUsuario, actualizarUsuario,
@@ -335,8 +336,14 @@ export default function Usuarios() {
       payload.trabajador_id = payload.trabajador_id === '' ? null : Number(payload.trabajador_id)
       await actualizarUsuario(openEdit.id, payload)
       // 2. Foto: POST multipart (solo si el admin eligió una nueva)
-      if (photoFile) await subirFotoUsuario(openEdit.id, photoFile)
-      toast.success(photoFile ? 'Usuario y foto actualizados' : 'Usuario actualizado')
+      if (photoFile) {
+        await subirConProgreso(
+          (onProgress) => subirFotoUsuario(openEdit.id, photoFile, onProgress),
+          { archivo: photoFile, exito: 'Usuario y foto actualizados' },
+        )
+      } else {
+        toast.success('Usuario actualizado')
+      }
       closeEdit()
       await refetch()
     } catch (err) {

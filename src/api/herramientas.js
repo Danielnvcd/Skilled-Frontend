@@ -1,4 +1,5 @@
 import api from './axios'
+import { progresoAxios } from '../utils/subida'
 
 const BASE = '/v1'
 
@@ -178,13 +179,14 @@ export async function ejecutarBaja(id) {
 }
 
 // ─── Fotos / evidencia ──────────────────────────────────────────────────────
-export async function subirFotoUnidad(unidadId, file, { tipo = 'FOTO_HERRAMIENTA', eventoId = null } = {}) {
+export async function subirFotoUnidad(unidadId, file, { tipo = 'FOTO_HERRAMIENTA', eventoId = null } = {}, onProgress) {
   const fd = new FormData()
   fd.append('foto', file)
   fd.append('tipo', tipo)
   if (eventoId) fd.append('evento_id', String(eventoId))
   const { data } = await api.post(`${BASE}/herramientas-unidades/${unidadId}/fotos`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }

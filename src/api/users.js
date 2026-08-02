@@ -1,4 +1,5 @@
 import api from './axios'
+import { progresoAxios } from '../utils/subida'
 
 const BASE = '/users'
 
@@ -35,11 +36,12 @@ export async function actualizarUsuario(id, payload) {
   return data
 }
 
-export async function subirFotoUsuario(id, file) {
+export async function subirFotoUsuario(id, file, onProgress) {
   const fd = new FormData()
   fd.append('foto_perfil', file)
   const { data } = await api.post(`${BASE}/${id}/foto`, fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }

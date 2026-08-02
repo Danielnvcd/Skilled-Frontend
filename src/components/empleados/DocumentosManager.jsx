@@ -5,6 +5,7 @@ import { Button, Input, EmptyState, ConfirmDialog, ImageViewer } from '../ui'
 import {
   subirDocumento, eliminarDocumento, descargarDocumento,
 } from '../../api/trabajadores'
+import { subirConProgreso } from '../../utils/subida'
 
 // Tipos de documento más comunes (datalist — el usuario puede escribir cualquier otro).
 const TIPOS_DOC_SUGERIDOS = [
@@ -39,18 +40,24 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
   }
 
   const onUpload = async (e) => {
-    e.preventDefault()
+    // Se llama desde onClick, no desde onSubmit (ver el comentario del contenedor).
+    // El preventDefault se conserva por si el botón acabara dentro de un form.
+    e?.preventDefault?.()
     if (!file) return
     setUploading(true)
     try {
-      const doc = await subirDocumento(trabajadorId, {
-        file,
-        tipo_documento: tipo,
-        fecha_inicio: fInicio,
-        fecha_fin: fFin,
-      })
+      // Los expedientes traen PDF de varios MB: `subirConProgreso` enseña la
+      // barra cuando el archivo lo amerita y suelta el toast de éxito al final.
+      const doc = await subirConProgreso(
+        (onProgress) => subirDocumento(trabajadorId, {
+          file,
+          tipo_documento: tipo,
+          fecha_inicio: fInicio,
+          fecha_fin: fFin,
+        }, onProgress),
+        { archivo: file, exito: 'Documento subido' },
+      )
       onChange([...documentos, doc])
-      toast.success('Documento subido')
       setFile(null)
       setTipo('')
       setFInicio('')
@@ -88,10 +95,15 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
 
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={onUpload}
-        className="rounded-xl border border-ink-200 dark:border-ink-800 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]"
-      >
+      {/*
+        Un <div>, NO un <form>: este componente se renderiza DENTRO del <form>
+        de EmpleadoForm, y un formulario anidado en otro es HTML inválido. El
+        navegador le daba el botón "Subir" al formulario exterior, así que en vez
+        de subir el documento se guardaba el empleado y la vista se reseteaba —
+        parecía que "no se podía subir" cuando en realidad nunca se enviaba nada.
+        Con un div y un botón type="button", la subida solo depende de onClick.
+      */}
+      <div className="rounded-xl border border-ink-200 dark:border-ink-800 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
         <div className="lg:col-span-1">
           <label className="block text-xs font-medium text-ink-700 dark:text-ink-300 mb-1.5 tracking-wide">
             Archivo
@@ -117,11 +129,17 @@ export default function DocumentosManager({ trabajadorId, documentos, onChange }
         <Input label="Fecha inicio" type="date" value={fInicio} onChange={(e) => setFInicio(e.target.value)} />
         <Input label="Fecha fin" type="date" value={fFin} onChange={(e) => setFFin(e.target.value)} />
         <div className="self-end">
-          <Button type="submit" leftIcon={<Upload size={14} />} loading={uploading} disabled={!file}>
+          <Button
+            type="button"
+            onClick={onUpload}
+            leftIcon={<Upload size={14} />}
+            loading={uploading}
+            disabled={!file}
+          >
             Subir
           </Button>
         </div>
-      </form>
+      </div>
 
       {documentos.length === 0 ? (
         <EmptyState

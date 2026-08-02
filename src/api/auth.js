@@ -1,4 +1,5 @@
 import api from './axios'
+import { progresoAxios } from '../utils/subida'
 
 const BASE = '/auth'
 
@@ -12,10 +13,11 @@ export async function obtenerUsuario(id) {
   return data
 }
 
-export async function updateProfile(formData) {
+export async function updateProfile(formData, onProgress) {
   // formData es un FormData con full_name, area, position, factory, contact_info, profile_pic
   const { data } = await api.post(`${BASE}/profile`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: progresoAxios(onProgress),
   })
   return data
 }

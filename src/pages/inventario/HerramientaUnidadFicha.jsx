@@ -18,6 +18,7 @@ import {
   getMantenimientos, getIncidencias, getSolicitudesBaja,
 } from '../../api/herramientas'
 import { extractApiError } from '../../utils/apiError'
+import { subirConProgreso } from '../../utils/subida'
 import {
   ESTADO_LABEL, ESTADO_TONE, TIPO_EVENTO_LABEL, formatDateTime,
   TIPO_INCIDENCIA, TIPO_INCIDENCIA_LABEL, TIPO_MANTENIMIENTO, CONDICION,
@@ -361,8 +362,10 @@ function FotoUpload({ unidadId, onUploaded }) {
     if (!file) return
     setUploading(true)
     try {
-      await subirFotoUnidad(unidadId, file, { tipo: 'FOTO_HERRAMIENTA' })
-      toast.success('Foto subida')
+      await subirConProgreso(
+        (onProgress) => subirFotoUnidad(unidadId, file, { tipo: 'FOTO_HERRAMIENTA' }, onProgress),
+        { archivo: file, exito: 'Foto subida' },
+      )
       onUploaded?.()
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo subir'))

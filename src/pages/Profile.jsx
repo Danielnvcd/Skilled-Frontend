@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import api from '../api/axios'
 import toast from 'react-hot-toast'
 import { extractApiError } from '../utils/apiError'
+import { subirConProgreso } from '../utils/subida'
 import { useAuth } from '../context/AuthContext'
 import {
   User, Building2, Briefcase, Factory, Phone, ShieldCheck, Save,
@@ -139,13 +140,15 @@ export default function Profile() {
       if (profilePicFile) {
         formData.append('profile_pic', profilePicFile)
       }
-      const data = await updateProfile(formData)
+      const data = await subirConProgreso(
+        (onProgress) => updateProfile(formData, onProgress),
+        { archivo: profilePicFile, exito: 'Perfil actualizado' },
+      )
       if (isOwn) updateUser(data)
       setProfilePicFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
       await refetch()
       setEditing(false)
-      toast.success('Perfil actualizado')
     } catch (err) {
       toast.error(extractApiError(err, 'Error al actualizar perfil'))
     } finally {
