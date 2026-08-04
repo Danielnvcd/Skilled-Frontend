@@ -345,7 +345,7 @@ export default function PortadaAlmacenes() {
     if (!resumen.some((a) => a.almacen_id === selectedId)) {
       setSelectedId(null); setProyecto(''); limpiarBusqueda()
     }
-  }, [resumen, selectedId])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [resumen, selectedId])
 
   // Al entrar, la página muestra el almacén PRINCIPAL para no abrir en blanco.
   // "Principal" = el que más unidades tiene, no el primero de la lista (que va

@@ -7,6 +7,7 @@ import {
 import { Card, Skeleton, EmptyState, Button, Select } from '../ui'
 import { obtenerTimeline } from '../../api/trabajadores'
 import { useResource } from '../../hooks/useResource'
+import { fmtFecha as fmtFechaBase } from '../../utils/format'
 
 const mxn = new Intl.NumberFormat('es-MX', {
   style: 'currency', currency: 'MXN', minimumFractionDigits: 2,
@@ -56,14 +57,8 @@ const RANGOS = [
   { dias: 365, label: 'Último año' },
 ]
 
-function fmtFecha(iso) {
-  if (!iso) return ''
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', {
-      day: '2-digit', month: 'short', year: 'numeric',
-    })
-  } catch { return iso }
-}
+// Sin valor se pinta vacío, no un guion: aquí la fecha va dentro de una frase.
+const fmtFecha = (iso) => fmtFechaBase(iso, '')
 
 function diasAtrasDesde(iso) {
   try {

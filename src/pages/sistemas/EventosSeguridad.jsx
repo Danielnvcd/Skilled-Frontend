@@ -29,7 +29,12 @@ export default function EventosSeguridad() {
   const { data, loading, error, refetch } = useResource(
     ['sistemas:eventos', dias],
     () => getEventosSeguridad({ dias, limite: 200 }),
-    { staleMs: 20_000, invalidateOn: ['bitacora:new'] },
+    // Dos eventos a propósito: `bitacora:new` solo se emite a admin/super_admin,
+    // así que para el rol `sistemas` —el dueño de esta pantalla— nunca llegaba y
+    // la vista no se refrescaba en vivo. `seguridad:new` es el push que sí le
+    // llega, y solo cuando la entrada del AuditLog es de seguridad. Trae únicamente
+    // el id: la lista se vuelve a pedir por REST, que filtra en el servidor.
+    { staleMs: 20_000, invalidateOn: ['bitacora:new', 'seguridad:new'] },
   )
 
   const { refrescando, refrescar } = useRefrescar(refetch)

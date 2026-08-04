@@ -21,15 +21,15 @@ import CredencialPreviewModal from '../../components/empleados/CredencialPreview
 import { obtenerTrabajador } from '../../api/trabajadores'
 import { useResource } from '../../hooks/useResource'
 import { useSocket } from '../../context/SocketContext'
+import { fmtFecha } from '../../utils/format'
 
 const PER_PAGE = 20
 
-function fmtFechaCorta(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return iso }
-}
+// `fecha_ingreso` y `fecha_baja` son `db.Date` en el backend, o sea "AAAA-MM-DD"
+// sin hora. El `new Date(iso)` que había aquí las leía como medianoche UTC y en
+// México pintaba el día ANTERIOR: un ingreso del día 1 aparecía como día 30 del
+// mes pasado. `fmtFecha` ancla ese caso al huso local.
+const fmtFechaCorta = fmtFecha
 
 function fmtMoney(n) {
   if (n == null) return null

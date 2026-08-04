@@ -66,12 +66,13 @@ function ReporteSelector({ reportes, selectedId, onSelect }) {
 }
 
 function ResultadoOverlay({ resultado, onClose }) {
-  if (!resultado) return null
-  const isOk = resultado.ok
-  const icon = isOk ? CheckCircle2 : XCircle
-  const tone = isOk
-    ? (resultado.tipo === 'ENTRADA' ? 'text-emerald-500' : 'text-blue-500')
-    : 'text-red-500'
+  // El `useEffect` va ANTES de cualquier `return`, y el guard de `resultado`
+  // después. Este componente se monta SIEMPRE (ver el scanner más abajo), así
+  // que `resultado` pasa de null a objeto en vivo: con el `if (!resultado)
+  // return null` por delante, el número de hooks saltaba de 0 a 1 entre dos
+  // renders del mismo componente y React abortaba con "Rendered more hooks than
+  // during the previous render" — justo al mostrar el resultado del escaneo.
+  const isOk = !!resultado?.ok
 
   useEffect(() => {
     if (!isOk) return
@@ -79,7 +80,12 @@ function ResultadoOverlay({ resultado, onClose }) {
     return () => clearTimeout(t)
   }, [isOk, onClose])
 
-  const Icon = icon
+  if (!resultado) return null
+  const tone = isOk
+    ? (resultado.tipo === 'ENTRADA' ? 'text-emerald-500' : 'text-blue-500')
+    : 'text-red-500'
+
+  const Icon = isOk ? CheckCircle2 : XCircle
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/70 backdrop-blur-sm p-4">
       <Card className="max-w-sm w-full text-center">

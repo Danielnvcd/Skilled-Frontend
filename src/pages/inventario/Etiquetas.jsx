@@ -25,7 +25,6 @@ async function fetchTodosProductos({ q = '', categoria } = {}) {
   const acc = []
   let skip = 0
   // Bucle de paginación: corta cuando una página viene incompleta.
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const page = await getProductos({ q, categoria, skip, limit: PAGE })
     acc.push(...(page || []))

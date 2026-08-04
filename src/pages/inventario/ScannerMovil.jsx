@@ -14,6 +14,7 @@ import {
   getProductoStocks,
 } from '../../api/inventario'
 import { validarUnidadQR } from '../../api/herramientas'
+import { extractApiError } from '../../utils/apiError'
 import { useNavigate } from 'react-router-dom'
 
 // Placeholder SVG inline (mismo del legacy) — data: URIs están permitidos por el CSP.
@@ -185,8 +186,7 @@ export default function ScannerMovil() {
       setView('scanner')
       setIsScanning(true)
     } catch (err) {
-      const msg = err.response?.data?.detail || 'Error al registrar el movimiento'
-      toast.error(msg)
+      toast.error(extractApiError(err, 'Error al registrar el movimiento'))
     } finally {
       setAccionSaving(false)
     }

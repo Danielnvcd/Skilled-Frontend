@@ -189,13 +189,20 @@ function MobileInventarioHome() {
 
 // ── Dashboard completo (PC) ────────────────────────────────────────────────
 
+// Selector de variante. Existe para que la versión de escritorio sea un
+// componente aparte: antes el `if (isMobileDevice) return <MobileInventarioHome/>`
+// vivía dentro del mismo componente, POR ENCIMA de sus ~12 hooks. Hoy no
+// reventaba porque `useIsMobileDevice` deriva del user-agent y nunca cambia de
+// valor, pero bastaba con volverlo reactivo (un matchMedia, un resize) para que
+// el conteo de hooks cambiara entre renders y React abortara la pantalla.
 export default function InventarioDashboard() {
   const isMobileDevice = useIsMobileDevice()
-  if (isMobileDevice) return <MobileInventarioHome />
+  return isMobileDevice ? <MobileInventarioHome /> : <DesktopInventarioDashboard />
+}
 
+function DesktopInventarioDashboard() {
   const { theme } = useTheme()
   const isDark = theme === 'dark'
-  void theme
 
   // 5 fuentes con namespaces compartidos por otras páginas de inventario
   // (Catalogo, BajoMinimo, Movimientos, Solicitudes, Herramientas/*). Cuando

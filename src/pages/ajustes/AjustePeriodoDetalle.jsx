@@ -13,15 +13,10 @@ import {
 } from '../../api/ajustes'
 import AgregarDescuentoModal from './AgregarDescuentoModal'
 import { useResource } from '../../hooks/useResource'
+import { fmtFecha as fmt } from '../../utils/format'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
 
-function fmt(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return iso }
-}
 
 export default function AjustePeriodoDetalle() {
   const { id } = useParams()

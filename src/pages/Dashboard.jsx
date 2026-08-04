@@ -16,6 +16,7 @@ import { obtenerDashboard } from '../api/dashboard'
 import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
 import AvatarFoto from '../components/empleados/AvatarFoto'
+import { fmtFechaCorta } from '../utils/format'
 
 function greeting() {
   const h = new Date().getHours()
@@ -70,14 +71,7 @@ function fmtRelative(iso) {
   return d.toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-function fmtFecha(iso) {
-  if (!iso) return ''
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch {
-    return iso
-  }
-}
+const fmtFecha = (iso) => fmtFechaCorta(iso, '')
 
 // Acceso rápido: tarjeta neutra con chip de icono monocromo (slate). Sin
 // acentos de color para un look corporativo sobrio; el icono y el label son

@@ -49,6 +49,15 @@ export default defineConfig({
     sourcemap: false,
     // Minify con esbuild (más rápido que terser, similar resultado).
     minify: 'esbuild',
+    // NO definir `rollupOptions.output.manualChunks` aquí sin medir antes.
+    // El chunk del entry se llama `createLucideIcon-*.js`, pero ese nombre lo
+    // elige rolldown por uno de los módulos que contiene: el chunk es react +
+    // react-dom (~187 kB raw / 66 kB gzip), NO los iconos. Los ~377 iconos de
+    // lucide ya viven repartidos dentro de cada chunk de ruta y se bajan por
+    // demanda al navegar — el reparto por defecto es el correcto.
+    // Se probó agruparlos por inicial: subió la carga inicial de 153 a 166 kB
+    // gzip, porque definir `manualChunks` desactiva el chunking automático de
+    // rolldown y forzaba a precargar 23 grupos de iconos que antes ni se pedían.
   },
   oxc: {
     // Elimina debugger statements y console.log/info/debug del bundle de
