@@ -186,3 +186,9 @@ Cada archivo en `src/api/` mapea 1:1 con un blueprint `api_*.py` del backend. Pa
 | `src/api/inventario.js` | `app/routes/inventario_api.py` (`/api/v1`) |
 
 Si agregas un endpoint nuevo en el backend, replica el wrapper en el archivo correspondiente para mantener la convención.
+
+---
+
+## Licencia
+
+MIT. Puedes usar, copiar, modificar y distribuir este código, incluso comercialmente, conservando el aviso de copyright. El texto completo está en [`LICENSE`](./LICENSE).
