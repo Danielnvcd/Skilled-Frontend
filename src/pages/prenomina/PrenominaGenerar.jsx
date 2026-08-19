@@ -14,15 +14,10 @@ import {
   exportarExcel,
 } from '../../api/prenomina'
 import EnvioCorreoModal from './EnvioCorreoModal'
+import { fmtFechaCorta as fmtFecha } from '../../utils/format'
 
 const mxn = (n) => `$${(Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-function fmtFecha(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch { return iso }
-}
 
 function fmtCorta(iso) {
   if (!iso) return ''

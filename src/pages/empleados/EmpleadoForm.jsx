@@ -17,6 +17,7 @@ import FotoUploader from '../../components/empleados/FotoUploader'
 import { useAuth } from '../../context/AuthContext'
 import useUnsavedChanges, { confirmIfDirty } from '../../hooks/useUnsavedChanges'
 import { subirConProgreso } from '../../utils/subida'
+import { extractApiError } from '../../utils/apiError'
 
 const TABS = [
   { id: 'datos',    label: 'Datos personales', icon: User },
@@ -187,7 +188,9 @@ export default function EmpleadoForm({ modo }) {
         setFoto(null)
       }
     } catch (err) {
-      const msg = err.response?.data?.error || 'Error al guardar'
+      const msg = extractApiError(err, 'Error al guardar')
+      // `details` es una lista aparte que manda este endpoint (no la cubre
+      // extractApiError): se anexa al error de la cabecera del formulario.
       const details = err.response?.data?.details
       setGlobalError(details ? `${msg}: ${details.join(', ')}` : msg)
       toast.error(msg)

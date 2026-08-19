@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { Button, Card, PageHeader, Modal, Select, InfoTip, Badge } from '../../components/ui'
 import { descargarPlantillaMateriales, exportarProductos, importarMateriales, getEstadoImagenes, sincronizarImagenes, getImagenesErrores, updateProducto, upsertCategoriaConfig, getAlmacenes, getProyectosInventario, getImportaciones, deshacerImportacion } from '../../api/inventario'
 import { invalidate } from '../../utils/resourceCache'
+import { extractApiError } from '../../utils/apiError'
 import { useSocket } from '../../context/SocketContext'
 
 // ── Piezas de los modales de importación ─────────────────────────────────────
@@ -125,7 +126,7 @@ export default function ImportarMateriales() {
       cargarHistorial()
       setConfirmarUndo(null)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'No se pudo deshacer la importación')
+      toast.error(extractApiError(err, 'No se pudo deshacer la importación'))
     } finally {
       setDeshaciendo(null)
     }
@@ -141,7 +142,9 @@ export default function ImportarMateriales() {
       setPlantillaOpen(false)
       toast.success('Plantilla descargada. El almacén y el proyecto ya vienen llenos.')
     } catch (err) {
-      toast.error(err?.detail || err?.response?.data?.detail || 'Error al descargar la plantilla')
+      // `err.detail` a secas: el helper de descarga lanza un objeto plano, no un
+      // error de axios, así que se consulta antes de pasar por extractApiError.
+      toast.error(err?.detail || extractApiError(err, 'Error al descargar la plantilla'))
     } finally {
       setDescargando(false)
     }
@@ -198,7 +201,7 @@ export default function ImportarMateriales() {
         toast.success('Todas las imágenes ya están en R2')
       }
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'No se pudo iniciar la sincronización')
+      toast.error(extractApiError(err, 'No se pudo iniciar la sincronización'))
     } finally {
       setSyncing(false)
     }
@@ -244,7 +247,7 @@ export default function ImportarMateriales() {
       setErrItems((list) => list.filter((x) => keyOf(x) !== k))
       cargarEstadoImagenes()
     } catch (e) {
-      toast.error(e?.response?.data?.detail || 'No se pudo guardar la URL (¿es HTTPS y termina en imagen?)')
+      toast.error(extractApiError(e, 'No se pudo guardar la URL (¿es HTTPS y termina en imagen?)'))
     } finally {
       setErrSavingKey(null)
     }
@@ -328,7 +331,7 @@ export default function ImportarMateriales() {
     try {
       await pedirPlan(undefined)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al leer el archivo')
+      toast.error(extractApiError(err, 'Error al leer el archivo'))
     } finally {
       setUploading(false)
     }
@@ -345,7 +348,7 @@ export default function ImportarMateriales() {
       setConfirmCats(null)
       await pedirPlan(mapeo)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al leer el archivo')
+      toast.error(extractApiError(err, 'Error al leer el archivo'))
     } finally {
       setUploading(false)
     }
@@ -360,7 +363,7 @@ export default function ImportarMateriales() {
       setPlan(null)
       aplicarResultado(res)
     } catch (err) {
-      toast.error(err?.response?.data?.detail || 'Error al importar el archivo')
+      toast.error(extractApiError(err, 'Error al importar el archivo'))
     } finally {
       setUploading(false)
     }

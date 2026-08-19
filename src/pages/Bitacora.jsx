@@ -11,6 +11,7 @@ import {
 import { listarBitacora, detalleLog } from '../api/bitacora'
 import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
+import { fmtFechaHora as fmtFechaHoraBase } from '../utils/format'
 
 const PER_PAGE = 50
 
@@ -19,13 +20,7 @@ function isSuspicious(action) {
   return /fallido|elimin[óo]|admin cambi[óo] contrase[ñn]a|bloqueado|denegado/.test(a)
 }
 
-function fmtFechaHora(iso) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('es-MX', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: true,
-  })
-}
+const fmtFechaHora = (iso) => fmtFechaHoraBase(iso, '')
 
 function LogItem({ log, onView }) {
   const sospechoso = isSuspicious(log.action)

@@ -9,16 +9,11 @@ import {
 import { listarPeriodos } from '../../api/ajustes'
 import { useResource } from '../../hooks/useResource'
 import PeriodoCrearModal from './PeriodoCrearModal'
+import { fmtFecha as fmt } from '../../utils/format'
 
 const mxn = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 })
 const PER_PAGE = 20
 
-function fmt(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return iso }
-}
 
 export default function AjustesList() {
   const navigate = useNavigate()

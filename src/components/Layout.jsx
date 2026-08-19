@@ -5,6 +5,7 @@ import Topbar from './Topbar'
 import BottomNav from './BottomNav'
 import Breadcrumbs from './Breadcrumbs'
 import ShortcutsHelp from './ShortcutsHelp'
+import { RouteErrorBoundary } from './ErrorBoundary'
 import useIsMobileDevice from '../hooks/useIsMobileDevice'
 import useGlobalShortcuts from '../hooks/useGlobalShortcuts'
 
@@ -96,9 +97,15 @@ export default function Layout() {
             : undefined}
         >
           <Breadcrumbs />
-          <Suspense fallback={<ContentSpinner />}>
-            <Outlet />
-          </Suspense>
+          {/* La frontera va POR FUERA del Suspense a propósito: así atrapa tanto
+              los errores de render de la pantalla como el fallo al descargar su
+              chunk lazy (deploy nuevo + pestaña vieja, red caída), que Suspense
+              propaga como excepción. */}
+          <RouteErrorBoundary>
+            <Suspense fallback={<ContentSpinner />}>
+              <Outlet />
+            </Suspense>
+          </RouteErrorBoundary>
         </main>
       </div>
       {isMobileDevice && <BottomNav />}

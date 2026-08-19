@@ -1,7 +1,9 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+import { construirAcceso } from './config/permisos'
 import Layout from './components/Layout'
+import { RouteErrorBoundary, FullPageFallback } from './components/ErrorBoundary'
 // Login se carga eager: es la primera pantalla que ve el usuario sin sesión
 // y evitamos un spinner extra en el arranque. El resto de páginas se carga
 // lazy para partir el bundle en chunks por ruta — el SW del PWA precachea
@@ -121,21 +123,20 @@ function RoleBasedHome() {
 }
 
 export default function App() {
-  const { user, isAdmin, isCoordinador, puedeGestionarSistema } = useAuth()
+  const auth = useAuth()
+  const { user } = auth
 
-  const role = user?.role
-  const isInventario = role === 'inventario' || isAdmin
-  // Plan de materiales por proyecto: además del rol inventario/admin, el
-  // coordinador planea los materiales de sus proyectos (crea/abre el plan y
-  // selecciona materiales). Solo abre ESAS pantallas, no el resto de inventario.
-  const canPlanMateriales = isInventario || isCoordinador
-  // Coordinador también puede crear y ver SUS solicitudes/pedidos (cambio 2026-05-25).
-  const canSolicit   = role === 'solicitante_material' || role === 'inventario' || role === 'coordinador' || isAdmin
-  const canOperar    = isAdmin || isCoordinador
-  // Compras (procura) es EXCLUSIVO de inventario: admin es RH y no entra.
-  const inventarioSolo = role === 'inventario' || role === 'super_admin'
+  // Quién puede abrir qué vive en `config/permisos.js`, no aquí. Es la misma
+  // tabla que verifica el test contra `config/menus.js`, así que un enlace del
+  // menú que apunte a una ruta prohibida para ese rol falla en CI en vez de
+  // descubrirse cuando un usuario lo pulsa y rebota al inicio sin explicación.
+  const acceso = useMemo(() => construirAcceso(auth), [auth])
 
   return (
+    // Red de seguridad de último nivel: cubre lo que queda FUERA del Layout
+    // (Login, Verify2FA) y al Layout mismo. Cuando salta esto ya no hay menú al
+    // que volver, así que su fallback ocupa la página entera y ofrece recargar.
+    <RouteErrorBoundary fallback={FullPageFallback}>
     <Suspense fallback={<FullPageSpinner />}>
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
@@ -147,107 +148,108 @@ export default function App() {
         <Route path="directorio"  element={<Directorio />} />
 
         {/* Panel financiero: home del rol finanzas; el admin también puede verlo */}
-        <Route path="finanzas"    element={<RoleRoute allow={role === 'finanzas' || isAdmin}><FinanzasPanel /></RoleRoute>} />
+        <Route path="finanzas"    element={<RoleRoute allow={acceso['/finanzas']}><FinanzasPanel /></RoleRoute>} />
 
         {/* Panel de sistemas (TI/soporte). Eje de permisos independiente del de
             admin/RRHH: administra el sistema, no los datos de nómina. El
             backend además exige 2FA en cada endpoint; si falta, la vista lo
             explica y manda a activarlo en lugar de fallar en seco. */}
-        <Route path="sistemas"             element={<RoleRoute allow={puedeGestionarSistema}><SistemasEstado /></RoleRoute>} />
-        <Route path="sistemas/peticiones"  element={<RoleRoute allow={puedeGestionarSistema}><SistemasPeticiones /></RoleRoute>} />
-        <Route path="sistemas/sesiones"    element={<RoleRoute allow={puedeGestionarSistema}><SistemasSesiones /></RoleRoute>} />
-        <Route path="sistemas/seguridad"   element={<RoleRoute allow={puedeGestionarSistema}><SistemasSeguridad /></RoleRoute>} />
-        <Route path="sistemas/cuentas"     element={<RoleRoute allow={puedeGestionarSistema}><SistemasCuentas /></RoleRoute>} />
-        <Route path="sistemas/mantenimiento" element={<RoleRoute allow={puedeGestionarSistema}><SistemasMantenimiento /></RoleRoute>} />
+        <Route path="sistemas"             element={<RoleRoute allow={acceso['/sistemas']}><SistemasEstado /></RoleRoute>} />
+        <Route path="sistemas/peticiones"  element={<RoleRoute allow={acceso['/sistemas/peticiones']}><SistemasPeticiones /></RoleRoute>} />
+        <Route path="sistemas/sesiones"    element={<RoleRoute allow={acceso['/sistemas/sesiones']}><SistemasSesiones /></RoleRoute>} />
+        <Route path="sistemas/seguridad"   element={<RoleRoute allow={acceso['/sistemas/seguridad']}><SistemasSeguridad /></RoleRoute>} />
+        <Route path="sistemas/cuentas"     element={<RoleRoute allow={acceso['/sistemas/cuentas']}><SistemasCuentas /></RoleRoute>} />
+        <Route path="sistemas/mantenimiento" element={<RoleRoute allow={acceso['/sistemas/mantenimiento']}><SistemasMantenimiento /></RoleRoute>} />
 
         {/* La gestión de cuentas se movió de admin al rol sistemas. */}
-        <Route path="usuarios"                element={<RoleRoute allow={puedeGestionarSistema}><Usuarios /></RoleRoute>} />
+        <Route path="usuarios"                element={<RoleRoute allow={acceso['/usuarios']}><Usuarios /></RoleRoute>} />
         {/* La bitácora completa es del eje de RRHH. El rol `sistemas` usa
             /sistemas/seguridad, que es la misma bitácora filtrada a eventos de
             seguridad. Dejarla abierta aquí solo servía para pintar una pantalla
             que después el backend rechazaba con 403. */}
-        <Route path="bitacora"                element={<RoleRoute allow={isAdmin}><Bitacora /></RoleRoute>} />
-        <Route path="manual"                  element={<RoleRoute allow={isAdmin}><ManualAdmin /></RoleRoute>} />
-        <Route path="manual-coordinador"      element={<RoleRoute allow={isCoordinador || isAdmin}><ManualCoordinador /></RoleRoute>} />
-        <Route path="metricas"                element={<RoleRoute allow={isAdmin}><Metricas /></RoleRoute>} />
-        <Route path="prenomina"               element={<RoleRoute allow={isAdmin}><PrenominaList /></RoleRoute>} />
-        <Route path="prenomina/:fecha"        element={<RoleRoute allow={isAdmin}><PrenominaGenerar /></RoleRoute>} />
-        <Route path="prenomina/:fecha/editar" element={<RoleRoute allow={isAdmin}><PrenominaEditar /></RoleRoute>} />
-        <Route path="prenomina/:fecha/pago"   element={<RoleRoute allow={isAdmin}><PrenominaResumenPago /></RoleRoute>} />
-        <Route path="prestamos"               element={<RoleRoute allow={isAdmin}><PrestamosList /></RoleRoute>} />
-        <Route path="ajustes"                 element={<RoleRoute allow={isAdmin}><AjustesList /></RoleRoute>} />
-        <Route path="ajustes/:id"             element={<RoleRoute allow={isAdmin}><AjustePeriodoDetalle /></RoleRoute>} />
-        <Route path="proyecto-total"          element={<RoleRoute allow={isAdmin}><ProyectoTotal /></RoleRoute>} />
-        <Route path="historico"               element={<RoleRoute allow={isAdmin}><HistoricoList /></RoleRoute>} />
-        <Route path="historico/:fecha"        element={<RoleRoute allow={isAdmin}><HistoricoDetalle /></RoleRoute>} />
+        <Route path="bitacora"                element={<RoleRoute allow={acceso['/bitacora']}><Bitacora /></RoleRoute>} />
+        <Route path="manual"                  element={<RoleRoute allow={acceso['/manual']}><ManualAdmin /></RoleRoute>} />
+        <Route path="manual-coordinador"      element={<RoleRoute allow={acceso['/manual-coordinador']}><ManualCoordinador /></RoleRoute>} />
+        <Route path="metricas"                element={<RoleRoute allow={acceso['/metricas']}><Metricas /></RoleRoute>} />
+        <Route path="prenomina"               element={<RoleRoute allow={acceso['/prenomina']}><PrenominaList /></RoleRoute>} />
+        <Route path="prenomina/:fecha"        element={<RoleRoute allow={acceso['/prenomina/:fecha']}><PrenominaGenerar /></RoleRoute>} />
+        <Route path="prenomina/:fecha/editar" element={<RoleRoute allow={acceso['/prenomina/:fecha/editar']}><PrenominaEditar /></RoleRoute>} />
+        <Route path="prenomina/:fecha/pago"   element={<RoleRoute allow={acceso['/prenomina/:fecha/pago']}><PrenominaResumenPago /></RoleRoute>} />
+        <Route path="prestamos"               element={<RoleRoute allow={acceso['/prestamos']}><PrestamosList /></RoleRoute>} />
+        <Route path="ajustes"                 element={<RoleRoute allow={acceso['/ajustes']}><AjustesList /></RoleRoute>} />
+        <Route path="ajustes/:id"             element={<RoleRoute allow={acceso['/ajustes/:id']}><AjustePeriodoDetalle /></RoleRoute>} />
+        <Route path="proyecto-total"          element={<RoleRoute allow={acceso['/proyecto-total']}><ProyectoTotal /></RoleRoute>} />
+        <Route path="historico"               element={<RoleRoute allow={acceso['/historico']}><HistoricoList /></RoleRoute>} />
+        <Route path="historico/:fecha"        element={<RoleRoute allow={acceso['/historico/:fecha']}><HistoricoDetalle /></RoleRoute>} />
 
         {/* Empleados y Proyectos: solo admin (el coordinador no los ve en Flask) */}
-        <Route path="empleados"              element={<RoleRoute allow={isAdmin}><EmpleadosList /></RoleRoute>} />
-        <Route path="empleados/bajas"        element={<RoleRoute allow={isAdmin}><EmpleadosList variante="bajas" /></RoleRoute>} />
-        <Route path="empleados/nuevo"        element={<RoleRoute allow={isAdmin}><EmpleadoForm modo="nuevo" /></RoleRoute>} />
-        <Route path="empleados/importar"     element={<RoleRoute allow={isAdmin}><EmpleadosImport /></RoleRoute>} />
-        <Route path="empleados/:id"          element={<RoleRoute allow={isAdmin}><EmpleadoView /></RoleRoute>} />
-        <Route path="empleados/:id/editar"   element={<RoleRoute allow={isAdmin}><EmpleadoForm modo="editar" /></RoleRoute>} />
-        <Route path="proyectos"              element={<RoleRoute allow={isAdmin}><ProyectosList /></RoleRoute>} />
+        <Route path="empleados"              element={<RoleRoute allow={acceso['/empleados']}><EmpleadosList /></RoleRoute>} />
+        <Route path="empleados/bajas"        element={<RoleRoute allow={acceso['/empleados/bajas']}><EmpleadosList variante="bajas" /></RoleRoute>} />
+        <Route path="empleados/nuevo"        element={<RoleRoute allow={acceso['/empleados/nuevo']}><EmpleadoForm modo="nuevo" /></RoleRoute>} />
+        <Route path="empleados/importar"     element={<RoleRoute allow={acceso['/empleados/importar']}><EmpleadosImport /></RoleRoute>} />
+        <Route path="empleados/:id"          element={<RoleRoute allow={acceso['/empleados/:id']}><EmpleadoView /></RoleRoute>} />
+        <Route path="empleados/:id/editar"   element={<RoleRoute allow={acceso['/empleados/:id/editar']}><EmpleadoForm modo="editar" /></RoleRoute>} />
+        <Route path="proyectos"              element={<RoleRoute allow={acceso['/proyectos']}><ProyectosList /></RoleRoute>} />
 
         {/* Admin + Coordinador: horas, credenciales, ficha técnica */}
-        <Route path="horas"                  element={<RoleRoute allow={canOperar}><ReportesList /></RoleRoute>} />
-        <Route path="horas/movil"            element={<RoleRoute allow={isCoordinador}><HorasMovil /></RoleRoute>} />
-        <Route path="horas/qr"               element={<RoleRoute allow={isAdmin}><HorasAdminQR /></RoleRoute>} />
-        <Route path="horas/:id"              element={<RoleRoute allow={canOperar}><ReporteCaptura /></RoleRoute>} />
-        <Route path="credenciales"           element={<RoleRoute allow={canOperar}><CredencialesList /></RoleRoute>} />
-        <Route path="ficha"                  element={<RoleRoute allow={isCoordinador || isAdmin}><FichaTecnica /></RoleRoute>} />
-        <Route path="mis-proyectos"          element={<RoleRoute allow={isCoordinador || isAdmin}><MisProyectos /></RoleRoute>} />
+        <Route path="horas"                  element={<RoleRoute allow={acceso['/horas']}><ReportesList /></RoleRoute>} />
+        <Route path="horas/movil"            element={<RoleRoute allow={acceso['/horas/movil']}><HorasMovil /></RoleRoute>} />
+        <Route path="horas/qr"               element={<RoleRoute allow={acceso['/horas/qr']}><HorasAdminQR /></RoleRoute>} />
+        <Route path="horas/:id"              element={<RoleRoute allow={acceso['/horas/:id']}><ReporteCaptura /></RoleRoute>} />
+        <Route path="credenciales"           element={<RoleRoute allow={acceso['/credenciales']}><CredencialesList /></RoleRoute>} />
+        <Route path="ficha"                  element={<RoleRoute allow={acceso['/ficha']}><FichaTecnica /></RoleRoute>} />
+        <Route path="mis-proyectos"          element={<RoleRoute allow={acceso['/mis-proyectos']}><MisProyectos /></RoleRoute>} />
 
         {/* Inventario: admin + rol inventario */}
-        <Route path="inventario"             element={<RoleRoute allow={isInventario}><PortadaAlmacenes /></RoleRoute>} />
+        <Route path="inventario"             element={<RoleRoute allow={acceso['/inventario']}><PortadaAlmacenes /></RoleRoute>} />
         {/* Actividad y auditoría: el antiguo panel de inicio (KPIs, gráficas,
             solicitudes y movimientos), reubicado fuera de la portada. */}
-        <Route path="inventario/actividad"   element={<RoleRoute allow={isInventario}><InventarioDashboard /></RoleRoute>} />
-        <Route path="inventario/catalogo"    element={<RoleRoute allow={isInventario}><CatalogoProductos /></RoleRoute>} />
+        <Route path="inventario/actividad"   element={<RoleRoute allow={acceso['/inventario/actividad']}><InventarioDashboard /></RoleRoute>} />
+        <Route path="inventario/catalogo"    element={<RoleRoute allow={acceso['/inventario/catalogo']}><CatalogoProductos /></RoleRoute>} />
         {/* Material por proyecto: asignar, mover y devolver existencias.
             Distinto de "inventario/proyectos", que es el PLAN (lo que se pensaba
             usar) — esto es el material físico apartado ahora mismo.
             "/general" convive con "/:id" sin conflicto: React Router ordena por
             especificidad y el segmento estático gana al dinámico. */}
-        <Route path="inventario/material-proyecto"     element={<RoleRoute allow={isInventario}><MaterialPorProyecto /></RoleRoute>} />
-        <Route path="inventario/material-proyecto/general" element={<RoleRoute allow={isInventario}><MaterialGeneral /></RoleRoute>} />
-        <Route path="inventario/material-proyecto/:id" element={<RoleRoute allow={isInventario}><MaterialProyectoDetalle /></RoleRoute>} />
-        <Route path="inventario/proyectos"   element={<RoleRoute allow={canPlanMateriales}><ProyectosInventario /></RoleRoute>} />
-        <Route path="inventario/proyectos/:id" element={<RoleRoute allow={canPlanMateriales}><ProyectoInventarioDetalle /></RoleRoute>} />
-        <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={isInventario}><ProductoKardex /></RoleRoute>} />
-        <Route path="inventario/bajo-minimo" element={<RoleRoute allow={isInventario}><BajoMinimo /></RoleRoute>} />
-        <Route path="inventario/reportes"    element={<RoleRoute allow={isInventario}><Reportes /></RoleRoute>} />
-        <Route path="inventario/etiquetas"   element={<RoleRoute allow={isInventario}><Etiquetas /></RoleRoute>} />
-        <Route path="inventario/importar"    element={<RoleRoute allow={isInventario}><ImportarMateriales /></RoleRoute>} />
-        <Route path="inventario/almacenes"   element={<RoleRoute allow={isInventario}><AlmacenesEstantes /></RoleRoute>} />
-        <Route path="inventario/qr/:id"      element={<RoleRoute allow={isInventario}><QREstante /></RoleRoute>} />
-        <Route path="inventario/movimientos" element={<RoleRoute allow={isInventario}><MovimientosInventario /></RoleRoute>} />
-        <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={isInventario}><RegistrarMovimiento /></RoleRoute>} />
-        <Route path="inventario/solicitudes" element={<RoleRoute allow={canSolicit}><SolicitudesMaterial /></RoleRoute>} />
-        <Route path="inventario/entrega-directa" element={<RoleRoute allow={isInventario}><EntregaDirecta /></RoleRoute>} />
-        <Route path="inventario/solicitudes-compra" element={<RoleRoute allow={inventarioSolo}><SolicitudesCompra /></RoleRoute>} />
-        <Route path="inventario/scanner"     element={<RoleRoute allow={isInventario}><ScannerMovil /></RoleRoute>} />
-        <Route path="inventario/tomas"       element={<RoleRoute allow={isInventario}><Tomas /></RoleRoute>} />
-        <Route path="inventario/tomas/:id"   element={<RoleRoute allow={isInventario}><TomaDetalle /></RoleRoute>} />
-        <Route path="inventario/manual"      element={<RoleRoute allow={isInventario}><ManualInventario /></RoleRoute>} />
+        <Route path="inventario/material-proyecto"     element={<RoleRoute allow={acceso['/inventario/material-proyecto']}><MaterialPorProyecto /></RoleRoute>} />
+        <Route path="inventario/material-proyecto/general" element={<RoleRoute allow={acceso['/inventario/material-proyecto/general']}><MaterialGeneral /></RoleRoute>} />
+        <Route path="inventario/material-proyecto/:id" element={<RoleRoute allow={acceso['/inventario/material-proyecto/:id']}><MaterialProyectoDetalle /></RoleRoute>} />
+        <Route path="inventario/proyectos"   element={<RoleRoute allow={acceso['/inventario/proyectos']}><ProyectosInventario /></RoleRoute>} />
+        <Route path="inventario/proyectos/:id" element={<RoleRoute allow={acceso['/inventario/proyectos/:id']}><ProyectoInventarioDetalle /></RoleRoute>} />
+        <Route path="inventario/productos/:id/kardex" element={<RoleRoute allow={acceso['/inventario/productos/:id/kardex']}><ProductoKardex /></RoleRoute>} />
+        <Route path="inventario/bajo-minimo" element={<RoleRoute allow={acceso['/inventario/bajo-minimo']}><BajoMinimo /></RoleRoute>} />
+        <Route path="inventario/reportes"    element={<RoleRoute allow={acceso['/inventario/reportes']}><Reportes /></RoleRoute>} />
+        <Route path="inventario/etiquetas"   element={<RoleRoute allow={acceso['/inventario/etiquetas']}><Etiquetas /></RoleRoute>} />
+        <Route path="inventario/importar"    element={<RoleRoute allow={acceso['/inventario/importar']}><ImportarMateriales /></RoleRoute>} />
+        <Route path="inventario/almacenes"   element={<RoleRoute allow={acceso['/inventario/almacenes']}><AlmacenesEstantes /></RoleRoute>} />
+        <Route path="inventario/qr/:id"      element={<RoleRoute allow={acceso['/inventario/qr/:id']}><QREstante /></RoleRoute>} />
+        <Route path="inventario/movimientos" element={<RoleRoute allow={acceso['/inventario/movimientos']}><MovimientosInventario /></RoleRoute>} />
+        <Route path="inventario/movimientos/nuevo" element={<RoleRoute allow={acceso['/inventario/movimientos/nuevo']}><RegistrarMovimiento /></RoleRoute>} />
+        <Route path="inventario/solicitudes" element={<RoleRoute allow={acceso['/inventario/solicitudes']}><SolicitudesMaterial /></RoleRoute>} />
+        <Route path="inventario/entrega-directa" element={<RoleRoute allow={acceso['/inventario/entrega-directa']}><EntregaDirecta /></RoleRoute>} />
+        <Route path="inventario/solicitudes-compra" element={<RoleRoute allow={acceso['/inventario/solicitudes-compra']}><SolicitudesCompra /></RoleRoute>} />
+        <Route path="inventario/scanner"     element={<RoleRoute allow={acceso['/inventario/scanner']}><ScannerMovil /></RoleRoute>} />
+        <Route path="inventario/tomas"       element={<RoleRoute allow={acceso['/inventario/tomas']}><Tomas /></RoleRoute>} />
+        <Route path="inventario/tomas/:id"   element={<RoleRoute allow={acceso['/inventario/tomas/:id']}><TomaDetalle /></RoleRoute>} />
+        <Route path="inventario/manual"      element={<RoleRoute allow={acceso['/inventario/manual']}><ManualInventario /></RoleRoute>} />
 
         {/* Pedir material: todos los roles pueden solicitarlo */}
-        <Route path="inventario/mis-pedidos" element={<RoleRoute allow={canSolicit}><MisPedidos /></RoleRoute>} />
+        <Route path="inventario/mis-pedidos" element={<RoleRoute allow={acceso['/inventario/mis-pedidos']}><MisPedidos /></RoleRoute>} />
 
         {/* Herramientas — inventario + admin */}
-        <Route path="inventario/herramientas"                element={<RoleRoute allow={isInventario}><HerramientasCatalogo /></RoleRoute>} />
-        <Route path="inventario/herramientas/unidades"       element={<RoleRoute allow={isInventario}><HerramientasUnidades /></RoleRoute>} />
-        <Route path="inventario/herramientas/unidades/:id"   element={<RoleRoute allow={canSolicit}><HerramientaUnidadFicha /></RoleRoute>} />
-        <Route path="inventario/herramientas/asignaciones"   element={<RoleRoute allow={isInventario}><AsignacionesHerramienta /></RoleRoute>} />
-        <Route path="inventario/herramientas/mantenimientos" element={<RoleRoute allow={isInventario}><MantenimientosHerramienta /></RoleRoute>} />
-        <Route path="inventario/herramientas/incidencias"    element={<RoleRoute allow={isInventario}><IncidenciasYBajas /></RoleRoute>} />
+        <Route path="inventario/herramientas"                element={<RoleRoute allow={acceso['/inventario/herramientas']}><HerramientasCatalogo /></RoleRoute>} />
+        <Route path="inventario/herramientas/unidades"       element={<RoleRoute allow={acceso['/inventario/herramientas/unidades']}><HerramientasUnidades /></RoleRoute>} />
+        <Route path="inventario/herramientas/unidades/:id"   element={<RoleRoute allow={acceso['/inventario/herramientas/unidades/:id']}><HerramientaUnidadFicha /></RoleRoute>} />
+        <Route path="inventario/herramientas/asignaciones"   element={<RoleRoute allow={acceso['/inventario/herramientas/asignaciones']}><AsignacionesHerramienta /></RoleRoute>} />
+        <Route path="inventario/herramientas/mantenimientos" element={<RoleRoute allow={acceso['/inventario/herramientas/mantenimientos']}><MantenimientosHerramienta /></RoleRoute>} />
+        <Route path="inventario/herramientas/incidencias"    element={<RoleRoute allow={acceso['/inventario/herramientas/incidencias']}><IncidenciasYBajas /></RoleRoute>} />
 
         {/* Vistas para el solicitante */}
-        <Route path="inventario/mis-herramientas"  element={<RoleRoute allow={canSolicit}><MisHerramientas /></RoleRoute>} />
-        <Route path="inventario/mis-incidencias"   element={<RoleRoute allow={canSolicit}><MisIncidencias /></RoleRoute>} />
+        <Route path="inventario/mis-herramientas"  element={<RoleRoute allow={acceso['/inventario/mis-herramientas']}><MisHerramientas /></RoleRoute>} />
+        <Route path="inventario/mis-incidencias"   element={<RoleRoute allow={acceso['/inventario/mis-incidencias']}><MisIncidencias /></RoleRoute>} />
       </Route>
     </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   )
 }

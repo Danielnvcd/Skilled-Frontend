@@ -339,7 +339,11 @@ async function renderToPng(html) {
 
 function dataUrlToBlob(dataUrl) {
   const [header, b64] = dataUrl.split(',')
-  const mime = (header.match(/data:(.*?);base64/) || [, 'image/png'])[1]
+  // El fallback imita la forma de un resultado de `match`: índice 0 = coincidencia
+  // completa (aquí irrelevante), índice 1 = el grupo capturado. Antes era un array
+  // disperso `[, 'image/png']`; `[null, ...]` es idéntico al leer `[1]` y no
+  // depende de que quien lo lea note la coma suelta.
+  const mime = (header.match(/data:(.*?);base64/) || [null, 'image/png'])[1]
   const bin = atob(b64)
   const arr = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)

@@ -22,6 +22,7 @@ import { cableResumen } from '../../utils/cable'
 import { useAuth } from '../../context/AuthContext'
 import { useResource } from '../../hooks/useResource'
 import SolicitudesKanban from './SolicitudesKanban'
+import { fmtFechaCorta } from '../../utils/format'
 
 const TABS = [
   { key: 'TODAS',     label: 'Todas',      icon: ListTodo },
@@ -779,9 +780,9 @@ function DetallesModal({ solicitud, onClose, onChanged, isAdmin, getStatusTone }
                         {(d.fecha_uso_inicio || d.fecha_uso_fin) && (
                           <p>
                             <span className="font-semibold text-ink-600 dark:text-ink-400">Uso:</span>{' '}
-                            {d.fecha_uso_inicio ? new Date(d.fecha_uso_inicio).toLocaleDateString('es-MX') : '?'}
+                            {fmtFechaCorta(d.fecha_uso_inicio, '?')}
                             {' → '}
-                            {d.fecha_uso_fin ? new Date(d.fecha_uso_fin).toLocaleDateString('es-MX') : '?'}
+                            {fmtFechaCorta(d.fecha_uso_fin, '?')}
                           </p>
                         )}
                         {d.justificacion && (

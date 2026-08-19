@@ -434,7 +434,7 @@ function EstanteVisualCard({ estante, onAcomodar, onEditar }) {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { cargar() /* eslint-disable-next-line */ }, [estante.id])
+  useEffect(() => { cargar() }, [estante.id])
 
   // Refresca este rack cuando cambia su layout (otro usuario acomodando).
   useEffect(() => {

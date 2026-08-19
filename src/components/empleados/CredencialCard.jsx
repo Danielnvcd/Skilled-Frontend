@@ -1,4 +1,5 @@
 import { Badge } from '../ui'
+import { fmtFechaLarga as fmtFecha } from '../../utils/format'
 
 // Credencial con look de "membership card" profesional. Reutilizable entre
 // la ficha del empleado y la ficha-modal del módulo /credenciales.
@@ -7,14 +8,6 @@ import { Badge } from '../ui'
 //   credencial   { planta, credencial_id, fecha_caducidad }
 //   noEmpleado   string opcional — se muestra en el footer
 
-function fmtFecha(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', {
-      day: '2-digit', month: 'long', year: 'numeric',
-    })
-  } catch { return iso }
-}
 
 export default function CredencialCard({ credencial, noEmpleado }) {
   const c = credencial

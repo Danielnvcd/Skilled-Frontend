@@ -12,15 +12,13 @@ import { listarProyectos } from '../../api/proyectos'
 import { useResource } from '../../hooks/useResource'
 import UserAvatar from '../../components/UserAvatar'
 import ProyectoFormModal from './ProyectoFormModal'
+import { fmtFecha } from '../../utils/format'
 
 const PER_PAGE = 20
 
-function fmtFechaCorta(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return iso }
-}
+// `created_at` es un timestamp completo, así que aquí no había corrimiento de
+// día; se unifica igual para no dejar una cuarta copia del mismo formato.
+const fmtFechaCorta = fmtFecha
 
 function tiempoRelativo(iso) {
   if (!iso) return null

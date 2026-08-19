@@ -20,13 +20,13 @@ import {
   darBajaTrabajador, reactivarTrabajador,
 } from '../../api/trabajadores'
 import { useAuth } from '../../context/AuthContext'
+import { fmtFechaLarga } from '../../utils/format'
 
-function fmtFecha(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
-  } catch { return iso }
-}
+// `fecha_nacimiento`, `fecha_baja` y `fecha_caducidad` son `db.Date`: llegan
+// como "AAAA-MM-DD" y el `new Date(iso)` que había aquí las leía como medianoche
+// UTC, así que en México se mostraba el día ANTERIOR. `fmtFechaLarga` lo ancla
+// al huso local y ya devuelve '—' cuando no hay valor.
+const fmtFecha = fmtFechaLarga
 
 function fmtMoney(s) {
   if (!s) return null

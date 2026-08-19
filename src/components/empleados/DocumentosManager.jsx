@@ -6,6 +6,7 @@ import {
   subirDocumento, eliminarDocumento, descargarDocumento,
 } from '../../api/trabajadores'
 import { subirConProgreso } from '../../utils/subida'
+import { fmtFecha as fmtFechaBase } from '../../utils/format'
 
 // Tipos de documento más comunes (datalist — el usuario puede escribir cualquier otro).
 const TIPOS_DOC_SUGERIDOS = [
@@ -13,12 +14,11 @@ const TIPOS_DOC_SUGERIDOS = [
   'Comprobante Domicilio', 'Contrato', 'RFC',
 ]
 
-function fmtFecha(iso) {
-  if (!iso) return ''
-  try {
-    return new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch { return iso }
-}
+// Corrige de paso un corrimiento de día: `fecha_inicio`, `fecha_fin` y
+// `fecha_subida` llegan como "AAAA-MM-DD" (salen de un `db.Date` en el backend)
+// y el `new Date(iso)` que había aquí las interpretaba como medianoche UTC, así
+// que en México se pintaba el día ANTERIOR. `fmtFecha` distingue el caso.
+const fmtFecha = (iso) => fmtFechaBase(iso, '')
 
 export default function DocumentosManager({ trabajadorId, documentos, onChange }) {
   const fileRef = useRef(null)

@@ -15,6 +15,7 @@ import { useTheme } from '../context/ThemeContext'
 import { getMetricas } from '../api/metricas'
 import { extractApiError } from '../utils/apiError'
 import { useResource } from '../hooks/useResource'
+import { fmtFechaCorta as fmtFecha } from '../utils/format'
 
 // StatCard sobrio: chip neutro slate, sin borde lateral colorido. Mismo
 // patrón que el Dashboard para que las dos páginas se sientan parte del
@@ -54,14 +55,6 @@ function EstadoBadge({ estado }) {
   return <Badge tone="neutral">{estado}</Badge>
 }
 
-function fmtFecha(iso) {
-  if (!iso) return '—'
-  try {
-    return new Date(iso + 'T00:00:00').toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  } catch {
-    return iso
-  }
-}
 
 export default function Metricas() {
   const { theme } = useTheme()
