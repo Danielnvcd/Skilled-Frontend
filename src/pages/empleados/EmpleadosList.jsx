@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import {
   Plus, Search, Upload, Download, Pencil, UserMinus, UserCheck,
   FileSpreadsheet, Users as UsersIcon, Eye, ArrowLeft, IdCard, X,
-  MoreHorizontal, FileDown, SlidersHorizontal, Info,
+  MoreHorizontal, FileDown, SlidersHorizontal, Info, ScanFace,
 } from 'lucide-react'
 import {
   PageHeader, Button, Input, Select, Table, THead, TH, THSort, TBody, TR, TD,
@@ -111,6 +111,7 @@ export default function EmpleadosList({ variante = 'activos' }) {
   // Selección múltiple. Per-página: cambiar de página/búsqueda limpia la
   // selección para evitar acciones sorpresa sobre filas que ya no se ven.
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [busyOficina, setBusyOficina] = useState(false)
   const [confirmBulk, setConfirmBulk] = useState(false)
   const [busyBulk, setBusyBulk] = useState(false)
   const [exportingSel, setExportingSel] = useState(false)
@@ -293,6 +294,35 @@ export default function EmpleadosList({ variante = 'activos' }) {
       toast.error(err.response?.data?.error || 'Error en operación en lote')
     } finally {
       setBusyBulk(false)
+    }
+  }
+
+  // Marca de personal de oficina. Va aparte de `onBulkAction` (baja/reactivar)
+  // porque no es destructiva y no necesita confirmación: se aplica al momento y
+  // se revierte con el botón contrario.
+  const onBulkOficina = async (marcar) => {
+    setBusyOficina(true)
+    try {
+      const res = await bulkAccionTrabajadores({
+        ids: Array.from(selectedIds),
+        action: marcar ? 'marcar_oficina' : 'desmarcar_oficina',
+      })
+      const plural = res.affected === 1 ? '' : 's'
+      toast.success(
+        marcar
+          ? `${res.affected} empleado${plural} marcado${plural} como personal de oficina`
+          : `${res.affected} empleado${plural} ya no ${res.affected === 1 ? 'es' : 'son'} personal de oficina`,
+      )
+      if (res.skipped?.length) {
+        toast(`${res.skipped.length} ya estaba${res.skipped.length === 1 ? '' : 'n'} así`,
+              { icon: <Info size={18} /> })
+      }
+      setSelectedIds(new Set())
+      await refetch()
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo aplicar el cambio')
+    } finally {
+      setBusyOficina(false)
     }
   }
 
@@ -508,6 +538,22 @@ export default function EmpleadosList({ variante = 'activos' }) {
             >
               Reactivar
             </Button>
+          )}
+          {variante === 'activos' && (
+            <>
+              <Button
+                variant="secondary" size="sm" leftIcon={<ScanFace size={14} />}
+                loading={busyOficina} onClick={() => onBulkOficina(true)}
+              >
+                Marcar como oficina
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                loading={busyOficina} onClick={() => onBulkOficina(false)}
+              >
+                Quitar marca
+              </Button>
+            </>
           )}
           <Button
             variant="secondary"

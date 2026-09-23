@@ -54,6 +54,11 @@ function accesoOriginal(role) {
     '/proyecto-total': isAdmin,
     '/historico': isAdmin,
     '/historico/:fecha': isAdmin,
+    // Lectores biométricos Hikvision — alta nueva, no existía en App.jsx.
+    // Se suma aquí a propósito para que el diff deje constancia de que el
+    // permiso (solo admin, eje RRHH) fue una decisión y no un descuido.
+    '/lectores': isAdmin,
+    '/lectores/:id': isAdmin,
     '/empleados': isAdmin,
     '/empleados/bajas': isAdmin,
     '/empleados/nuevo': isAdmin,

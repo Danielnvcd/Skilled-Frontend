@@ -5,7 +5,7 @@ import {
   Boxes, ArrowRightLeft, ClipboardList, Send, ScanLine,
   BarChart3, HardHat, QrCode, BookOpen, FileSpreadsheet, Tag,
   Wrench, Hammer, AlertTriangle, ClipboardCheck, ShoppingCart, PackageCheck,
-  MonitorSmartphone, ShieldAlert,
+  MonitorSmartphone, ShieldAlert, ScanFace,
   // Módulo de inventario: iconos que dicen QUÉ es cada pantalla en vez de
   // genéricos (una bodega, un faltante de material…). Los de Herramientas van
   // en orden de ciclo de vida: Wrench → Layers → Handshake → Cog → Bandage.
@@ -41,6 +41,7 @@ export const MENUS = {
         // Asistencia QR (/horas/movil) es exclusiva del coordinador (2026-06-10):
         // la toma de asistencia en obra es su flujo, no del admin.
         { path: '/horas/qr', label: 'Tarjetas', icon: QrCode },
+        { path: '/lectores', label: 'Lectores', icon: ScanFace },
         { path: '/prenomina', label: 'Prenómina', icon: DollarSign },
         { path: '/proyecto-total', label: 'Proyecto Total', icon: PieChart },
         { path: '/historico', label: 'Histórico nóminas', icon: FileClock },

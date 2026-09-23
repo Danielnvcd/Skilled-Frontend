@@ -50,6 +50,7 @@ const EMPTY = {
   folio_mov_idse: '',
   // Operación
   ubicacion_estado: '', observaciones: '',
+  es_oficina: false,
 }
 
 function TabButton({ active, onClick, icon: Icon, label }) {
@@ -333,6 +334,26 @@ export default function EmpleadoForm({ modo }) {
             )}
             <Textarea wrapperClassName="sm:col-span-2 lg:col-span-3" label="Descripción del servicio" rows={2}
               value={form.descripcion_servicio} onChange={onField('descripcion_servicio')} />
+            {/* Personal de oficina: decide si la persona puede darse de alta en
+                un lector biométrico. Solo admin, igual que el resto de lo
+                laboral. Se explica el efecto debajo porque desde aquí no se ve
+                la pantalla de Lectores, y sin esa frase la casilla no dice nada. */}
+            <label className="sm:col-span-2 lg:col-span-3 flex items-start gap-2.5 rounded-lg border border-ink-200 dark:border-ink-700 p-3">
+              <input
+                type="checkbox"
+                checked={!!form.es_oficina}
+                disabled={!isAdmin}
+                onChange={(e) => setForm((f) => ({ ...f, es_oficina: e.target.checked }))}
+                className="mt-0.5 rounded border-ink-300 dark:border-ink-600 disabled:opacity-40"
+              />
+              <span className="text-sm">
+                <span className="font-medium text-ink-900 dark:text-ink-100">Personal de oficina</span>
+                <span className="block text-xs text-ink-500 dark:text-ink-400">
+                  Podrá darse de alta en un lector biométrico para checar entrada y salida.
+                  Requiere fotografía de perfil.
+                </span>
+              </span>
+            </label>
           </Section>
           <Section title="Operación">
             <Input label="Estado de ubicación" value={form.ubicacion_estado} onChange={onField('ubicacion_estado')} maxLength={100} />

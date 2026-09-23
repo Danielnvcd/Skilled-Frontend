@@ -114,6 +114,11 @@ export function construirAcceso(perms) {
     '/historico': isAdmin,
     '/historico/:fecha': isAdmin,
 
+    // Lectores biométricos: administran empleados y su fotografía, así que van
+    // al eje de RRHH (admin), no al de sistemas.
+    '/lectores': isAdmin,
+    '/lectores/:id': isAdmin,
+
     // Empleados y Proyectos: solo admin (el coordinador no los ve en Flask).
     '/empleados': isAdmin,
     '/empleados/bajas': isAdmin,

@@ -80,6 +80,8 @@ const MisIncidencias = lazy(() => import('./pages/inventario/MisIncidencias'))
 const FichaTecnica = lazy(() => import('./pages/ficha/FichaTecnica'))
 const HorasMovil = lazy(() => import('./pages/horas/HorasMovil'))
 const HorasAdminQR = lazy(() => import('./pages/horas/HorasAdminQR'))
+const Lectores = lazy(() => import('./pages/lectores/Dispositivos'))
+const LectorDetalle = lazy(() => import('./pages/lectores/DispositivoDetalle'))
 const ManualAdmin = lazy(() => import('./pages/manual/ManualAdmin'))
 const ManualCoordinador = lazy(() => import('./pages/manual/ManualCoordinador'))
 const ManualInventario = lazy(() => import('./pages/manual/ManualInventario'))
@@ -195,6 +197,8 @@ export default function App() {
         <Route path="horas"                  element={<RoleRoute allow={acceso['/horas']}><ReportesList /></RoleRoute>} />
         <Route path="horas/movil"            element={<RoleRoute allow={acceso['/horas/movil']}><HorasMovil /></RoleRoute>} />
         <Route path="horas/qr"               element={<RoleRoute allow={acceso['/horas/qr']}><HorasAdminQR /></RoleRoute>} />
+        <Route path="lectores"               element={<RoleRoute allow={acceso['/lectores']}><Lectores /></RoleRoute>} />
+        <Route path="lectores/:id"           element={<RoleRoute allow={acceso['/lectores/:id']}><LectorDetalle /></RoleRoute>} />
         <Route path="horas/:id"              element={<RoleRoute allow={acceso['/horas/:id']}><ReporteCaptura /></RoleRoute>} />
         <Route path="credenciales"           element={<RoleRoute allow={acceso['/credenciales']}><CredencialesList /></RoleRoute>} />
         <Route path="ficha"                  element={<RoleRoute allow={acceso['/ficha']}><FichaTecnica /></RoleRoute>} />
