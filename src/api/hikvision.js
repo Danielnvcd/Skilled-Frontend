@@ -39,6 +39,28 @@ export async function eliminarDispositivo(id) {
   return data
 }
 
+// ── Foto del lector ─────────────────────────────────────────────────────────
+
+/** Sube o reemplaza la foto de cómo se ve el lector instalado. Devuelve el lector. */
+export async function subirFotoLector(id, archivo) {
+  const fd = new FormData()
+  fd.append('foto', archivo)
+  const { data } = await api.post(`/hikvision/dispositivos/${id}/foto`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function quitarFotoLector(id) {
+  const { data } = await api.delete(`/hikvision/dispositivos/${id}/foto`)
+  return data
+}
+
+/** Ruta para <AuthImage>. `version` cambia con cada foto nueva. */
+export function rutaFotoLector(id, version) {
+  return `/hikvision/dispositivos/${id}/foto${version ? `?v=${version}` : ''}`
+}
+
 /**
  * Prueba de vida y credenciales. Devuelve { ok, dispositivo, info, hora }.
  *
@@ -62,9 +84,12 @@ export async function getEmpleadosDeLector(id) {
 /**
  * Envía los empleados indicados al lector.
  *
- * Responde 200 aunque alguno falle: el detalle por persona viene en
- * `resultados`, y `resumen` trae los totales. Que uno falle no cancela a los
- * demás, así que la UI debe pintar la lista completa, no solo el error.
+ * Dos respuestas posibles:
+ *  - Tanda chica (≤ 5): 200 con `resultados` y `resumen` al instante. Que uno
+ *    falle no cancela a los demás.
+ *  - Tanda grande: 202 con `tarea` — corre en segundo plano (no cabe en el
+ *    límite de tiempo de una petición). El avance llega por Socket.IO
+ *    (`hikvision:tarea`) y el detalle con `getTarea(id)` al terminar.
  */
 export async function sincronizarEmpleados(id, trabajadorIds) {
   const { data } = await api.post(`/hikvision/dispositivos/${id}/sincronizar`, {
@@ -72,6 +97,20 @@ export async function sincronizarEmpleados(id, trabajadorIds) {
   })
   return data
 }
+
+/** Tarea de sincronización; al terminar trae `resultados` y `resumen`. */
+export async function getTarea(tareaId) {
+  const { data } = await api.get(`/hikvision/tareas/${tareaId}`)
+  return data
+}
+
+/** Tareas en cola o en curso del lector (para retomar el progreso al recargar). */
+export async function getTareasActivas(id) {
+  const { data } = await api.get(`/hikvision/dispositivos/${id}/tareas`)
+  return data
+}
+
+export const EVENTO_TAREA = 'hikvision:tarea'
 
 export async function quitarEmpleadoDeLector(id, trabajadorId) {
   const { data } = await api.delete(`/hikvision/dispositivos/${id}/empleados/${trabajadorId}`)
@@ -114,6 +153,26 @@ export function rutaRostroLector(id, trabajadorId, version) {
 /** Info del equipo, reloj (con `desfase_segundos` y `en_hora`) y capacidad usada. */
 export async function getEstadoEquipo(id) {
   const { data } = await api.get(`/hikvision/dispositivos/${id}/estado`)
+  return data
+}
+
+/**
+ * Pone el reloj del lector a sincronizarse solo por NTP.
+ * `servidor`: IP o nombre (si el lector no tiene DNS, mejor una IP).
+ */
+export async function configurarNtp(id, servidor, intervaloMin = 60) {
+  const { data } = await api.post(`/hikvision/dispositivos/${id}/ntp`, {
+    servidor, intervalo_min: intervaloMin,
+  })
+  return data
+}
+
+/**
+ * Salud de la conexión ERP ↔ lector: reconexiones y retraso en 24 h, último
+ * problema y bitácora reciente. Sale de la base, no consulta al lector.
+ */
+export async function getSalud(id) {
+  const { data } = await api.get(`/hikvision/dispositivos/${id}/salud`)
   return data
 }
 
@@ -169,6 +228,10 @@ export async function traerEventos(id) {
 // Eventos de Socket.IO que refrescan la actividad: uno nuevo guardado, o la
 // escucha que se conectó/desconectó (cambia el indicador «En vivo»).
 export const EVENTOS_ACTIVIDAD = ['hikvision:evento', 'hikvision:changed']
+
+// Cambio de la cerradura que reporta el lector (desbloqueada / bloqueada).
+// Payload: { dispositivo_id, cerradura: 'Abierta'|'Cerrada', hora }.
+export const EVENTO_PUERTA = 'hikvision:puerta'
 
 /** Ruta (para <AuthImage>/<ImageViewer authPath>) de la foto que tomó el lector. */
 export function rutaCaptura(id, captura) {

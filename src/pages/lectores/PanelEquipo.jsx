@@ -12,15 +12,18 @@ import {
   Cpu, Clock, HardDrive, DoorOpen, ShieldCheck, ShieldAlert, AlertTriangle, RefreshCw, Trash2,
   Lock, Unlock,
 } from 'lucide-react'
-import { Button, Card, CardHeader, Badge, Skeleton, ConfirmDialog } from '../../components/ui'
+import { Button, Card, CardHeader, Badge, Skeleton, ConfirmDialog, Modal, Input } from '../../components/ui'
 import { extractApiError } from '../../utils/apiError'
 import {
-  ajustarHoraLector, getAuditoria, borrarUsuarioAjeno, abrirPuerta,
+  ajustarHoraLector, getAuditoria, borrarUsuarioAjeno, abrirPuerta, configurarNtp,
 } from '../../api/hikvision'
 import { describirDesfase } from './formato'
+import TarjetaSalud from './TarjetaSalud'
 
 export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta, onCambioEmpleados }) {
   const [ajustando, setAjustando] = useState(false)
+  const [ntpForm, setNtpForm] = useState(null)   // null = modal cerrado
+  const [guardandoNtp, setGuardandoNtp] = useState(false)
   const [confirmarHora, setConfirmarHora] = useState(false)
   const [abriendo, setAbriendo] = useState(false)
   const [confirmarApertura, setConfirmarApertura] = useState(false)
@@ -47,6 +50,21 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
     }
   }
 
+  const guardarNtp = async (ev) => {
+    ev.preventDefault()
+    setGuardandoNtp(true)
+    try {
+      await configurarNtp(dispositivoId, ntpForm.servidor.trim(), Number(ntpForm.intervalo) || 60)
+      toast.success('NTP configurado: el reloj del lector se mantendrá en hora solo')
+      setNtpForm(null)
+      estado.refetch()
+    } catch (err) {
+      toast.error(extractApiError(err, 'No se pudo configurar el NTP'))
+    } finally {
+      setGuardandoNtp(false)
+    }
+  }
+
   const abrir = async () => {
     setAbriendo(true)
     try {
@@ -54,6 +72,10 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
       toast.success(`Puerta abierta — el relé cierra durante ${r.segundos_apertura} s`)
       setConfirmarApertura(false)
       puerta.refetch()
+      // Con la escucha activa el cierre llega solo por Socket.IO. Esto cubre
+      // el caso en que no esté corriendo: se vuelve a mirar cuando el relé ya
+      // debió cerrar.
+      setTimeout(() => puerta.refetch(), ((r.segundos_apertura || 5) + 1) * 1000)
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo abrir la puerta'))
     } finally {
@@ -109,6 +131,16 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
             <Dato etiqueta="Firmware" valor={e.info.firmware} mono />
             <Dato etiqueta="MAC" valor={e.info.mac} mono />
             <Dato etiqueta="Dirección" valor={`${dispositivo?.host}:${dispositivo?.puerto}`} mono />
+            {e.red && (
+              <>
+                <dt className="text-ink-500 dark:text-ink-400">Tipo de IP</dt>
+                <dd>
+                  {e.red.direccionamiento === 'static'
+                    ? <Badge tone="success">Fija</Badge>
+                    : <Badge tone="warning">Dinámica ({e.red.direccionamiento}): puede cambiar</Badge>}
+                </dd>
+              </>
+            )}
             <Dato etiqueta="Nombre en el equipo" valor={e.info.nombre_dispositivo} />
           </dl>
         )}
@@ -151,6 +183,17 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
                 : `Diferencia con el servidor: ${describirDesfase(e.hora.desfase_segundos)}.`}
               {' '}Modo: {e.hora.modo === 'NTP' ? 'automático (NTP)' : 'manual'}.
             </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-ink-50 px-3 py-2 text-xs dark:bg-ink-800/60">
+              <span className="text-ink-600 dark:text-ink-300">
+                {e.ntp?.servidor
+                  ? <>NTP: <span className="font-mono">{e.ntp.servidor}</span> cada {e.ntp.intervalo_min} min</>
+                  : 'Sin servidor NTP: el reloj solo se corrige a mano.'}
+              </span>
+              <Button size="xs" variant="secondary" disabled={!activo}
+                      onClick={() => setNtpForm({ servidor: e.ntp?.servidor || '', intervalo: e.ntp?.intervalo_min || 60 })}>
+                {e.ntp?.servidor ? 'Cambiar NTP' : 'Configurar NTP'}
+              </Button>
+            </div>
             {!e.hora.en_hora && (
               <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
                 Con el reloj desajustado, las entradas y salidas quedan registradas a otra hora.
@@ -207,6 +250,9 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
           </dl>
         )}
       </Card>
+
+      {/* ── Salud de la conexión ────────────────────────────────────── */}
+      <TarjetaSalud dispositivoId={dispositivoId} />
 
       {/* ── Auditoría ───────────────────────────────────────────────── */}
       <Card className="p-5 lg:col-span-2">
@@ -276,6 +322,43 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
           </div>
         )}
       </Card>
+
+      <Modal
+        open={ntpForm !== null}
+        onClose={guardandoNtp ? () => {} : () => setNtpForm(null)}
+        title="Sincronizar el reloj por NTP"
+        description="El lector ajustará su hora solo, contra un servidor de hora de internet o de tu red."
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setNtpForm(null)} disabled={guardandoNtp}>Cancelar</Button>
+            <Button onClick={guardarNtp} loading={guardandoNtp} disabled={!ntpForm?.servidor?.trim()}>Guardar</Button>
+          </div>
+        }
+      >
+        {ntpForm && (
+          <form onSubmit={guardarNtp} className="space-y-4">
+            <Input
+              label="Servidor NTP"
+              placeholder="216.239.35.0  o  time.google.com"
+              value={ntpForm.servidor}
+              onChange={(ev) => setNtpForm({ ...ntpForm, servidor: ev.target.value })}
+              hint="Si el lector no tiene DNS configurado, usa una IP (la de tu router, o 216.239.35.0 de Google)."
+              required
+            />
+            <Input
+              label="Sincronizar cada (minutos)"
+              type="number" min={1} max={10080}
+              value={ntpForm.intervalo}
+              onChange={(ev) => setNtpForm({ ...ntpForm, intervalo: ev.target.value })}
+            />
+            <p className="text-xs text-ink-500 dark:text-ink-400">
+              El lector no permite probar el servidor antes de guardarlo. Si no logra
+              sincronizar, el ERP lo detecta en la siguiente revisión del reloj (cada 30 min)
+              y avisa a los administradores.
+            </p>
+          </form>
+        )}
+      </Modal>
 
       <ConfirmDialog
         open={confirmarHora}

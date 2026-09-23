@@ -14,12 +14,13 @@
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ScanFace, Users, Activity, Cpu, Wifi, WifiOff, CheckCircle2, XCircle, Clock,
-  HardDrive, RefreshCw,
+  HardDrive, RefreshCw, MapPin,
 } from 'lucide-react'
-import { PageHeader, Button, Card, Badge, Skeleton } from '../../components/ui'
+import { PageHeader, Button, Card, Badge, Skeleton, AuthImage } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import {
-  getEmpleadosDeLector, getPuerta, getEstadoEquipo, getEventos, EVENTOS_ACTIVIDAD,
+  getEmpleadosDeLector, getPuerta, getEstadoEquipo, getEventos, EVENTOS_ACTIVIDAD, EVENTO_PUERTA,
+  rutaFotoLector,
 } from '../../api/hikvision'
 import PanelEmpleados from './PanelEmpleados'
 import PanelActividad from './PanelActividad'
@@ -48,9 +49,13 @@ export default function DispositivoDetalle() {
     () => getEstadoEquipo(id),
     { staleMs: 30_000, invalidateOn: ['hikvision:changed'] },
   )
-  // El estado de la puerta se consulta al lector en cada carga, así que no se
-  // cachea tanto: un relé abierto es algo que se quiere ver ahora.
-  const puerta = useResource(['hikvision:puerta', { id }], () => getPuerta(id), { staleMs: 5_000 })
+  // El estado de la puerta se consulta al lector, y se vuelve a consultar cada
+  // vez que el lector avisa que la cerradura cambió (`hikvision:puerta`): al
+  // abrir, el relé cierra solo a los pocos segundos y sin esto la pantalla se
+  // quedaba en «Abierta» hasta recargar.
+  const puerta = useResource(['hikvision:puerta', { id }], () => getPuerta(id), {
+    staleMs: 5_000, invalidateOn: [EVENTO_PUERTA],
+  })
   // Misma clave y misma consulta que la vista por defecto de «Actividad»: los
   // KPIs de hoy y esa pestaña comparten una sola petición. Sale de la base del
   // ERP y se refresca sola con cada evento que avisa la escucha.
@@ -90,13 +95,22 @@ export default function DispositivoDetalle() {
 
       {/* ── Identidad y conexión ─────────────────────────────────────── */}
       <Card className="flex flex-wrap items-center gap-4 p-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-          enLinea ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-            : sinConexion ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-              : 'bg-ink-100 text-ink-500 dark:bg-ink-800'
-        }`}>
-          <ScanFace size={24} />
-        </div>
+        {dispositivo?.tiene_foto ? (
+          <AuthImage
+            src={rutaFotoLector(dispositivo.id, dispositivo.foto_version)} alt=""
+            className={`h-16 w-16 rounded-xl object-cover ring-2 ${
+              enLinea ? 'ring-emerald-400' : sinConexion ? 'ring-red-400' : 'ring-ink-200 dark:ring-ink-700'
+            }`}
+          />
+        ) : (
+          <div className={`flex h-16 w-16 items-center justify-center rounded-xl ${
+            enLinea ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
+              : sinConexion ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                : 'bg-ink-100 text-ink-500 dark:bg-ink-800'
+          }`}>
+            <ScanFace size={28} />
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">
@@ -114,6 +128,11 @@ export default function DispositivoDetalle() {
               ? <Badge tone="success" dot>Tiempo real</Badge>
               : <Badge tone="warning" dot>Sin tiempo real</Badge>)}
           </div>
+          {dispositivo?.ubicacion && (
+            <p className="mt-0.5 flex items-center gap-1 truncate text-sm text-ink-600 dark:text-ink-300">
+              <MapPin size={13} className="flex-shrink-0" /> {dispositivo.ubicacion}
+            </p>
+          )}
           <p className="mt-0.5 truncate font-mono text-xs text-ink-500 dark:text-ink-400">
             {dispositivo ? `${dispositivo.host}:${dispositivo.puerto}` : '—'}
             {dispositivo?.firmware && ` · FW ${dispositivo.firmware}`}

@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import NotificacionesBell from './NotificacionesBell'
 import AlertasBell from './AlertasBell'
 import BajoMinimoBell from './BajoMinimoBell'
+import PuertaRapida from './PuertaRapida'
 import UserAvatar from './UserAvatar'
 import MenuSearch from './MenuSearch'
 import { ConfirmDialog } from './ui'
@@ -81,6 +82,9 @@ export default function Topbar({ collapsed, setCollapsed, setMobileOpen, isMobil
           {/* Bajo mínimo: solo para el rol `inventario`, que es quien repone.
               No va dentro de AlertasBell porque aquélla es exclusiva de admin. */}
           {isInventario && <BajoMinimoBell />}
+          {/* Apertura remota de la puerta del lector: solo admin, igual que el
+              backend (`require_admin`). No aparece si no hay lectores activos. */}
+          {isAdmin && <PuertaRapida />}
           {isAdmin && <AlertasBell />}
           {isAdmin && <NotificacionesBell />}
 

@@ -17,11 +17,12 @@
  * foto, nombre o número en su ficha después de sincronizar aparece como
  * «Desactualizado».
  */
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   Users, UploadCloud, ImageOff, CheckCircle2, XCircle, Trash2, AlertTriangle, Camera, Search,
+  Loader2,
 } from 'lucide-react'
 import {
   Button, Card, Badge, EmptyState, Skeleton, Input, Modal, ConfirmDialog, AuthImage,
@@ -29,13 +30,17 @@ import {
 import { extractApiError } from '../../utils/apiError'
 import {
   sincronizarEmpleados, quitarEmpleadoDeLector, etiquetaEstado, rutaFotoPerfil,
+  getTarea, getTareasActivas, EVENTO_TAREA,
 } from '../../api/hikvision'
+import { useSocket } from '../../context/SocketContext'
 import { formatoFecha } from './formato'
 import FotoEmpleadoModal from './FotoEmpleadoModal'
 
-// Igual que el tope del backend (`MAX_POR_TANDA`). Cada empleado son varias
-// peticiones al equipo, así que una tanda enorme agotaría el timeout.
-const MAX_POR_TANDA = 50
+// Igual que el tope del backend (`MAX_POR_TANDA`). Las tandas de más de 5
+// corren en segundo plano, así que el límite ya no lo pone el timeout.
+const MAX_POR_TANDA = 500
+
+const TERMINADA = ['TERMINADA', 'ERROR']
 
 // Filtros rápidos por estado. `en_lector` junta a quien está en el equipo
 // (al día o no); los demás son un estado cada uno.
@@ -60,6 +65,52 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
   // Se guarda solo el id: así el modal siempre lee la fila más reciente del
   // listado (tras un refetch) en vez de una copia vieja.
   const [fotoDe, setFotoDe] = useState(null)
+  // Sincronización en segundo plano: { id, estado, procesados, total }.
+  const [tarea, setTarea] = useState(null)
+  const [trabajadorActivo, setTrabajadorActivo] = useState(true)
+  const { on } = useSocket()
+  const { refetch } = datos
+
+  const alTerminarTarea = useCallback(async (tareaId) => {
+    try {
+      const t = await getTarea(tareaId)
+      setTarea(null)
+      if (t.estado === 'ERROR' && !t.resultados?.length) {
+        toast.error(t.error || 'La sincronización no pudo completarse')
+      } else {
+        setResultados({ resultados: t.resultados, resumen: t.resumen })
+        toast.success(`${t.resumen.sincronizados} empleado(s) sincronizado(s)`)
+      }
+    } catch (err) {
+      setTarea(null)
+      toast.error(extractApiError(err, 'No se pudo leer el resultado de la sincronización'))
+    }
+    refetch()
+  }, [refetch])
+
+  // Si al abrir la pantalla ya había una tarea en curso (se recargó la página
+  // a media sincronización), se retoma su progreso.
+  useEffect(() => {
+    let vigente = true
+    getTareasActivas(dispositivoId)
+      .then((r) => {
+        if (!vigente) return
+        setTrabajadorActivo(r.trabajador_activo)
+        if (r.items?.length) setTarea(r.items[0])
+      })
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [dispositivoId])
+
+  // Avance en vivo desde el proceso de escucha.
+  useEffect(() => on(EVENTO_TAREA, (e) => {
+    if (Number(e.dispositivo_id) !== Number(dispositivoId)) return
+    if (TERMINADA.includes(e.estado)) {
+      alTerminarTarea(e.id)
+    } else {
+      setTarea((prev) => (prev && prev.id !== e.id ? prev : { ...prev, ...e }))
+    }
+  }), [on, dispositivoId, alTerminarTarea])
 
   // Memoizado: `datos.data?.items || []` crearía un array nuevo en cada render
   // y los useMemo de abajo se recalcularían siempre.
@@ -113,6 +164,13 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
     setSincronizando(true)
     try {
       const r = await sincronizarEmpleados(dispositivoId, ids)
+      setSeleccion(new Set())
+      if (r.tarea) {
+        // Tanda grande: corre en segundo plano y el avance llega por socket.
+        setTarea(r.tarea)
+        toast(`Sincronizando ${r.tarea.total} empleado(s) en segundo plano`, { icon: '⏳' })
+        return
+      }
       setResultados(r)
       if (r.resumen.fallidos === 0) {
         toast.success(`${r.resumen.sincronizados} empleado(s) sincronizado(s)`)
@@ -144,8 +202,35 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
     }
   }
 
+  const enCurso = tarea !== null
+
   return (
     <div className="space-y-4">
+      {enCurso && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="inline-flex items-center gap-2 font-medium text-ink-900 dark:text-ink-100">
+              <Loader2 size={16} className="animate-spin text-brand-600" />
+              {tarea.estado === 'PENDIENTE'
+                ? `En cola: ${tarea.total} empleado(s)`
+                : `Sincronizando ${tarea.procesados} de ${tarea.total}`}
+            </span>
+            <span className="tabular-nums text-xs text-ink-500 dark:text-ink-400">
+              {tarea.total ? Math.round((tarea.procesados / tarea.total) * 100) : 0}%
+            </span>
+          </div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-ink-100 dark:bg-ink-800">
+            <div className="h-full rounded-full bg-brand-600 transition-all dark:bg-brand-500"
+                 style={{ width: `${tarea.total ? (tarea.procesados / tarea.total) * 100 : 0}%` }} />
+          </div>
+          <p className="mt-2 text-xs text-ink-500 dark:text-ink-400">
+            {tarea.estado === 'PENDIENTE' && !trabajadorActivo
+              ? 'El servicio de lectores no está corriendo: la tarea empezará en cuanto arranque.'
+              : 'Puedes seguir trabajando o cerrar esta pantalla: la sincronización continúa sola.'}
+          </p>
+        </Card>
+      )}
+
       {desactualizados.length > 0 && (
         <Card className="flex flex-wrap items-center justify-between gap-3 border-sky-200 bg-sky-50/60 p-3 dark:border-sky-800 dark:bg-sky-900/20">
           <p className="text-sm text-sky-800 dark:text-sky-300">
@@ -154,7 +239,7 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
           </p>
           <Button
             size="sm" leftIcon={<UploadCloud size={14} />} loading={sincronizando}
-            disabled={!activo}
+            disabled={!activo || enCurso}
             onClick={() => sincronizar(desactualizados.map((i) => i.id))}
           >
             Actualizar todos
@@ -181,7 +266,7 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
               <Button
                 leftIcon={<UploadCloud size={16} />}
                 loading={sincronizando}
-                disabled={!activo || seleccion.size === 0 || seleccion.size > MAX_POR_TANDA}
+                disabled={!activo || enCurso || seleccion.size === 0 || seleccion.size > MAX_POR_TANDA}
                 onClick={() => sincronizar()}
                 title={activo ? undefined : 'El lector está desactivado'}
               >
