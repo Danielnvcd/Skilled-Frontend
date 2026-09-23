@@ -8,7 +8,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Camera, ImagePlus, Trash2, ScanFace, Server, Tag } from 'lucide-react'
+import { ScanFace, Server, Tag } from 'lucide-react'
 import { Modal, Button, Input, Textarea, AuthImage } from '../../components/ui'
 import { extractApiError } from '../../utils/apiError'
 import {
@@ -85,7 +85,7 @@ export default function FormularioLector({ lector, onClose, onGuardado }) {
       onClose={guardando ? () => {} : onClose}
       title={edicion ? `Editar ${lector.nombre}` : 'Agregar lector'}
       description="El lector debe estar en la red local de la empresa."
-      size="lg"
+      size="md"
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={guardando}>Cancelar</Button>
@@ -95,42 +95,41 @@ export default function FormularioLector({ lector, onClose, onGuardado }) {
         </div>
       }
     >
-      <form id="form-lector" onSubmit={guardar} className="grid gap-6 md:grid-cols-[14rem,1fr]">
-        {/* ── Foto ─────────────────────────────────────────────── */}
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-ink-700 dark:text-ink-300">Foto del lector</p>
-          <div className="aspect-[4/3] w-full overflow-hidden rounded-lg bg-ink-100 ring-1 ring-ink-200 dark:bg-ink-800 dark:ring-ink-700">
+      <form id="form-lector" onSubmit={guardar} className="space-y-5">
+        {/* ── Foto: una fila discreta, no la protagonista ──────────── */}
+        <div className="flex items-center gap-3">
+          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-md bg-ink-100 ring-1 ring-ink-200 dark:bg-ink-800 dark:ring-ink-700">
             {fotoNueva ? (
               <img src={preview} alt="Foto nueva" className="h-full w-full object-cover" />
             ) : fotoActual ? (
               <AuthImage src={rutaFotoLector(lector.id, lector.foto_version)} alt=""
                          className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-ink-400">
-                <ScanFace size={36} strokeWidth={1.25} />
-                <span className="text-xs">Sin foto</span>
+              <div className="flex h-full w-full items-center justify-center text-ink-400">
+                <ScanFace size={20} />
               </div>
             )}
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            <Button type="button" size="xs" variant="secondary" leftIcon={<ImagePlus size={13} />}
-                    onClick={() => inputArchivo.current?.click()} disabled={guardando}>
-              {hayFoto ? 'Cambiar' : 'Elegir'}
-            </Button>
-            <Button type="button" size="xs" variant="secondary" leftIcon={<Camera size={13} />}
-                    onClick={() => inputCamara.current?.click()} disabled={guardando}>
-              Tomar
-            </Button>
-            {hayFoto && (
-              <Button type="button" size="xs" variant="danger-ghost" leftIcon={<Trash2 size={13} />}
-                      onClick={() => { setFotoNueva(null); setQuitarFoto(true) }} disabled={guardando}>
-                Quitar
-              </Button>
-            )}
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-ink-700 dark:text-ink-300">Foto del equipo</p>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
+              <button type="button" className="font-medium text-brand-700 hover:underline disabled:opacity-50 dark:text-brand-300"
+                      onClick={() => inputArchivo.current?.click()} disabled={guardando}>
+                {hayFoto ? 'Cambiar' : 'Subir'}
+              </button>
+              <button type="button" className="font-medium text-brand-700 hover:underline disabled:opacity-50 dark:text-brand-300"
+                      onClick={() => inputCamara.current?.click()} disabled={guardando}>
+                Tomar con la cámara
+              </button>
+              {hayFoto && (
+                <button type="button" className="font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                        onClick={() => { setFotoNueva(null); setQuitarFoto(true) }} disabled={guardando}>
+                  Quitar
+                </button>
+              )}
+            </div>
+            <p className="mt-0.5 text-[11px] text-ink-500 dark:text-ink-400">Opcional · JPG o PNG, hasta 5 MB</p>
           </div>
-          <p className="text-xs text-ink-500 dark:text-ink-400">
-            Una foto de cómo se ve instalado ayuda a reconocerlo. JPG o PNG, hasta 5 MB.
-          </p>
           <input ref={inputArchivo} type="file" accept="image/jpeg,image/png" className="hidden" onChange={elegir} />
           <input ref={inputCamara} type="file" accept="image/jpeg,image/png" capture="environment"
                  className="hidden" onChange={elegir} />

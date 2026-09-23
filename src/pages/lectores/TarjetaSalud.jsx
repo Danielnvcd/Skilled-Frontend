@@ -7,11 +7,12 @@
  * un evento.
  */
 import { Activity, AlertTriangle } from 'lucide-react'
-import { Card, CardHeader, Badge, Skeleton } from '../../components/ui'
+import { Card, CardHeader, Skeleton } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { extractApiError } from '../../utils/apiError'
 import { getSalud } from '../../api/hikvision'
 import { formatoFecha } from './formato'
+import Estado from './Estado'
 
 const SUCESOS = {
   CONECTADO: { texto: 'Conectado', tono: 'success' },
@@ -36,8 +37,8 @@ export default function TarjetaSalud({ dispositivoId }) {
         title={<span className="inline-flex items-center gap-2"><Activity size={16} /> Salud de la conexión</span>}
         description="Cómo le ha ido a la conexión en tiempo real con el lector en las últimas 24 horas."
         actions={s && (s.tiempo_real.en_vivo
-          ? <Badge tone="success" dot>En vivo</Badge>
-          : <Badge tone="warning" dot>Sin tiempo real</Badge>)}
+          ? <Estado tone="success">En vivo</Estado>
+          : <Estado tone="warning">Sin tiempo real</Estado>)}
       />
       {salud.loading ? (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -98,7 +99,7 @@ export default function TarjetaSalud({ dispositivoId }) {
                       <span className="w-32 flex-shrink-0 text-xs tabular-nums text-ink-500 dark:text-ink-400">
                         {formatoFecha(x.creado_en)}
                       </span>
-                      <Badge tone={tipo.tono}>{tipo.texto}</Badge>
+                      <Estado tone={tipo.tono}>{tipo.texto}</Estado>
                       <span className="min-w-0 flex-1 truncate text-xs text-ink-600 dark:text-ink-300">
                         {x.detalle}
                       </span>

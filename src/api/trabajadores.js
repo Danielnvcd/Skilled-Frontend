@@ -6,6 +6,7 @@ const BASE = '/trabajadores'
 export async function listarTrabajadores({
   page = 1, q = '', estado = 'activos', perPage = 20, sort = '', dir = '',
   area = '', puesto = '', tipoNomina = '', tipoPago = '', sinSalario = false,
+  esOficina = '',
 } = {}) {
   const params = { page, q, estado, per_page: perPage }
   if (sort) {
@@ -17,6 +18,8 @@ export async function listarTrabajadores({
   if (tipoNomina) params.tipo_nomina = tipoNomina
   if (tipoPago) params.tipo_pago = tipoPago
   if (sinSalario) params.sin_salario = 1
+  // '1' = solo personal de oficina, '0' = solo quien no lo es, '' = todos.
+  if (esOficina !== '') params.es_oficina = esOficina
   const { data } = await api.get(BASE, { params })
   return data
 }

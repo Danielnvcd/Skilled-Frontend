@@ -12,13 +12,14 @@ import {
   Cpu, Clock, HardDrive, DoorOpen, ShieldCheck, ShieldAlert, AlertTriangle, RefreshCw, Trash2,
   Lock, Unlock,
 } from 'lucide-react'
-import { Button, Card, CardHeader, Badge, Skeleton, ConfirmDialog, Modal, Input } from '../../components/ui'
+import { Button, Card, CardHeader, Skeleton, ConfirmDialog, Modal, Input } from '../../components/ui'
 import { extractApiError } from '../../utils/apiError'
 import {
   ajustarHoraLector, getAuditoria, borrarUsuarioAjeno, abrirPuerta, configurarNtp,
 } from '../../api/hikvision'
 import { describirDesfase } from './formato'
 import TarjetaSalud from './TarjetaSalud'
+import Estado from './Estado'
 
 export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta, onCambioEmpleados }) {
   const [ajustando, setAjustando] = useState(false)
@@ -136,8 +137,8 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
                 <dt className="text-ink-500 dark:text-ink-400">Tipo de IP</dt>
                 <dd>
                   {e.red.direccionamiento === 'static'
-                    ? <Badge tone="success">Fija</Badge>
-                    : <Badge tone="warning">Dinámica ({e.red.direccionamiento}): puede cambiar</Badge>}
+                    ? <Estado tone="success">Fija</Estado>
+                    : <Estado tone="warning">Dinámica ({e.red.direccionamiento}): puede cambiar</Estado>}
                 </dd>
               </>
             )}
@@ -172,9 +173,9 @@ export default function PanelEquipo({ dispositivoId, dispositivo, estado, puerta
                 </p>
               </div>
               {e.hora.en_hora ? (
-                <Badge tone="success" dot>En hora</Badge>
+                <Estado tone="success">En hora</Estado>
               ) : (
-                <Badge tone="warning" dot>Desajustado</Badge>
+                <Estado tone="warning">Desajustado</Estado>
               )}
             </div>
             <p className="text-sm text-ink-600 dark:text-ink-300">
@@ -441,7 +442,7 @@ function ListaAuditoria({ titulo, items, render, vacio, tono, pie }) {
           {items.length > 0 && <ShieldAlert size={14} className={tono === 'danger' ? 'text-red-500' : 'text-amber-500'} />}
           {titulo}
         </p>
-        <Badge tone={items.length ? tono : 'neutral'}>{items.length}</Badge>
+        <span className={`text-sm font-semibold tabular-nums ${items.length ? (tono === 'danger' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400') : 'text-ink-400'}`}>{items.length}</span>
       </div>
       {items.length ? (
         <ul className="divide-y divide-ink-100 dark:divide-ink-800">

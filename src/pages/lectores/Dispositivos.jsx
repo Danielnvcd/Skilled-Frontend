@@ -3,25 +3,21 @@
  *
  * Un lector por oficina; el diseño NO asume que solo habrá uno.
  *
- * Cada tarjeta muestra la foto del equipo instalado, dónde está, si la
- * conexión en tiempo real funciona y sus cifras del día (empleados, accesos,
- * último acceso). Todo eso sale de la base del ERP: abrir esta lista no le
- * pregunta nada a ningún lector.
+ * Tabla compacta: miniatura del equipo, ubicación, dirección, estado de la
+ * conexión en tiempo real y cifras del día (empleados, accesos, último
+ * acceso). Todo sale de la base del ERP: abrir esta lista no le pregunta nada
+ * a ningún lector.
  *
  * La contraseña se captura aquí pero nunca vuelve del servidor: al editar, el
- * campo aparece vacío y dejarlo así significa «no la cambies». Se dice en la
- * propia etiqueta porque un campo de contraseña vacío en un formulario de
- * edición se interpreta, si no, como que se va a borrar.
+ * campo aparece vacío y dejarlo así significa «no la cambies».
  */
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { ScanFace, Plug, Plus, Pencil, Trash2, AlertTriangle, MapPin, ChevronRight } from 'lucide-react'
 import {
-  ScanFace, Plug, Plus, Pencil, Trash2, AlertTriangle, MapPin, Users, LogIn, Clock,
-  ArrowRight, Radio,
-} from 'lucide-react'
-import {
-  PageHeader, Button, Card, Badge, EmptyState, Skeleton, ConfirmDialog, AuthImage,
+  PageHeader, Button, Card, EmptyState, Skeleton, ConfirmDialog, AuthImage,
+  Table, THead, TH, TBody, TR, TD,
 } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { extractApiError } from '../../utils/apiError'
@@ -29,6 +25,7 @@ import {
   getDispositivos, eliminarDispositivo, probarDispositivo, rutaFotoLector,
 } from '../../api/hikvision'
 import FormularioLector from './FormularioLector'
+import Estado from './Estado'
 
 export default function Dispositivos() {
   const lectores = useResource('hikvision:dispositivos', getDispositivos, {
@@ -54,12 +51,11 @@ export default function Dispositivos() {
       if (anio && Math.abs(anio - new Date().getFullYear()) > 0) {
         toast('El reloj del lector está desajustado: ' + r.hora.hora_local, { icon: '🕓' })
       }
-      lectores.refetch()
     } catch (err) {
       toast.error(extractApiError(err, 'No se pudo conectar con el lector'))
-      lectores.refetch()
     } finally {
       setProbandoId(null)
+      lectores.refetch()
     }
   }
 
@@ -79,29 +75,20 @@ export default function Dispositivos() {
 
   const items = lectores.data || []
   const enVivo = items.filter((d) => d.activo && d.escucha?.en_vivo).length
-  const conProblema = items.filter((d) => d.activo && (!d.escucha?.en_vivo || d.ultimo_estado === 'ERROR')).length
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Lectores biométricos"
-        description="Los lectores de rostro de cada oficina: quién está dado de alta, quién entra y cómo está la conexión."
+        description={items.length
+          ? `${items.length} lector(es) · ${enVivo} en tiempo real`
+          : 'Lectores de rostro de cada oficina.'}
         icon={ScanFace}
-        actions={<Button leftIcon={<Plus size={16} />} onClick={() => setEditando({})}>Agregar lector</Button>}
+        actions={<Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setEditando({})}>Agregar lector</Button>}
       />
 
-      {items.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-sm">
-          <Resumen texto={`${items.length} lector(es)`} />
-          <Resumen texto={`${enVivo} en tiempo real`} tono="emerald" />
-          {conProblema > 0 && <Resumen texto={`${conProblema} requiere(n) atención`} tono="amber" />}
-        </div>
-      )}
-
       {lectores.loading && !items.length ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-96 rounded-xl" />)}
-        </div>
+        <Card className="space-y-2 p-4"><Skeleton className="h-10" /><Skeleton className="h-10" /></Card>
       ) : lectores.error ? (
         <Card>
           <EmptyState
@@ -116,29 +103,34 @@ export default function Dispositivos() {
           <EmptyState
             icon={ScanFace}
             title="Todavía no hay lectores"
-            description="Agrega el primer lector con su IP y credenciales. Puedes ponerle una foto y su ubicación para reconocerlo fácil."
-            action={<Button leftIcon={<Plus size={16} />} onClick={() => setEditando({})}>Agregar lector</Button>}
+            description="Agrega el primer lector con su IP y credenciales."
+            action={<Button size="sm" leftIcon={<Plus size={14} />} onClick={() => setEditando({})}>Agregar lector</Button>}
           />
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {items.map((d) => (
-            <TarjetaLector
-              key={d.id} lector={d}
-              probando={probandoId === d.id}
-              onProbar={() => probar(d)}
-              onEditar={() => setEditando(d)}
-              onEliminar={() => setPorBorrar(d)}
-            />
-          ))}
-          <button
-            type="button" onClick={() => setEditando({})}
-            className="flex min-h-[18rem] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink-200 text-ink-500 transition-colors hover:border-brand-400 hover:bg-brand-50/40 hover:text-brand-700 focus-ring dark:border-ink-700 dark:text-ink-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300"
-          >
-            <Plus size={28} />
-            <span className="text-sm font-medium">Agregar otro lector</span>
-          </button>
-        </div>
+        <Table>
+          <THead>
+            <TH>Lector</TH>
+            <TH>Dirección</TH>
+            <TH>Estado</TH>
+            <TH align="right">Empleados</TH>
+            <TH align="right">Accesos hoy</TH>
+            <TH>Último acceso</TH>
+            <TH align="right"><span className="sr-only">Acciones</span></TH>
+            <TH align="right"><span className="sr-only">Abrir</span></TH>
+          </THead>
+          <TBody>
+            {items.map((d) => (
+              <FilaLector
+                key={d.id} lector={d}
+                probando={probandoId === d.id}
+                onProbar={() => probar(d)}
+                onEditar={() => setEditando(d)}
+                onEliminar={() => setPorBorrar(d)}
+              />
+            ))}
+          </TBody>
+        </Table>
       )}
 
       {editando !== null && (
@@ -168,120 +160,114 @@ export default function Dispositivos() {
   )
 }
 
-function TarjetaLector({ lector: d, probando, onProbar, onEditar, onEliminar }) {
+// Un solo estado por fila, lo más grave primero. La franja izquierda y la
+// etiqueta usan el mismo color para que la fila se distinga de un vistazo.
+function estadoDe(d) {
+  if (!d.activo) return { tono: 'neutral', texto: 'Desactivado', franja: 'border-l-ink-300 dark:border-l-ink-600' }
+  if (d.ultimo_estado === 'ERROR') {
+    return { tono: 'danger', texto: 'Error', detalle: d.ultimo_error, franja: 'border-l-red-500' }
+  }
+  if (!d.escucha?.en_vivo) {
+    return { tono: 'warning', texto: 'Sin tiempo real', detalle: d.escucha?.error, franja: 'border-l-amber-500' }
+  }
+  return { tono: 'success', texto: 'Tiempo real', franja: 'border-l-emerald-500' }
+}
+
+function FilaLector({ lector: d, probando, onProbar, onEditar, onEliminar }) {
   const r = d.resumen || {}
-  const enVivo = d.escucha?.en_vivo
-
+  const estado = estadoDe(d)
+  const navigate = useNavigate()
+  const url = `/lectores/${d.id}`
+  // Toda la fila lleva al panel del lector; los botones de acción detienen el
+  // clic para no navegar al usarlos.
+  const soloAccion = (fn) => (e) => { e.stopPropagation(); fn() }
   return (
-    <Card className="flex flex-col overflow-hidden p-0">
-      <Link to={`/lectores/${d.id}`} className="group relative block aspect-[16/9] overflow-hidden bg-ink-100 dark:bg-ink-800">
-        {d.tiene_foto ? (
-          <AuthImage
-            src={rutaFotoLector(d.id, d.foto_version)} alt={`Foto de ${d.nombre}`}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            fallback={<SinFoto />}
-          />
-        ) : <SinFoto />}
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
-          {!d.activo ? (
-            <Badge tone="neutral">Desactivado</Badge>
-          ) : enVivo ? (
-            <Badge tone="success" dot className="shadow-sm">Tiempo real</Badge>
-          ) : (
-            <Badge tone="warning" dot className="shadow-sm">Sin tiempo real</Badge>
-          )}
-          {d.modelo && (
-            <span className="rounded-md bg-black/50 px-2 py-0.5 font-mono text-[10px] text-white backdrop-blur">
-              {d.modelo}
-            </span>
-          )}
+    <TR className={`cursor-pointer ${d.activo ? '' : 'opacity-60'}`} onClick={() => navigate(url)}>
+      <TD className={`border-l-[3px] py-2.5 ${estado.franja}`}>
+        <div className="flex items-center gap-3">
+          <Miniatura lector={d} />
+          <div className="min-w-0">
+            <Link to={url} onClick={(e) => e.stopPropagation()}
+                  className="block truncate text-sm font-semibold text-ink-900 hover:text-brand-700 hover:underline dark:text-ink-50 dark:hover:text-brand-300">
+              {d.nombre}
+            </Link>
+            <p className="flex items-center gap-1 truncate text-xs text-ink-500 dark:text-ink-400">
+              {d.ubicacion
+                ? <><MapPin size={11} className="flex-shrink-0" />{d.ubicacion}</>
+                : (d.modelo || '—')}
+            </p>
+          </div>
         </div>
-      </Link>
-
-      <div className="flex flex-1 flex-col p-4">
-        <Link to={`/lectores/${d.id}`} className="min-w-0 hover:underline">
-          <h3 className="truncate text-base font-semibold text-ink-900 dark:text-ink-100">{d.nombre}</h3>
-        </Link>
-        <p className="mt-0.5 flex items-center gap-1 truncate text-sm text-ink-500 dark:text-ink-400">
-          <MapPin size={13} className="flex-shrink-0" />
-          {d.ubicacion || <span className="italic">Sin ubicación</span>}
-        </p>
-        <p className="mt-1 truncate font-mono text-xs text-ink-400 dark:text-ink-500">
-          {d.host}:{d.puerto}{d.firmware && ` · FW ${d.firmware}`}
-        </p>
-
-        <dl className="mt-4 grid grid-cols-3 divide-x divide-ink-100 rounded-lg bg-ink-50 py-2 text-center dark:divide-ink-700 dark:bg-ink-800/50">
-          <Cifra Icono={Users} etiqueta="Empleados" valor={r.empleados ?? 0} />
-          <Cifra Icono={LogIn} etiqueta="Accesos hoy" valor={r.accesos_hoy ?? 0} />
-          <Cifra Icono={Clock} etiqueta="Último"
-                 valor={r.ultimo_acceso ? r.ultimo_acceso.hora.slice(11, 16) : '—'}
-                 detalle={r.ultimo_acceso?.nombre} />
-        </dl>
-
-        {d.activo && !enVivo && d.escucha?.error && (
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
-            <Radio size={13} className="mt-0.5 flex-shrink-0" /> {d.escucha.error}
-          </p>
-        )}
-        {d.ultimo_estado === 'ERROR' && d.ultimo_error && (
-          <p className="mt-2 flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400">
-            <AlertTriangle size={13} className="mt-0.5 flex-shrink-0" /> {d.ultimo_error}
-          </p>
-        )}
-        {d.notas && (
-          <p className="mt-3 line-clamp-2 text-xs text-ink-500 dark:text-ink-400">{d.notas}</p>
-        )}
-
-        <div className="mt-auto flex items-center gap-1 pt-4">
-          <Link to={`/lectores/${d.id}`} className="flex-1">
-            <Button size="sm" className="w-full" rightIcon={<ArrowRight size={14} />}>Abrir panel</Button>
-          </Link>
+      </TD>
+      <TD className="py-2.5">
+        <span className="font-mono text-xs text-ink-800 dark:text-ink-200">{d.host}:{d.puerto}</span>
+        {d.firmware && <p className="text-[11px] text-ink-400 dark:text-ink-500">{d.firmware}</p>}
+      </TD>
+      <TD className="py-2.5">
+        <Estado tono={estado.tono} title={estado.detalle || undefined}>{estado.texto}</Estado>
+      </TD>
+      <TD className="py-2.5" align="right"><Numero valor={r.empleados} /></TD>
+      <TD className="py-2.5" align="right"><Numero valor={r.accesos_hoy} /></TD>
+      <TD className="py-2.5">
+        {r.ultimo_acceso ? (
+          <>
+            <span className="font-medium tabular-nums text-ink-900 dark:text-ink-100">
+              {r.ultimo_acceso.hora.slice(11, 16)}
+            </span>
+            <p className="max-w-[10rem] truncate text-[11px] text-ink-500 dark:text-ink-400">
+              {r.ultimo_acceso.nombre}
+            </p>
+          </>
+        ) : <span className="text-ink-300 dark:text-ink-600">—</span>}
+      </TD>
+      <TD className="py-2.5" align="right">
+        <div className="flex justify-end gap-0.5">
           <Button size="icon-sm" variant="ghost" title="Probar conexión" aria-label="Probar conexión"
-                  loading={probando} onClick={onProbar}>
-            <Plug size={15} />
+                  loading={probando} onClick={soloAccion(onProbar)}>
+            <Plug size={14} />
           </Button>
-          <Button size="icon-sm" variant="ghost" title="Editar" aria-label="Editar" onClick={onEditar}>
-            <Pencil size={15} />
+          <Button size="icon-sm" variant="ghost" title="Editar" aria-label="Editar"
+                  onClick={soloAccion(onEditar)}>
+            <Pencil size={14} />
           </Button>
           <Button size="icon-sm" variant="danger-ghost" title="Eliminar" aria-label="Eliminar"
-                  onClick={onEliminar}>
-            <Trash2 size={15} />
+                  onClick={soloAccion(onEliminar)}>
+            <Trash2 size={14} />
           </Button>
         </div>
-      </div>
-    </Card>
+      </TD>
+      <TD className="py-2.5 pl-0" align="right">
+        <Link to={url} onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-md border border-ink-200 px-2.5 py-1.5 text-xs font-medium text-ink-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 focus-ring dark:border-ink-700 dark:text-ink-200 dark:hover:border-brand-600 dark:hover:bg-brand-900/30 dark:hover:text-brand-200">
+          Abrir panel <ChevronRight size={14} />
+        </Link>
+      </TD>
+    </TR>
   )
 }
 
-function SinFoto() {
+// Los ceros en gris: así resaltan las cifras que sí dicen algo.
+function Numero({ valor }) {
+  const n = valor ?? 0
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-gradient-to-br from-ink-100 to-ink-200 text-ink-400 dark:from-ink-800 dark:to-ink-900 dark:text-ink-500">
-      <ScanFace size={40} strokeWidth={1.25} />
-      <span className="text-xs">Sin foto</span>
-    </div>
-  )
-}
-
-function Cifra({ Icono, etiqueta, valor, detalle }) {
-  return (
-    <div className="min-w-0 px-2">
-      <dt className="flex items-center justify-center gap-1 text-[11px] text-ink-500 dark:text-ink-400">
-        <Icono size={11} /> {etiqueta}
-      </dt>
-      <dd className="mt-0.5 text-lg font-semibold tabular-nums text-ink-900 dark:text-ink-100">{valor}</dd>
-      {detalle && <dd className="truncate text-[10px] text-ink-500 dark:text-ink-400">{detalle}</dd>}
-    </div>
-  )
-}
-
-function Resumen({ texto, tono }) {
-  const tonos = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-800',
-    amber: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:ring-amber-800',
-  }
-  return (
-    <span className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset ${tonos[tono] || 'bg-white text-ink-700 ring-ink-200 dark:bg-ink-900 dark:text-ink-300 dark:ring-ink-700'}`}>
-      {texto}
+    <span className={`tabular-nums ${n ? 'font-semibold text-ink-900 dark:text-ink-100' : 'text-ink-300 dark:text-ink-600'}`}>
+      {n}
     </span>
+  )
+}
+
+function Miniatura({ lector: d }) {
+  const vacio = (
+    <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-ink-100 text-ink-400 ring-1 ring-ink-200 dark:bg-ink-800 dark:ring-ink-700">
+      <ScanFace size={18} />
+    </span>
+  )
+  if (!d.tiene_foto) return vacio
+  return (
+    <AuthImage
+      src={rutaFotoLector(d.id, d.foto_version)} alt=""
+      className="h-10 w-10 flex-shrink-0 rounded-md object-cover ring-1 ring-ink-200 dark:ring-ink-700"
+      fallback={vacio}
+    />
   )
 }

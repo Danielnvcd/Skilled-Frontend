@@ -19,11 +19,12 @@ import toast from 'react-hot-toast'
 import {
   Activity, AlertTriangle, CheckCircle2, XCircle, DoorOpen, ScanFace, Download, Radio,
 } from 'lucide-react'
-import { Button, Card, Badge, EmptyState, Skeleton, AuthImage, ImageViewer } from '../../components/ui'
+import { Button, Card, EmptyState, Skeleton, AuthImage, ImageViewer } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import { extractApiError } from '../../utils/apiError'
 import { getEventos, traerEventos, rutaCaptura, EVENTOS_ACTIVIDAD } from '../../api/hikvision'
 import { claveEventos } from './formato'
+import Estado from './Estado'
 
 const FILTROS = [
   { id: 'todos', texto: 'Todos' },
@@ -270,9 +271,9 @@ function FilaEvento({ evento: e, dispositivoId, onVerCaptura }) {
       </div>
 
       {!esPuerta && (
-        <Badge tone={estilo.tono} leftIcon={<Icono size={12} />}>
+        <Estado tone={estilo.tono}>
           {e.tipo === 'permitido' ? 'Permitido' : e.tipo === 'denegado' ? 'Rechazado' : 'Evento'}
-        </Badge>
+        </Estado>
       )}
     </li>
   )

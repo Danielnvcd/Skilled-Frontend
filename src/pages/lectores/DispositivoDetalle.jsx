@@ -13,10 +13,10 @@
  */
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, ScanFace, Users, Activity, Cpu, Wifi, WifiOff, CheckCircle2, XCircle, Clock,
+  ArrowLeft, ScanFace, Users, Activity, Cpu, CheckCircle2, XCircle, Clock,
   HardDrive, RefreshCw, MapPin,
 } from 'lucide-react'
-import { PageHeader, Button, Card, Badge, Skeleton, AuthImage } from '../../components/ui'
+import { PageHeader, Button, Card, Skeleton, AuthImage } from '../../components/ui'
 import { useResource } from '../../hooks/useResource'
 import {
   getEmpleadosDeLector, getPuerta, getEstadoEquipo, getEventos, EVENTOS_ACTIVIDAD, EVENTO_PUERTA,
@@ -26,6 +26,7 @@ import PanelEmpleados from './PanelEmpleados'
 import PanelActividad from './PanelActividad'
 import PanelEquipo from './PanelEquipo'
 import { claveEventos, describirDesfase, formatoFecha } from './formato'
+import Estado from './Estado'
 
 const PESTANAS = [
   { id: 'empleados', texto: 'Empleados', Icono: Users },
@@ -98,17 +99,11 @@ export default function DispositivoDetalle() {
         {dispositivo?.tiene_foto ? (
           <AuthImage
             src={rutaFotoLector(dispositivo.id, dispositivo.foto_version)} alt=""
-            className={`h-16 w-16 rounded-xl object-cover ring-2 ${
-              enLinea ? 'ring-emerald-400' : sinConexion ? 'ring-red-400' : 'ring-ink-200 dark:ring-ink-700'
-            }`}
+            className="h-11 w-11 rounded-md object-cover ring-1 ring-ink-200 dark:ring-ink-700"
           />
         ) : (
-          <div className={`flex h-16 w-16 items-center justify-center rounded-xl ${
-            enLinea ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
-              : sinConexion ? 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                : 'bg-ink-100 text-ink-500 dark:bg-ink-800'
-          }`}>
-            <ScanFace size={28} />
+          <div className="flex h-11 w-11 items-center justify-center rounded-md bg-ink-100 text-ink-500 dark:bg-ink-800">
+            <ScanFace size={20} />
           </div>
         )}
         <div className="min-w-0 flex-1">
@@ -117,16 +112,16 @@ export default function DispositivoDetalle() {
               {dispositivo?.modelo || 'Lector Hikvision'}
             </h2>
             {estado.loading ? (
-              <Badge tone="neutral">Conectando…</Badge>
+              <Estado tone="neutral">Conectando…</Estado>
             ) : enLinea ? (
-              <Badge tone="success" leftIcon={<Wifi size={12} />}>En línea</Badge>
+              <Estado tone="success">En línea</Estado>
             ) : (
-              <Badge tone="danger" leftIcon={<WifiOff size={12} />}>Sin conexión</Badge>
+              <Estado tone="danger">Sin conexión</Estado>
             )}
-            {dispositivo && !dispositivo.activo && <Badge tone="warning">Desactivado</Badge>}
+            {dispositivo && !dispositivo.activo && <Estado tone="warning">Desactivado</Estado>}
             {tiempoReal && (tiempoReal.en_vivo
-              ? <Badge tone="success" dot>Tiempo real</Badge>
-              : <Badge tone="warning" dot>Sin tiempo real</Badge>)}
+              ? <Estado tone="success">Tiempo real</Estado>
+              : <Estado tone="warning">Sin tiempo real</Estado>)}
           </div>
           {dispositivo?.ubicacion && (
             <p className="mt-0.5 flex items-center gap-1 truncate text-sm text-ink-600 dark:text-ink-300">

@@ -22,10 +22,10 @@ import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   Users, UploadCloud, ImageOff, CheckCircle2, XCircle, Trash2, AlertTriangle, Camera, Search,
-  Loader2,
+  Loader2, UserPlus,
 } from 'lucide-react'
 import {
-  Button, Card, Badge, EmptyState, Skeleton, Input, Modal, ConfirmDialog, AuthImage,
+  Button, Card, EmptyState, Skeleton, Input, Modal, ConfirmDialog, AuthImage,
 } from '../../components/ui'
 import { extractApiError } from '../../utils/apiError'
 import {
@@ -35,6 +35,8 @@ import {
 import { useSocket } from '../../context/SocketContext'
 import { formatoFecha } from './formato'
 import FotoEmpleadoModal from './FotoEmpleadoModal'
+import AgregarOficinaModal from './AgregarOficinaModal'
+import Estado from './Estado'
 
 // Igual que el tope del backend (`MAX_POR_TANDA`). Las tandas de más de 5
 // corren en segundo plano, así que el límite ya no lo pone el timeout.
@@ -68,6 +70,7 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
   // Sincronización en segundo plano: { id, estado, procesados, total }.
   const [tarea, setTarea] = useState(null)
   const [trabajadorActivo, setTrabajadorActivo] = useState(true)
+  const [agregando, setAgregando] = useState(false)
   const { on } = useSocket()
   const { refetch } = datos
 
@@ -258,6 +261,9 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
               />
             </div>
             <div className="ml-auto flex items-center gap-2">
+              <Button variant="secondary" leftIcon={<UserPlus size={16} />} onClick={() => setAgregando(true)}>
+                Agregar personal
+              </Button>
               {seleccion.size > MAX_POR_TANDA && (
                 <span className="text-xs text-amber-600 dark:text-amber-400">
                   Máximo {MAX_POR_TANDA} por tanda
@@ -324,8 +330,13 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
             description={
               items.length
                 ? 'Ningún empleado coincide con la búsqueda o el filtro.'
-                : 'Marca a los empleados como personal de oficina desde el módulo de Empleados para que aparezcan aquí.'
+                : 'Agrega al personal de oficina que usará este lector.'
             }
+            action={!items.length && (
+              <Button leftIcon={<UserPlus size={16} />} onClick={() => setAgregando(true)}>
+                Agregar personal de oficina
+              </Button>
+            )}
           />
         ) : (
           <ul className="divide-y divide-ink-100 dark:divide-ink-800">
@@ -387,7 +398,7 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
                   <span className="hidden w-32 text-xs text-ink-500 dark:text-ink-400 sm:block">
                     {emp.sincronizado_en ? formatoFecha(emp.sincronizado_en) : '—'}
                   </span>
-                  <span className="w-28 text-right"><Badge tone={est.tono} dot>{est.texto}</Badge></span>
+                  <span className="w-28 text-right"><Estado tone={est.tono}>{est.texto}</Estado></span>
                   <span className="flex w-16 justify-end gap-0.5">
                     <Button
                       size="icon-sm" variant="ghost" title="Ver o cambiar la fotografía"
@@ -412,6 +423,18 @@ export default function PanelEmpleados({ dispositivoId, datos, activo }) {
           </ul>
         )}
       </Card>
+
+      <AgregarOficinaModal
+        open={agregando}
+        onClose={() => setAgregando(false)}
+        onAgregados={(paraEnviar) => {
+          setAgregando(false)
+          refetch()
+          // Los que tienen foto se envían al lector en el mismo paso (si se
+          // pidió); con más de 5 va en segundo plano con su barra de avance.
+          if (paraEnviar.length && activo) sincronizar(paraEnviar)
+        }}
+      />
 
       <FotoEmpleadoModal
         key={fotoDe ?? 'cerrado'}
