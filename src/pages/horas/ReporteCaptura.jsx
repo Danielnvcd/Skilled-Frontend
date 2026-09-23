@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { ArrowLeft, Lock, CheckCircle2, Plus, Edit3, ClipboardPaste } from 'lucide-react'
+import { ArrowLeft, Lock, CheckCircle2, Plus, Edit3, ClipboardPaste, ScanFace } from 'lucide-react'
 import {
   PageHeader, Button, Badge, Skeleton, ConfirmDialog,
 } from '../../components/ui'
@@ -257,7 +257,12 @@ export default function ReporteCaptura() {
                                 ) : (
                                   <span className="font-mono">{reg.hora_entrada}-{reg.hora_salida}</span>
                                 )}
-                                <span className="font-mono text-[10px]">{Number(reg.horas_productivas).toFixed(2)}h</span>
+                                <span className="inline-flex items-center gap-1 font-mono text-[10px]">
+                                  {reg.origen && (
+                                    <ScanFace size={10} aria-label="Registrado por el lector biométrico" />
+                                  )}
+                                  {Number(reg.horas_productivas).toFixed(2)}h
+                                </span>
                               </div>
                             ) : (
                               editable ? <Plus size={14} className="mx-auto" /> : '—'

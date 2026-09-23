@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Trash2 } from 'lucide-react'
+import { Trash2, ScanFace } from 'lucide-react'
 import { Modal, Button, Select, Input, ConfirmDialog } from '../../components/ui'
 import { crearRegistro, editarRegistro, eliminarRegistro } from '../../api/horas'
 
@@ -126,6 +126,24 @@ export default function RegistroModal({
         {!editable && (
           <p className="text-xs text-ink-500 dark:text-ink-400 bg-ink-50 dark:bg-ink-800/60 border border-ink-200 dark:border-ink-700 rounded-md p-2">
             Este reporte está cerrado. Vista de solo lectura.
+          </p>
+        )}
+
+        {/* Horas puestas por el lector biométrico: el backend deja de
+            actualizarlas en cuanto alguien cambia entrada o salida. */}
+        {existing?.origen === 'LECTOR' && (
+          <p className="flex items-start gap-2 text-xs text-sky-800 dark:text-sky-300 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-md p-2">
+            <ScanFace size={14} className="mt-0.5 flex-shrink-0" />
+            <span>
+              Entrada y salida las registró el lector biométrico y se actualizan solas con cada
+              acceso del día. Si cambias alguna de las dos, el lector dejará de modificar este registro.
+            </span>
+          </p>
+        )}
+        {existing?.origen === 'LECTOR_EDITADO' && (
+          <p className="flex items-start gap-2 text-xs text-ink-600 dark:text-ink-300 bg-ink-50 dark:bg-ink-800/60 border border-ink-200 dark:border-ink-700 rounded-md p-2">
+            <ScanFace size={14} className="mt-0.5 flex-shrink-0" />
+            <span>Registro del lector biométrico corregido a mano: el lector ya no lo modifica.</span>
           </p>
         )}
 
